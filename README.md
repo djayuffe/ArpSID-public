@@ -155,10 +155,17 @@ strict physical C64 exactness beyond the documented boundaries
 
 ## Licensing
 
-Source is a mix of BSD-3-Clause and MIT per-file (see SPDX headers); there is no
-top-level `LICENSE` file yet. **Note:** the C64 player path embeds Commodore KERNAL,
-BASIC and CHARGEN ROM images, which are copyrighted and are **not** covered by the
-source license — they must not be redistributed without appropriate rights.
+ArpSID is **Copyright (C) 2024-2026 Ulf Bertilsson** and is licensed under the
+**GNU General Public License, version 3 or later (GPL-3.0-or-later)** — see the
+[`LICENSE`](LICENSE) file. Some source files also carry earlier per-file
+BSD-3-Clause / MIT SPDX headers; those permissive terms are GPL-compatible, and
+the project as a whole is distributed under the GPL.
+
+**C64 ROMs are not covered by this license.** The Commodore KERNAL, BASIC and
+CHARGEN ROM images are copyrighted by their respective owners. This public
+source does **not** bundle them (`c64_embedded_roms.h` ships zero-filled
+placeholders); supply your own dumps at runtime. Do not redistribute the ROMs
+without appropriate rights.
 
 ---
 
