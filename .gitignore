@@ -1,0 +1,23 @@
+# Build output (CMake). These are regenerated; never commit them.
+/build/
+build*/
+.build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+Testing/
+
+# Release packaging output
+/dist/
+/release-logs/
+*.zip
+
+# Editor / OS cruft
+.DS_Store
+*/.DS_Store
+.vscode/
+.idea/
+.claude/
+
+# Patches and scratch
+*.patch

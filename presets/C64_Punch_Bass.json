@@ -1,0 +1,28 @@
+{
+  "ArpSIDFormat": "ClassicC64JSON",
+  "ArpSIDVersion": 1,
+  "description": "Original C64-authentic punch bass. 6581, single narrow pulse (~31% width), zero attack, tight decay, medium sustain, low closed low-pass cutoff with resonance. The dry, woody SID bottom end.",
+  "patches": [
+    {
+      "name": "C64 Punch Bass",
+      "category": "Bass",
+      "chip": "6581",
+      "volume": 15,
+      "voice1": {
+        "wave": "pulse",
+        "pw": 1280,
+        "detune": 0,
+        "sync": false,
+        "ringmod": false,
+        "level": 15,
+        "ad": 8,
+        "sr": 102
+      },
+      "filter": {
+        "cutoff": 2800,
+        "res": 8,
+        "mode": "lp"
+      }
+    }
+  ]
+}

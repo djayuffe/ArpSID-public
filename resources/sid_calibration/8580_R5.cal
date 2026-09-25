@@ -1,0 +1,7 @@
+# ArpSID measured analogue calibration seed: MOS 8580 R5
+dc_mv=3.0
+output_gain=1.00
+waveform_coupling=0.22
+waveform_leak=0.035
+external_rc_lowpass_hz=18500.0
+external_rc_highpass_hz=16.0

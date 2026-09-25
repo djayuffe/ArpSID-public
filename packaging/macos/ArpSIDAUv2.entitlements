@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!--
+        AUv2 .component entitlements
+        ─────────────────────────────
+        Classic AUv2 plug-ins are loaded in-process by the host application.
+        They must NOT carry com.apple.security.app-sandbox: that flag causes the
+        kernel to restrict the entire host process to the sandbox policy described
+        here, which breaks non-sandboxed hosts (Logic Pro 10.7 and earlier, AULab,
+        Reaper, etc.) and causes auval to fail with "sandbox deny file-read-data".
+
+        For ad-hoc (-) signing no entitlements file is needed at all; this file
+        exists so that codesign can be invoked consistently regardless of identity.
+        If you sign with a Developer ID Application identity add only the minimum
+        required entitlements here (e.g. com.apple.security.cs.allow-unsigned-executable-memory
+        if your DSP kernel requires it for JIT/SIMD, but ArpSID does not).
+    -->
+</dict>
+</plist>

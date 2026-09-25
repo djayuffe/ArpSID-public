@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.app-sandbox</key>
+    <true/>
+    <!--
+        DIGI REC/MON capture path
+        ─────────────────────────
+        The DIGI tab opens a private AVAudioEngine input tap to record/monitor
+        the selected CoreAudio/AVCapture input. A sandboxed process WITHOUT this
+        entitlement does NOT error when it taps the microphone — CoreAudio simply
+        delivers silence (all-zero buffers). That is the exact "no signal from any
+        input" symptom. The audio-input device entitlement is mandatory for any
+        sandboxed host that hosts the DIGI capture path.
+    -->
+    <key>com.apple.security.device.audio-input</key>
+    <true/>
+</dict>
+</plist>

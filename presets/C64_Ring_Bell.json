@@ -1,0 +1,38 @@
+{
+  "ArpSIDFormat": "ClassicC64JSON",
+  "ArpSIDVersion": 1,
+  "description": "Original C64-authentic ring-modulated bell. 8580, triangle voice 1 ring-modulated by triangle voice 3 (a detuned fifth), long decay to silence, band-pass shimmer. The iconic metallic SID bell/chime. Exercises the v845 ring-source fix that keeps the V3 ring source oscillating.",
+  "patches": [
+    {
+      "name": "C64 Ring Bell",
+      "category": "Bell",
+      "chip": "8580",
+      "volume": 15,
+      "voice1": {
+        "wave": "triangle",
+        "pw": 2048,
+        "detune": 0,
+        "sync": false,
+        "ringmod": true,
+        "level": 15,
+        "ad": 10,
+        "sr": 9
+      },
+      "voice3": {
+        "wave": "triangle",
+        "pw": 2048,
+        "detune": 7,
+        "sync": false,
+        "ringmod": false,
+        "level": 6,
+        "ad": 10,
+        "sr": 9
+      },
+      "filter": {
+        "cutoff": 11000,
+        "res": 4,
+        "mode": "bp"
+      }
+    }
+  ]
+}

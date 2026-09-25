@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.app-sandbox</key>
+    <true/>
+    <!--
+        The AUv3 app-extension runs the DIGI REC/MON capture path (AVAudioEngine
+        input tap) inside the host's sandboxed AU process. Without the audio-input
+        device entitlement the OS hands the tap silent (all-zero) buffers instead
+        of refusing, which presents as "no signal from any input" on the DIGI
+        meter/HUD. Mandatory for live capture.
+    -->
+    <key>com.apple.security.device.audio-input</key>
+    <true/>
+</dict>
+</plist>

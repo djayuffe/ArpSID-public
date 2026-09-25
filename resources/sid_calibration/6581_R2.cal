@@ -1,0 +1,8 @@
+# ArpSID measured analogue calibration seed: MOS 6581 R2
+# key=value lines are accepted by sidParseCalibrationAssignment().
+dc_mv=28.0
+output_gain=1.16
+waveform_coupling=0.46
+waveform_leak=0.13
+external_rc_lowpass_hz=13200.0
+external_rc_highpass_hz=16.0

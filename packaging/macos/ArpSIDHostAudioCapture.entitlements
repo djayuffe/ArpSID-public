@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!--
+        Non-sandbox audio-capture entitlements for the bundled ArpSID host apps
+        (arpsid_auv3_wrapper, arpsid_standalone).
+        ──────────────────────────────────────────────────────────────────────
+        These apps are intentionally NOT sandboxed (they host AUs in-process and
+        need broad file access), but they DO use the hardened runtime in release
+        builds. Under the hardened runtime, microphone / audio capture — including
+        the macOS 14.2+ Core Audio process tap used by DIGI "System Audio Capture"
+        — is DENIED unless the binary carries the audio-input device entitlement.
+        This file grants exactly that and nothing else (no app-sandbox).
+    -->
+    <key>com.apple.security.device.audio-input</key>
+    <true/>
+</dict>
+</plist>

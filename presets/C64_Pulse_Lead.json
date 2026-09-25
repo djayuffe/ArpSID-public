@@ -1,0 +1,28 @@
+{
+  "ArpSIDFormat": "ClassicC64JSON",
+  "ArpSIDVersion": 1,
+  "description": "Original C64-authentic pulse lead. 6581, single pulse oscillator at 50% width, fast attack, short decay with held sustain, low-pass filter with bite. The classic SID solo-lead voice.",
+  "patches": [
+    {
+      "name": "C64 Pulse Lead",
+      "category": "Lead",
+      "chip": "6581",
+      "volume": 15,
+      "voice1": {
+        "wave": "pulse",
+        "pw": 2048,
+        "detune": 0,
+        "sync": false,
+        "ringmod": false,
+        "level": 15,
+        "ad": 6,
+        "sr": 168
+      },
+      "filter": {
+        "cutoff": 8500,
+        "res": 10,
+        "mode": "lp"
+      }
+    }
+  ]
+}

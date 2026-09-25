@@ -1,0 +1,45 @@
+{
+  "audit_findings_closed": 15,
+  "capability_contract": {
+    "AU": [
+      "canonical_timed_events",
+      "fractional_sid_render",
+      "exact_postfx_timeline",
+      "no_output_continuation",
+      "kit_overlay",
+      "digi_overlay",
+      "mix_fx"
+    ],
+    "Phase2_VST3": [
+      "canonical_timed_events",
+      "fractional_sid_render",
+      "exact_postfx_timeline",
+      "no_output_continuation"
+    ]
+  },
+  "focused_tests_failed": 0,
+  "focused_tests_passed": 18,
+  "integrated_user_closures": [
+    "v962 GUI user-kit/popout wiring",
+    "v963 GUI accessibility/tooltips",
+    "v964 C64 SIDPLAY telemetry"
+  ],
+  "package": "0.0.690-pass380-v965-canonical-render-pipeline-closure",
+  "platform_validation_not_performed": [
+    "AUv2/AUv3 host validation in Logic",
+    "auval",
+    "Apple signing and notarization",
+    "production build against real Steinberg VST3 SDK",
+    "full clean 479-test execution",
+    "full ASan/UBSan instrumentation"
+  ],
+  "registered_tests": 479,
+  "scope": "canonical render pipeline from timed ingress through GUI telemetry",
+  "sha256_manifest_entries": 930,
+  "source_package_files": 931,
+  "validation_builds": [
+    "Release/default optimization for 8 runtime/version tests",
+    "Release with -O0 -DNDEBUG for heavyweight closure and GUI/source-contract tests",
+    "Release with -O1 -DNDEBUG for ArpAudioRenderV954Tests"
+  ]
+}

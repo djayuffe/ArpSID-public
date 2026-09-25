@@ -1,0 +1,7 @@
+# ArpSID measured analogue calibration seed: MOS 6581 R3
+dc_mv=20.0
+output_gain=1.10
+waveform_coupling=0.39
+waveform_leak=0.10
+external_rc_lowpass_hz=14200.0
+external_rc_highpass_hz=16.0
