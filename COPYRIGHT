@@ -1,0 +1,10 @@
+ArpSID
+Copyright (C) 2024-2026 Ulf Bertilsson
+
+Licensed under the GNU General Public License, version 3 or later
+(GPL-3.0-or-later). See the LICENSE file for the full license text, and
+<https://www.gnu.org/licenses/> for more information.
+
+Note: the Commodore C64 KERNAL, BASIC and CHARGEN ROM images are copyrighted by
+their respective owners and are NOT part of this project or covered by this
+license. They are not distributed with the public source.
