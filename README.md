@@ -1,4 +1,4 @@
-# ArpSID 0.9.2
+# ArpSID 0.9.3
 
 **A Commodore 64 SID synthesizer and C64 tune player as an audio plug-in for macOS.**
 
@@ -31,12 +31,15 @@ Captured from the ArpSID standalone host (AUv3 presentation), running the shippe
 
 ## Plug-in formats
 
-| Format | Notes |
-|---|---|
-| **AUv2** (`aumu`, manufacturer `ASID`) | Five component flavors: `ArpS` (ArpSID), `ArIn` (ArpSID Instrument), `DrSD` (DrSID drum machine), `S808` (SID-808), `C64P` (C64 tune player). |
-| **AUv3** | App-extension + wrapper-app path on macOS. |
-| **VST3** | Phase2 processor/controller path (built against the Steinberg VST3 SDK). |
-| **Standalone** | macOS standalone host shell. |
+| Format | Platforms | Notes |
+|---|---|---|
+| **AUv2** (`aumu`, manufacturer `ASID`) | macOS (universal) | Five component flavors: `ArpS` (ArpSID), `ArIn` (ArpSID Instrument), `DrSD` (DrSID drum machine), `S808` (SID-808), `C64P` (C64 tune player). |
+| **AUv3** | macOS (universal) | App extension inside the Logic-compatible `ArpSID.app`. |
+| **VST3** | macOS (universal), Windows x64 + arm64, Linux x86_64 + aarch64 | Phase2 processor/controller (Steinberg VST3 SDK). The rich editor is macOS-only; other platforms use the host's generic parameter UI. |
+| **Standalone** | macOS (universal) | `ArpSID Standalone.app` host with keyboard, transport and preset browser. |
+
+Every [release](https://github.com/djayuffe/ArpSID-public/releases) ships all
+of these as separate downloads, built and validated by CI.
 
 Wrappers share the canonical core but declare capabilities explicitly: AU owns the
 KIT/DIGI/MIX overlay layers; Phase2/VST owns the canonical core, fractional rendering,
@@ -199,8 +202,10 @@ requests:
 | Job | What it checks |
 |---|---|
 | `linux` | Repository guards, full build, full CTest suite. |
-| `linux-vst3` | VST3 build + Steinberg SDK validator. |
+| `linux-vst3` | VST3 for x86_64 and aarch64 + Steinberg SDK validator. |
+| `windows-vst3` | VST3 (MSVC) for x64 and arm64 + Steinberg SDK validator. |
 | `macos` | AUv2 (all five flavors) + VST3 build, code-signature check, strict `auval`. Public repository only. |
+| `macos-apps` | Standalone app + AUv3 (Logic-compatible app): bundle/signature checks and a Standalone launch test. Public repository only. |
 
 Every job fails on any ArpSID compiler or linker warning, and the macOS job
 fails on any `auval` warning.
@@ -212,8 +217,9 @@ fails on any `auval` warning.
    `## [x.y.z]` entry to `CHANGELOG.md` (`python3 scripts/check_version_coherence.py`
    checks they agree).
 2. Push to `main`. The **Release** workflow sees the `VERSION.txt` change,
-   reruns the whole pipeline and publishes `vx.y.z` with the source zip,
-   Linux VST3, universal macOS AUv2 and VST3 and `SHA256SUMS.txt`. Pushing a
+   reruns the whole pipeline and publishes `vx.y.z` with every product
+   variant (see the formats table above), the source zip and
+   `SHA256SUMS.txt`. Pushing a
    `vx.y.z` tag works too, and a manual run rebuilds an existing release.
 
 Releases are only published from the public repository and refuse any tree

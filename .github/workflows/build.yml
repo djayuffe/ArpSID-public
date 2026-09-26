@@ -3,8 +3,10 @@ name: Build
 # Reusable build + verification pipeline, shared by CI and Release.
 #
 #   linux       full CTest suite + repository guard scripts
-#   linux-vst3  VST3 plug-in + Steinberg SDK validator
+#   linux-vst3  VST3, Linux x86_64 + aarch64, SDK validator
+#   windows-vst3 VST3, Windows x64 + arm64 (MSVC), SDK validator
 #   macos       AUv2 (5 flavors) + VST3, codesign verify, strict auval
+#   macos-apps  Standalone app + AUv3 (Logic-compatible app), launch smoke test
 #
 # Every job fails on ArpSID compiler/linker warnings, and the macOS job fails
 # on any auval WARNING. With `release: true` the macOS plug-ins are built
@@ -70,7 +72,13 @@ jobs:
         with: { name: source, path: "${{ runner.temp }}/dist/*" }
 
   linux-vst3:
-    runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: ubuntu-24.04,     arch: x86_64 }
+          - { runner: ubuntu-24.04-arm, arch: aarch64 }
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v7
         with: { ref: "${{ inputs.ref }}" }
@@ -91,10 +99,46 @@ jobs:
         run: |
           v="$(tr -d '[:space:]' < VERSION.txt)"
           mkdir -p "${RUNNER_TEMP}/dist"
-          (cd build-vst3/VST3/Release && zip -qr "${RUNNER_TEMP}/dist/ArpSID-${v}-vst3-linux-x86_64.zip" arpsid_vst3.vst3)
+          (cd build-vst3/VST3/Release && zip -qr "${RUNNER_TEMP}/dist/ArpSID-${v}-vst3-linux-${{ matrix.arch }}.zip" arpsid_vst3.vst3)
       - uses: actions/upload-artifact@v7
         if: inputs.release
-        with: { name: linux-vst3, path: "${{ runner.temp }}/dist/*" }
+        with: { name: "linux-vst3-${{ matrix.arch }}", path: "${{ runner.temp }}/dist/*" }
+
+  windows-vst3:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { runner: windows-2025,   arch: x64,   cmake_arch: x64 }
+          - { runner: windows-11-arm, arch: arm64, cmake_arch: ARM64 }
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with: { ref: "${{ inputs.ref }}" }
+      - name: Fetch Steinberg VST3 SDK
+        run: |
+          git clone --depth 1 --branch "${VST3SDK_TAG}" --recurse-submodules --shallow-submodules \
+            https://github.com/steinbergmedia/vst3sdk.git "${RUNNER_TEMP}/vst3sdk"
+      - name: Build VST3 (MSVC, runs the SDK validator)
+        run: |
+          set -o pipefail
+          cmake -S . -B build-vst3 -A "${{ matrix.cmake_arch }}" \
+            -DARPSID_BUILD_VST3=ON -Dvst3sdk_SOURCE_DIR="$(cygpath -m "${RUNNER_TEMP}/vst3sdk")"
+          cmake --build build-vst3 --config Release --target arpsid_vst3 -- -m -nologo -v:minimal 2>&1 | tee build-vst3.log
+          scripts/ci/check_build_warnings.sh build-vst3.log "$(cygpath -w "$GITHUB_WORKSPACE")"
+          test -d build-vst3/VST3/Release/arpsid_vst3.vst3
+      - name: Package
+        if: inputs.release
+        run: |
+          v="$(tr -d '[:space:]' < VERSION.txt)"
+          mkdir -p "${RUNNER_TEMP}/dist"
+          (cd build-vst3/VST3/Release && 7z a -tzip -bso0 "$(cygpath -w "${RUNNER_TEMP}/dist/ArpSID-${v}-vst3-windows-${{ matrix.arch }}.zip")" arpsid_vst3.vst3)
+      - uses: actions/upload-artifact@v7
+        if: inputs.release
+        with: { name: "windows-vst3-${{ matrix.arch }}", path: "${{ runner.temp }}/dist/*" }
 
   macos:
     if: inputs.macos
@@ -167,3 +211,67 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: inputs.release
         with: { name: macos, path: "${{ runner.temp }}/dist/*" }
+
+  macos-apps:
+    if: inputs.macos
+    runs-on: macos-15
+    env:
+      MACOS_ARCHS: ${{ inputs.release && 'arm64;x86_64' || 'arm64' }}
+      MACOS_MIN: "12.0"
+    steps:
+      - uses: actions/checkout@v7
+        with: { ref: "${{ inputs.ref }}" }
+      - name: Build Standalone + AUv3 (Logic-compatible app, ad-hoc signed)
+        run: |
+          set -o pipefail
+          cmake -S . -B build-apps -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_ARCHITECTURES="${MACOS_ARCHS}" -DCMAKE_OSX_DEPLOYMENT_TARGET="${MACOS_MIN}" \
+            -DARPSID_BUILD_AUV3=ON -DARPSID_BUILD_LOGIC=ON -DARPSID_BUILD_STANDALONE=ON \
+            -DARPSID_CODESIGN_IDENTITY=-
+          cmake --build build-apps --target arpsid_standalone arpsid_logic --parallel "$(sysctl -n hw.ncpu)" 2>&1 | tee build-apps.log
+          scripts/ci/check_build_warnings.sh build-apps.log "$GITHUB_WORKSPACE"
+
+      - name: Verify app bundles
+        run: |
+          set -o pipefail
+          standalone="build-apps/ArpSID Standalone.app"
+          auv3app="build-apps/ArpSID.app"
+          appex="$auv3app/Contents/PlugIns/arpsid_auv3.appex"
+          for b in "$standalone" "$auv3app" "$appex"; do
+            test -d "$b" || { echo "::error::missing bundle $b"; exit 1; }
+            /usr/bin/plutil -lint "$b/Contents/Info.plist"
+            exe="$(/usr/bin/plutil -extract CFBundleExecutable raw "$b/Contents/Info.plist")"
+            echo "$b -> $(lipo -archs "$b/Contents/MacOS/$exe")"
+            /usr/bin/plutil -extract CFBundleShortVersionString raw "$b/Contents/Info.plist"
+          done
+          codesign --verify --deep --strict --verbose=2 "$standalone"
+          codesign --verify --deep --strict --verbose=2 "$auv3app"
+          /usr/bin/plutil -p "$appex/Contents/Info.plist" | grep -E 'NSExtensionPointIdentifier|AudioComponents|"name"|subtype' | head -20
+          echo "STANDALONE_APP=$standalone" >> "$GITHUB_ENV"
+          echo "AUV3_APP=$auv3app" >> "$GITHUB_ENV"
+
+      - name: Standalone launch smoke test
+        run: |
+          exe="$STANDALONE_APP/Contents/MacOS/ArpSID Standalone"
+          "$exe" > standalone.log 2>&1 &
+          pid=$!
+          sleep 10
+          if ! kill -0 "$pid" 2>/dev/null; then
+            wait "$pid"; rc=$?
+            echo "::error::ArpSID Standalone exited within 10 s (status $rc)"
+            tail -40 standalone.log
+            exit 1
+          fi
+          kill "$pid"; wait "$pid" 2>/dev/null || true
+          echo "ArpSID Standalone launched and stayed up for 10 s"
+
+      - name: Package
+        if: inputs.release
+        run: |
+          v="$(tr -d '[:space:]' < VERSION.txt)"
+          mkdir -p "${RUNNER_TEMP}/dist"
+          ditto -c -k --keepParent "$STANDALONE_APP" "${RUNNER_TEMP}/dist/ArpSID-${v}-standalone-macos-universal.zip"
+          ditto -c -k --keepParent "$AUV3_APP"       "${RUNNER_TEMP}/dist/ArpSID-${v}-auv3-macos-universal.zip"
+      - uses: actions/upload-artifact@v7
+        if: inputs.release
+        with: { name: macos-apps, path: "${{ runner.temp }}/dist/*" }

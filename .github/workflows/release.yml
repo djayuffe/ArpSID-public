@@ -1,11 +1,15 @@
 name: Release
 
 # Publishes v<VERSION.txt> as a GitHub release with these assets:
-#   ArpSID-<v>-source.zip                  ROM-free source (scripts/package_release.sh)
-#   ArpSID-<v>-vst3-linux-x86_64.zip       VST3, Linux x86_64 (generic host UI)
-#   ArpSID-<v>-vst3-macos-universal.zip    VST3, macOS arm64+x86_64, ad-hoc signed
-#   ArpSID-<v>-auv2-macos-universal.zip    AUv2 (5 flavors), macOS arm64+x86_64, ad-hoc signed
+#   ArpSID-<v>-standalone-macos-universal.zip  Standalone app, macOS arm64+x86_64
+#   ArpSID-<v>-auv3-macos-universal.zip        AUv3 (Logic-compatible ArpSID.app)
+#   ArpSID-<v>-auv2-macos-universal.zip        AUv2 (5 flavors)
+#   ArpSID-<v>-vst3-macos-universal.zip        VST3, macOS (rich editor)
+#   ArpSID-<v>-vst3-windows-{x64,arm64}.zip    VST3, Windows (generic host UI)
+#   ArpSID-<v>-vst3-linux-{x86_64,aarch64}.zip VST3, Linux (generic host UI)
+#   ArpSID-<v>-source.zip                      ROM-free source (scripts/package_release.sh)
 #   SHA256SUMS.txt
+# All macOS bundles are ad-hoc signed (not notarized).
 #
 # Triggers:
 #   - push to main that changes VERSION.txt  -> releases the new version (no-op if it exists)
@@ -115,26 +119,44 @@ jobs:
           test -s release-notes.md
           cat >> release-notes.md <<'EOF'
 
-          ### Installing the macOS builds
+          ### Downloads
 
-          The macOS plug-ins are universal (Apple silicon + Intel), ad-hoc signed
-          and **not notarized**. After unzipping, clear the download quarantine:
+          | Platform | Download |
+          |---|---|
+          | macOS (Apple silicon + Intel) | `standalone-macos-universal` (app), `auv3-macos-universal` (Logic-compatible `ArpSID.app` with the AUv3), `auv2-macos-universal` (5 AU flavors), `vst3-macos-universal` |
+          | Windows | `vst3-windows-x64`, `vst3-windows-arm64` |
+          | Linux | `vst3-linux-x86_64`, `vst3-linux-aarch64` |
+          | Source | `source` (no C64 ROMs) |
+
+          ### Installing
+
+          **macOS.** The bundles are universal, ad-hoc signed and **not notarized**,
+          so clear the download quarantine after unzipping:
 
           ```bash
-          # AUv2 (all five flavors: ArpSID, ArpSID Instrument, DrSID, SID-808, C64 player)
-          xattr -dr com.apple.quarantine ArpSID.component
-          mv ArpSID.component ~/Library/Audio/Plug-Ins/Components/
-          # VST3
-          xattr -dr com.apple.quarantine arpsid_vst3.vst3
-          mv arpsid_vst3.vst3 ~/Library/Audio/Plug-Ins/VST3/
+          xattr -dr com.apple.quarantine ArpSID.component "ArpSID Standalone.app" ArpSID.app arpsid_vst3.vst3
+          mv ArpSID.component ~/Library/Audio/Plug-Ins/Components/   # AUv2
+          mv arpsid_vst3.vst3 ~/Library/Audio/Plug-Ins/VST3/          # VST3
+          mv "ArpSID Standalone.app" ArpSID.app /Applications/        # Standalone, AUv3
           ```
 
-          Then rescan in your host (in Logic: restart, or run `killall -9 AudioComponentRegistrar`).
-          The C64 tune player needs your own KERNAL/BASIC/CHARGEN ROM dumps; none are bundled.
+          Open `ArpSID.app` once so macOS registers its AUv3, then rescan in your host
+          (in Logic: restart, or run `killall -9 AudioComponentRegistrar`). Because the
+          AUv3 is ad-hoc signed, some hosts only load it after it is re-signed with a
+          Developer ID; the AUv2 has no such restriction.
 
-          Every asset in this release was built by CI after the full test suite,
-          the Steinberg VST3 validator and strict `auval` (all five AU flavors,
-          zero warnings) passed. Verify downloads against `SHA256SUMS.txt`.
+          **Windows.** Copy `arpsid_vst3.vst3` to `C:\Program Files\Common Files\VST3\`.
+
+          **Linux.** Copy `arpsid_vst3.vst3` to `~/.vst3/`.
+
+          On Windows and Linux the VST3 uses the host's generic parameter editor; the
+          rich ArpSID editor is macOS-only. The C64 tune player needs your own
+          KERNAL/BASIC/CHARGEN ROM dumps; none are bundled.
+
+          Every asset in this release was built by CI after the full test suite, the
+          Steinberg VST3 validator (every VST3 build), strict `auval` on all five AU
+          flavors (zero warnings) and a Standalone launch test passed. Verify downloads
+          against `SHA256SUMS.txt`.
           EOF
       - name: Create or update release
         env:

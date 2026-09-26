@@ -5,6 +5,29 @@ All notable changes to ArpSID are documented here. The project uses
 version is `VERSION.txt`, mirrored by `project(VERSION)` in `CMakeLists.txt`
 and `include/arpsid/version.h`.
 
+## [0.9.3] — 2026-09-26
+
+### Added
+
+- Every product variant is now built, validated and published with each
+  release:
+  - **macOS (universal):** `ArpSID Standalone.app`, the AUv3 inside the
+    Logic-compatible `ArpSID.app`, the AUv2 component (five flavors) and VST3.
+  - **Windows:** VST3 for x64 and arm64 (first Windows builds).
+  - **Linux:** VST3 for x86_64 and, new, aarch64.
+- CI builds all of them on every push: the Steinberg validator runs on every
+  VST3, strict `auval` on the AUv2, and the Standalone app gets a launch test.
+
+### Fixed
+
+- MSVC builds used `/fp:fast`, which can optimise away the NaN/Inf
+  sanitation ArpSID relies on; they now use `/fp:precise` (and `/utf-8`).
+- `digi_panel_model.h`: the DIGI tune-bias limits mixed an unsigned literal
+  with a negative constant, which MSVC flagged (C4308) and which crashed the
+  MSVC compiler; values are unchanged.
+- MSVC `/W4` is aligned with the GCC/Clang warning policy, and two implicit
+  double-to-float conversions in `sid_chip.h` are now explicit (same result).
+
 ## [0.9.2] — 2026-09-26
 
 ### Fixed

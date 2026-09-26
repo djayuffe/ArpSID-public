@@ -1623,7 +1623,7 @@ private:
         const float thermalDelta = std::clamp((runtimeTemperatureCelsius_ - 35.0f) * (1.0f / 35.0f), -1.0f, 1.0f);
         const float thermalClock = forensicFrozen ? 0.0f : (((model == SIDModel::MOS6581) ? -7.5e-4f : -3.5e-4f) * thermalDrift_ * (1.0f + 0.55f * thermalDelta));
         const float rippleDepth = forensicFrozen ? 0.0f : (((model == SIDModel::MOS6581) ? 0.020f : 0.012f) * supplyRippleAmount_);
-        const float ripple = forensicFrozen ? 0.0f : (std::sin(2.0 * ArpSID_pi() * driftPhase_) * rippleDepth);
+        const float ripple = forensicFrozen ? 0.0f : static_cast<float>(std::sin(2.0 * ArpSID_pi() * driftPhase_) * rippleDepth);
         const float modulatedSupply = std::clamp(supplyScale_ * (1.0f + ripple), 0.85f, 1.15f);
         filter.setSupplyScale(modulatedSupply);
         const double forensicClockScale = std::clamp((double)(1.0f + jitter + thermalClock + ripple * 0.08f), 0.95, 1.05);
@@ -1793,7 +1793,7 @@ private:
         if (forensicConfig_.enable && forensicConfig_.potInput > 0.0f) {
             const float amt = forensicConfig_.active(forensicConfig_.potInput);
             const float potLeak = ((model == SIDModel::MOS6581) ? 0.0040f : 0.0025f) * amt;
-            y += potLeak * std::sin(2.0 * ArpSID_pi() * driftPhase_ * 0.5f);
+            y = static_cast<float>(y + potLeak * std::sin(2.0 * ArpSID_pi() * driftPhase_ * 0.5f));
         }
         // The revision calibration DC belongs to the chip's analogue output
         // before the board/DC-blocking stages, and it is owned by the $D418
