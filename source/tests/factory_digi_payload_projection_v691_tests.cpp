@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #include "arpsid/patchbank/factory_digi_kits.h"
 #include "arpsid/patchbank/factory_digi_param_bridge.h"
 #include <cstdlib>

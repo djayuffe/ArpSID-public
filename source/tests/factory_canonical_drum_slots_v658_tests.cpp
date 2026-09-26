@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #include "factory_patch_params.h"
 #include "arpsid/patchbank/forensic_patch_bank.h"
 #include "arpsid/core/drum_context.h"

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // drsid_restore_and_host_bridge_v537_tests.cpp
 //
 // Closes two audit items in one slice:

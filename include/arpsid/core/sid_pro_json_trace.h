@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #pragma once
 // SID-PRO / bit-correct JSON SID trace importer.
 // Header-only, allocation-bounded once vectors are reserved, non-render import path.

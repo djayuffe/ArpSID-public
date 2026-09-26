@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // c64_disasm_rt_format_v846_tests.cpp
 //
 // The C64 disassembly line formatter runs on the audio render thread during

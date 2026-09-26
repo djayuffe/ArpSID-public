@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // language_strings_v553.h — Localized UI string table for SETTINGS language support (v553).
 //
 // PURPOSE

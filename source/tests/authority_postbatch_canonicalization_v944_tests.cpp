@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // authority_postbatch_canonicalization_v944_tests.cpp
 // Guard for post-batch structural authority canonicalization.
 

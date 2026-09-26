@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // sid808_engine.h — Authentic SID-808 analog x0x projection engine
 // (Audit #39, #74 — engine-split architecture).
 //

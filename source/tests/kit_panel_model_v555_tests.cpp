@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // kit_panel_model_v555_tests.cpp — Contract tests for KIT tab data model (v555).
 //
 // Section I — Layout static_asserts (KitUserSlotMeta, KitDrumClassAssignment, KitPanelModel)

@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // sid808_factory_definition_v504_tests.cpp
 //
 // Regression coverage for SID-808 factory metadata.

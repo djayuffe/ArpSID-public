@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // ─── ArpSIDSequencerEngine.h ─────────────────────────────────────────────────
 // Phase 3: Transport-aware step sequencer that generates canonical TimedEvents.
 // Decoupled from voice/audio: emits events, never writes to engines directly.

@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // ArpSIDViewController+SettingsBankDrSID section interface.
 // Panel builders and action methods for SETTINGS, BANK, and DrSID tabs.
 #pragma once

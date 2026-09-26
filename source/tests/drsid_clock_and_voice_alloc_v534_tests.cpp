@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // drsid_clock_and_voice_alloc_v534_tests.cpp
 //
 // Closes two DrSidEngine audit items in the smallest-responsible-slice

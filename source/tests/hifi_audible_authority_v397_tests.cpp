@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #include "arpsid/core/sid_hifi_transcendence.h"
 #include <cmath>
 #include <cstdio>

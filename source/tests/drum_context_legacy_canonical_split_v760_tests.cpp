@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // drum_context_legacy_canonical_split_v760_tests.cpp
 //
 // fix-order #13: the legacy 0..127 DrSID compatibility classifier must stay

@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #include "arpsid/core/sid_event_queue.h"
 #include "arpsid/core/sid_runtime_register_ops.h"
 #include "arpsid/engines/bitperfect_engine.h"

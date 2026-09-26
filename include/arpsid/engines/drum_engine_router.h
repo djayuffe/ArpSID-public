@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // drum_engine_router.h — Routes drum kit-loads + note dispatch to the
 // right engine based on `DrumContext` (audit #39, #74 follow-up).
 //

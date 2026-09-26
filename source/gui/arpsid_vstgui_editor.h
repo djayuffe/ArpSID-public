@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // ArpSID — thin VST3 host view for the canonical native Cocoa GUI.
 #pragma once
 

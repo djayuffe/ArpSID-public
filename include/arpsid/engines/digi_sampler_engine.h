@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // digi_sampler_engine.h - RT-safe DIGI/$D418 factory/user sampler layer.
 
 #ifndef ARPSID_ENGINES_DIGI_SAMPLER_ENGINE_H

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #pragma once
 
 // v872 P0 fix — explicit KitDrumClass -> SidGMDrumClass mapping.

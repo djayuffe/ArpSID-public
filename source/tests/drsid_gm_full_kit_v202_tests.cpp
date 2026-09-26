@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #include "arpsid/core/sid_gm_drum_kit.h"
 #include "arpsid/engines/drsid_engine.h"
 #include <array>

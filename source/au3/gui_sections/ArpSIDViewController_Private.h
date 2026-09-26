@@ -7,7 +7,7 @@
 //
 // NEVER include this from non-section .mm files except ArpSIDViewController.mm.
 //
-// Copyright (c) 2024 ArpSID Project. SPDX-License-Identifier: MIT
+// Copyright (C) 2024-2026 Ulf Bertilsson. SPDX-License-Identifier: MIT
 #pragma once
 
 // Forward declarations needed before the class extension

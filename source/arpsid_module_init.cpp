@@ -11,7 +11,7 @@
 // SDK object file (e.g., when linking against a static archive without
 // --whole-archive).
 //
-// Copyright (c) 2024 ArpSID Project. All rights reserved.
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // SPDX-License-Identifier: MIT
 
 #include "pluginterfaces/base/funknown.h"

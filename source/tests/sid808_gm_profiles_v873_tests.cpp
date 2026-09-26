@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #include "arpsid/engines/drum_engine_host_bridge.h"
 #include "arpsid/engines/sid808_gm_projection.h"
 

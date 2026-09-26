@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // render_epoch.h — Render-epoch counter (Audit #1, partial fix).
 //
 // PROBLEM

@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // v873 audit P0-10: the init/play/CIA bootstraps live in a fixed $0334..$037C
 // window. A tune that loads over that window must NOT have its bytes overwritten by
 // the bootstrap — the bootstrap block relocates to a free page instead. Common tunes

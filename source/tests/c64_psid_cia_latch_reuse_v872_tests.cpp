@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // c64_psid_cia_latch_reuse_v872_tests.cpp
 //
 // v872 regression — CIA Timer-A latch must not leak across a reused C64Runtime.

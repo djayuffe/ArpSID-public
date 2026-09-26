@@ -1,5 +1,5 @@
 // sid_patchbank_io.cpp — ArpSID patch bank file I/O implementation
-// Copyright (c) 2024 ArpSID Project. MIT License.
+// Copyright (C) 2024-2026 Ulf Bertilsson. MIT License.
 
 #include "arpsid/patchbank/sid_patchbank_io.h"
 #include "arpsid/core/sid_state_codec.h"

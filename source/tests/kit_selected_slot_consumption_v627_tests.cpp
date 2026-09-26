@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #include "arpsid/engines/drum_engine_host_bridge.h"
 #include "arpsid/engines/digi_sampler_engine.h"
 #include "arpsid/patchbank/factory_sid808_kits.h"

@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // sid808_restore_flavor_integration_v816_tests.cpp
 //
 // P1-14 guard: SID-808 state restore must combine three authorities correctly:

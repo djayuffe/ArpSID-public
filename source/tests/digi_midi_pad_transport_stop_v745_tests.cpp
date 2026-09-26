@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // v745 - DIGI MIDI sample-pad must audition while the host transport is stopped.
 //
 // The on-screen DIGI pads (consumeGuiDigiPadTriggers_) are never gated by the

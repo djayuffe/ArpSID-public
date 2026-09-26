@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // c64_color_ram_open_bus_blocker_v690_tests.cpp
 //
 // Exactness audit #8: Color RAM ($D800-$DBFF) is only 4 bits wide; the high nibble

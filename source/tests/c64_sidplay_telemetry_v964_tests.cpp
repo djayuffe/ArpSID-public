@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // v964 C64 SIDPLAY telemetry closure.
 //
 // Telemetry audit: every field of ArpSIDTelemetry was cross-checked against the

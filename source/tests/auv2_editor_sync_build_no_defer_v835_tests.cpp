@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // Regression guard for the Logic "AUv2 editor hangs on open" bug.
 //
 // The v826-v834 deferred AUv2 out-of-process editor bootstrap installed a black

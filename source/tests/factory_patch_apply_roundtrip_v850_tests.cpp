@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // factory_patch_apply_roundtrip_v850_tests.cpp
 //
 // Deeper factory-patch load/apply guard. When a factory slot is selected the

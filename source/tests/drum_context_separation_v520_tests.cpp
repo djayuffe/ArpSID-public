@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // drum_context_separation_v520_tests.cpp
 //
 // Pins Audit #5/#39/#74 "DrSID ↔ SID-808 context separation":

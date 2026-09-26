@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // c64_sidplay_rollback_behavioral_v872_tests.cpp
 //
 // v872 SIDPLAY closure — behavioral proof (not source-string) for the C64 render

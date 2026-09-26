@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // Regression guard for the Logic "AU host crashes loading ArpSID" bug (v836).
 //
 // The simple 64-byte misalignment theory was disproven empirically: make_unique,

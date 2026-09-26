@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // sid808_restore_preload_drain_v803_tests.cpp
 //
 // P0 #4: a render-drained SID-808 factory restore must not leave the

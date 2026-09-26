@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // synthmode_held_replay_release_v872_tests.cpp
 //
 // v872 P1-7 — pins the canonical held-note replay + release law that the audit's

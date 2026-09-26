@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // c64_psid_vbi_cycles_v576_tests.cpp — VBI passive cycle budget (v576).
 //
 // Root cause of remaining timing imperfection after v575:

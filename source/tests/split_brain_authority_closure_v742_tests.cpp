@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #include "arpsid/core/sid_runtime_mod_ops.h"
 #include "arpsid/engines/drum_engine_host_bridge.h"
 #include "arpsid/gui/settings_panel_model.h"

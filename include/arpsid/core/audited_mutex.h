@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // audited_mutex.h — RT-policy-tagged mutex wrapper (Audit #46).
 //
 // PROBLEM

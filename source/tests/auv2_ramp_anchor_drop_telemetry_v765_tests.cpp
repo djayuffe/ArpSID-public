@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // fix-order #18: AUv2 ramp expansion generates multiple timed parameter
 // anchors. A full kernel param-intent queue means individual ramp anchors lose
 // sample-accurate timing even though dirty-flush fallback can preserve the last

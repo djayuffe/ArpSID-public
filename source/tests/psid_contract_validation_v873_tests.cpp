@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // v873 loader-contract validation: extra-SID $DE00-$DFE0 acceptance (item 8),
 // RSID speed!=0 rejection (item 3), PSID MUS rejection (item 5-MUS), RSID BASIC
 // init!=0 rejection (item 6) and explicit UnsupportedRsidBasic (item 7).

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // c64_boot_trace.h - opt-in, layering-clean RSID/PSID boot/init/play tracer.
 //
 // This is the canonical debug surface for the Commodore 64 SID boot sequence:

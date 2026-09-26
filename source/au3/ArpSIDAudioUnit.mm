@@ -21,7 +21,7 @@
 // ✓ Transient params excluded from state blobs
 // ✓ Non-nil originator sentinel breaks observer loop during preset load
 //
-// Copyright (c) 2024 ArpSID Project. All rights reserved.
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // SPDX-License-Identifier: MIT
 
 #import "ArpSIDAudioUnit.h"

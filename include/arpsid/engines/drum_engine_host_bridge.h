@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // drum_engine_host_bridge.h — Host-side reference wire-up of the
 // engine-split architecture for AUv2/AUv3 wrappers.
 //

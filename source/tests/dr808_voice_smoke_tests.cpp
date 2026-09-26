@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #include "dr808_test_utils.h"
 #include <array>
 #include <iostream>

@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #include "arpsid/engines/drum_stem_mixer.h"
 #include <cstdlib>
 #include <iostream>

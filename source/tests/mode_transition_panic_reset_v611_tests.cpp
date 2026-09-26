@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // mode_transition_panic_reset_v611_tests.cpp
 //
 // Fix #9 — Mode-transition panic/reset coverage.

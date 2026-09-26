@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // v595 - DIGI sampler render/telemetry contract tests.
 
 #include "arpsid/engines/digi_sampler_engine.h"

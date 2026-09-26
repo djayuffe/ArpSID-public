@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // cvdisplaylink_callback_lifetime_v756_tests.cpp
 //
 // audit P0-11 / fix-order #9: the CVDisplayLink output callback fires on a

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // gui_realtime_projection_v588.h - RT-safe projection of GUI tab models.
 //
 // The MIX, KIT and DIGI tabs own compact POD models. This header turns those

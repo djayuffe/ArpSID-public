@@ -5,7 +5,7 @@
 // enum value so the two worlds stay in 1-to-1 sync without a translation
 // table. Any new VST3 parameter automatically appears in AUv3 as well.
 //
-// Copyright (c) 2024 ArpSID Project. All rights reserved.
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // SPDX-License-Identifier: MIT
 
 #pragma once

@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #include "factory_patch_params.h"
 #include "arpsid/patchbank/factory_sid808_param_bridge.h"
 #include "parameter_ids.h"

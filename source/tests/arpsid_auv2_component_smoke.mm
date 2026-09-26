@@ -9,7 +9,7 @@
 // Run AFTER `arpsid_auv2_install_user` has placed the component in:
 // ~/Library/Audio/Plug-Ins/Components/ArpSID.component
 //
-// Copyright (c) 2024 ArpSID Project. All rights reserved.
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // SPDX-License-Identifier: MIT
 
 #import <AudioUnit/AudioUnit.h>

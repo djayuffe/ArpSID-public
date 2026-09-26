@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #include "arpsid/engines/drsid_engine.h"
 #include "arpsid/engines/drum_engine_router.h"
 #include <cstdlib>

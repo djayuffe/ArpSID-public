@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // synthmode_held_replay_identity_v869_tests.cpp
 //
 // v869 guards the AU/Logic SynthMode stuck-note fix:

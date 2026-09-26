@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // bridge_divert_gate_v540_tests.cpp
 //
 // Pins the standalone engine-split bridge gate semantics. Production AUv2

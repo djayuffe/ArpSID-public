@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // v958 DrSID cold-first-block audibility closure.
 //
 // Pins a residual of the v955 class: in the DEFAULT SidAuthentic drum model the

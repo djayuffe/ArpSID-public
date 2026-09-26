@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // bitperfect_dsp_authenticity_v531_tests.cpp
 //
 // Pins audit items #30/#34/#35/#36/#38 — the DSP-authenticity batch of

@@ -10,7 +10,7 @@
 // process() / handleNote*() → render thread only, never concurrent
 // setup() / reset() → must NOT overlap with process()
 //
-// Copyright (c) 2024 ArpSID Project. All rights reserved.
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // SPDX-License-Identifier: MIT
 
 #pragma once

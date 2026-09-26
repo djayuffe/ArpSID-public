@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // absolute_p2_closure_v799_tests.cpp
 //
 // fix-order #53: source/status guard for complete P2 closure. This is a

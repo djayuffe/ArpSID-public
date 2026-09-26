@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #include "arpsid/gui/kit_sequencer.h"
 #include <cstdlib>
 #include <iostream>

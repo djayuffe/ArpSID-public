@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #include <algorithm>
 #include <cstdlib>
 #include <fstream>

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // c64_potxy_blocker_v691_tests.cpp
 //
 // Exactness audit #11: POTX ($D419) / POTY ($D41A) are readable SID registers, but

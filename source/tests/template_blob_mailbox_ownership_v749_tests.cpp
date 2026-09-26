@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // template_blob_mailbox_ownership_v749_tests.cpp
 //
 // Behavioral tests for the serializable-template blob handoff (audit P0-2:

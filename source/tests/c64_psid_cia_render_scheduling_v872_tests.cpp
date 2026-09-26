@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // C64 PSID-CIA render scheduling regression guard.
 //
 // CIA-timed PSID service advances the PHI2 machine continuously until the

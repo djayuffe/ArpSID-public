@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // v873 P0-12: init-time I/O map. A PSID init routine in RAM under ROM must have
 // the shadowing ROM banked out (via $01) so its code actually runs, while common
 // tunes in normal RAM keep the full $37 map unchanged.

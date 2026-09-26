@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // v893 bit-exactness closure tests.
 //
 // Pins the low-level hardware-exactness fixes of the v893 audit:

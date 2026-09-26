@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // sidcore_panel_model_and_tab_wire_v545_tests.cpp
 //
 // Pins:

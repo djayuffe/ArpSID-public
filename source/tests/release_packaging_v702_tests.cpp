@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // release_packaging_v702_tests.cpp
 //
 // Pass127 guard for the final release path. It keeps package-release support

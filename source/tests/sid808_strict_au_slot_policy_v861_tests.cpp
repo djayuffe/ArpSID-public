@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // sid808_strict_au_slot_policy_v861_tests.cpp
 //
 // Dedicated SID808 AU instances may only hold/load canonical SID808 factory

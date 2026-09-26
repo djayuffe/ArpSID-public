@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // classic_mode_authority_closure_v909_tests.cpp
 //
 // v909 Classic-mode authority closure. Guards the four audit contracts:

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // digi_d418_sid_volume_dac_v699_tests.cpp
 // Verifies that authentic DIGI $D418 writes are audible through the SID
 // register engine's explicit volume-DAC model even when no oscillator voice

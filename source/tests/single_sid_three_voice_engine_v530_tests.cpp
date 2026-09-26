@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // single_sid_three_voice_engine_v530_tests.cpp
 //
 // Closes audit #29 architecturally — pins the parallel single-SID 3-voice

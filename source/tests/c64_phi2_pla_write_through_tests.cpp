@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #include "arpsid/core/c64_memory_matrix.h"
 #include "arpsid/core/c64_phi2_machine.h"
 #include "arpsid/core/c64_sid_bus_sink.h"

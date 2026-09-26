@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // scope_triple_buffer_multiconsumer_v687_tests.cpp
 //
 // audit P0.4 regression test ("TelemetryMultipleConsumersStable"): the scope

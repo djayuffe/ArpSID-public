@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #include "arpsid/core/drum_context.h"
 #include "arpsid/core/sid_runtime_state_root_presentation.h"
 #include "factory_patch_params.h"

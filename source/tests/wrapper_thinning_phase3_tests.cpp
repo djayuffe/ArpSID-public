@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #include "arpsid/core/sid_runtime_host_block.h"
 #include "arpsid/core/sid_runtime_model.h"
 

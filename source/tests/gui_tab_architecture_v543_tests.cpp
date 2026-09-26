@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #include "arpsid/gui/tab_architecture.h"
 
 #include <cstdlib>

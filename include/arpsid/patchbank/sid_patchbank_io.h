@@ -21,7 +21,7 @@
 // [+68..] SidStateRootV1 binary blob (blob_length bytes)
 //
 // All integer fields are little-endian.
-// Copyright (c) 2024 ArpSID Project. MIT License.
+// Copyright (C) 2024-2026 Ulf Bertilsson. MIT License.
 
 #include "arpsid/core/sid_serializer_schema.h"
 #include <cstdint>

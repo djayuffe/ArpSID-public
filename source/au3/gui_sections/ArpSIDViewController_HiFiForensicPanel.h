@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // ArpSIDViewController+HiFiForensicPanel section interface.
 // Panel builder + action methods for the HiFi and Forensic tabs.
 #pragma once

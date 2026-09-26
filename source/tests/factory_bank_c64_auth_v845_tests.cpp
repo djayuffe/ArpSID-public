@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // factory_bank_c64_auth_v845_tests.cpp
 //
 // Guards the v845 factory-bank "true C64-auth" pass:

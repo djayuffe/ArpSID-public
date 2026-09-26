@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // forensic_engine_sanity_v527_tests.cpp
 //
 // Exhaustive forensic-engine sanity sweep — catches stale forensic state,

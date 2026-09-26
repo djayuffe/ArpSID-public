@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // sid_envelope_dac_6581_v607_tests.cpp
 // Regression for the "timing/sound wrong for all non-8580" bug.
 //

@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #include "arpsid/gui/kit_panel_model.h"
 #include "arpsid/gui/kit_voice_config.h"
 #include "arpsid/gui/kit_assign_config.h"

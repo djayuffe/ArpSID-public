@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // ArpSIDViewController+MixKitDigi section interface.
 // Panel builders for MIX, KIT EDIT, and DIGI tabs.
 #pragma once

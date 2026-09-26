@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // kit_voice_config.h — KIT tab SID-808 voice configuration model (v558).
 //
 // PURPOSE

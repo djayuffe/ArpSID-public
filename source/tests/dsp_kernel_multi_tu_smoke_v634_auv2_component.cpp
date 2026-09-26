@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #include "dsp_kernel_multi_tu_smoke_v634_common.h"
 #include <cstdint>
 

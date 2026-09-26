@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // Ingress-path parity: a NoteOn delivered through the midiQueue_ ingress ring
 // (enqueueMidiIntent — the host MusicDevice / UI MIDI path) must produce the
 // SAME audio as the identical NoteOn delivered through the processBlock

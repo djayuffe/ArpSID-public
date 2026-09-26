@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // scope_triple_buffer.h — Wait-free SPSC triple buffer (Audit #14, #15).
 //
 // PROBLEM

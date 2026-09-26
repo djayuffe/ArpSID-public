@@ -555,7 +555,7 @@ if(ARPSID_BUILD_AUV2)
     <key>CFBundleIconFile</key><string>ArpSIDHybrid.png</string>\n\
     <key>CFBundleName</key><string>ArpSID</string>\n\
     <key>CFBundleGetInfoString</key><string>ArpSID by Uber Sound Solutions</string>\n\
-    <key>NSHumanReadableCopyright</key><string>Copyright 2026 Uber Sound Solutions</string>\n\
+    <key>NSHumanReadableCopyright</key><string>Copyright (C) 2024-2026 Ulf Bertilsson</string>\n\
     <key>CFBundlePackageType</key><string>BNDL</string>\n\
     <key>CFBundleShortVersionString</key><string>@PROJECT_VERSION@</string>\n\
     <key>CFBundleVersion</key><string>@PROJECT_VERSION@</string>\n\
@@ -987,7 +987,7 @@ if(ARPSID_BUILD_AUV3)
     <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>\n\
     <key>CFBundleName</key><string>ArpSID AUv3</string>\n\
     <key>CFBundleGetInfoString</key><string>ArpSID AUv3 by Uber Sound Solutions</string>\n\
-    <key>NSHumanReadableCopyright</key><string>Copyright 2026 Uber Sound Solutions</string>\n\
+    <key>NSHumanReadableCopyright</key><string>Copyright (C) 2024-2026 Ulf Bertilsson</string>\n\
     <key>CFBundlePackageType</key><string>XPC!</string>\n\
     <key>CFBundleShortVersionString</key><string>@PROJECT_VERSION@</string>\n\
     <key>CFBundleVersion</key><string>@PROJECT_VERSION@</string>\n\

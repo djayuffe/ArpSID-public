@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #include "arpsid/engines/voice_manager.h"
 #include "arpsid/core/sid_dynamic_state.h"
 #include "arpsid/core/sid_runtime_voice_policy.h"

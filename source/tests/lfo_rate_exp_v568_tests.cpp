@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // lfo_rate_exp_v568_tests.cpp — LFO rate-curve contract (v568).
 //
 // Pins the exponential mapping of the 0-1 normalized LFO rate parameter to Hz.

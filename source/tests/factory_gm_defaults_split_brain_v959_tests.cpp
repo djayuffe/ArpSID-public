@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // v959 factory/GM defaults + split-brain closure.
 //
 // Locks in the audit of every factory/GM default across all 180 factory slots:

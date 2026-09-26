@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // drsid_808_kit_data_v589_tests.cpp
 //
 // Pins the final DrSID/SID-808 audit guard:

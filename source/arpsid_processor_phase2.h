@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #pragma once
 #include "au3/ArpSIDCanonicalEvents.h"
 #include "arpsid/core/sid_event_timing.h"

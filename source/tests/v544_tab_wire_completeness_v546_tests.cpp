@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // v544_tab_wire_completeness_v546_tests.cpp
 //
 // Pins v544 tab wire-up completeness across ALL wrapper-side surfaces:

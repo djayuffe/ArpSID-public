@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // v895 SID-core split-brain closure tests.
 //
 // The audit found THREE separately maintained copies of the SID pulse

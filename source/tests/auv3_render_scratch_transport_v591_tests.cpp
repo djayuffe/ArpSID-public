@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // auv3_render_scratch_transport_v591_tests.cpp
 //
 // Pins the v591 AUv3 render-path audit guard:

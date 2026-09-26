@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // v873 audit items 4 & 7: loadPsidParsed() (share one parse with the AU) and the
 // PsidLoadFailure taxonomy / lastParseResult() diagnostics on C64Runtime.
 #include "arpsid/core/c64_psid_runtime.h"

@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #pragma once
 
 #include "arpsid/core/drsid_instrument_program.h"

@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // drum_user_kit_save_weak_continuation_v796_tests.cpp
 //
 // fix-order #50: _drumSaveUserKit: snapshots URL/name but its final main-queue

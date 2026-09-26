@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // drum_context.h — DrSID / SID-808 / Digi context separation (Audit #5, #39, #74).
 //
 // PURPOSE

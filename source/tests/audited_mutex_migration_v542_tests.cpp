@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // audited_mutex_migration_v542_tests.cpp
 //
 // Pins the v542 migration: AUv2's 4 instance mutexes

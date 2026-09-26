@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // c64_psid_scoped_sink_v585_tests.cpp
 // v585: Scoped sidSink_ in C64Platform::runCycles() and executeInstruction().
 //

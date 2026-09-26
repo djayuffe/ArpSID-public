@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // authority_splitbrain_closure_v943_tests.cpp
 // Behavioral/source guard for v943 param/model/backend authority split-brain closure.
 

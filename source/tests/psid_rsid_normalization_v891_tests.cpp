@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #include "arpsid/core/psid_header.h"
 #include <cstdint>
 #include <iostream>

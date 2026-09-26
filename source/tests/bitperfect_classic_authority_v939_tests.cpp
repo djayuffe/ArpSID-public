@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // bitperfect_classic_authority_v939_tests.cpp
 // Behavioral + source guard for v939 first-class CLASSIC / BitPerfect authority.
 

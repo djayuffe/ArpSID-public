@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // auv2_bridge_lifecycle_and_psid_diag_v539_tests.cpp
 //
 // Closes A (AUv2 lifecycle wire-up of DrumEngineHostBridge) and B

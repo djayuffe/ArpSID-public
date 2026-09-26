@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #include "arpsid/core/c64_psid_runtime.h"
 #include <cstdlib>
 #include <fstream>

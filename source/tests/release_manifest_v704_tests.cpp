@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // release_manifest_v704_tests.cpp
 //
 // Pass130 guard for release handoff integrity. The package step must emit a

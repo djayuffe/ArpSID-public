@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #pragma once
 #include "sid_event_queue.h"
 #include "sid_ingress_lane.h"

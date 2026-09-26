@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #pragma once
 // Timed $D400 SID bridge for C64Runtime/PSID and SID projection mirror paths.
 

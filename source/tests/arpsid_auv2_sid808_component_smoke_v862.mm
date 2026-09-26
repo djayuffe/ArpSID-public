@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // arpsid_auv2_sid808_component_smoke_v862.mm
 // Host-side AUv2 smoke test for the dedicated SID-808 subtype.
 //

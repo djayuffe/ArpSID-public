@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #include "arpsid/core/c64_cia.h"
 #include "arpsid/core/c64_open_bus.h"
 #include "arpsid/core/c64_sid_bridge.h"

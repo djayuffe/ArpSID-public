@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // zero_cycle_and_param_smoothing_v533_tests.cpp
 //
 // Closes two audit items in one slice:

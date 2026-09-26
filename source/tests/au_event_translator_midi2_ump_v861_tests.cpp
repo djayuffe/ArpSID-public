@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // au_event_translator_midi2_ump_v861_tests.cpp
 //
 // Logic can deliver AU MIDI through AURenderEventMIDIEventList. The translator

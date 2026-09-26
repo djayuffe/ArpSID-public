@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // v899 SID projection-mirror behavior closure.
 //
 // Pins the three validated mirror defects (values, not source shapes):

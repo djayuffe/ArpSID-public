@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // v957 SidAuthentic drum-knob response closure.
 //
 // The default DrSID drum model (SidAuthentic, machine model 0) plays fixed

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // auv2_wrapper_p2_fixes_v528_tests.cpp
 //
 // Pins the externally-observable invariants for the P2 audit fixes that

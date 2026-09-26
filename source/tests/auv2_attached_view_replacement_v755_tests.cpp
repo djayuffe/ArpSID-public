@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // auv2_attached_view_replacement_v755_tests.cpp
 //
 // audit P0-10 / fix-order #8: repeated editor open / attached-view replacement.

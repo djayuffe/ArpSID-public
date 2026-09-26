@@ -5,7 +5,7 @@
 // On macOS it is a full NSViewController subclass using AppKit controls.
 // The view is created fully in code — no XIB/storyboard dependencies.
 //
-// Copyright (c) 2024 ArpSID Project. All rights reserved.
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // SPDX-License-Identifier: MIT
 
 #pragma once

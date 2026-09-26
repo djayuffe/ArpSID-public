@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // build_graph_forensic_patchbank_lib_v970_tests.cpp — v970 closure.
 //
 // Handoff 22.7 (test build graph): forensic_patch_bank.cpp is a heavyweight

@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // ingress_parity_timing_authority_v910_tests.cpp
 //
 // v910 ingress-parity / timing-authority closure. Behavioral guards for the

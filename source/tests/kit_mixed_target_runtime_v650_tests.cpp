@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #include "arpsid/gui/kit_sequencer.h"
 #include "arpsid/gui/kit_sid808_class_map.h"
 #include "arpsid/gui/kit_panel_model.h"

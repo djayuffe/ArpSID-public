@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // render_mode_transition_kit_preservation_v942_tests.cpp
 // Source/behavioral guard for v942 render-mode transition cleanup without kit destruction.
 

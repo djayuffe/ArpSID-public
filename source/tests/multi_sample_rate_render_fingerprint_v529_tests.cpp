@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // multi_sample_rate_render_fingerprint_v529_tests.cpp
 //
 // Closes two audit items in one slice:

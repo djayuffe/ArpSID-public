@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // render_apply_rt_only_helpers_v804_tests.cpp
 //
 // Guard for pass380 / P0 #5: the render-drained state-root apply path must not

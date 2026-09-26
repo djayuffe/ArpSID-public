@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // poly_orphan_reconcile_v852_tests.cpp
 //
 // Guards the v852 stuck-note reconciliation. Any gated poly voice whose key is no

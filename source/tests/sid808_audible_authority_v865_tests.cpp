@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // sid808_audible_authority_v865_tests.cpp
 //
 // v865 closure:

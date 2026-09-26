@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // mix_panel_model.h — MIX tab data model + FX-chain architecture (v547).
 //
 // TAB_ARCHITECTURE.md §5 demands:

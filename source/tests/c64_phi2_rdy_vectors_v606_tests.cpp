@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // c64_phi2_rdy_vectors_v606_tests.cpp
 // Regressions for:
 // I. RDY-low holds the EXACT read bus phase (same address) and does not

@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // cpu6510_micro_opcode_matrix_v853_tests.cpp
 //
 // Exhaustive 6510 micro-CPU opcode matrix + cycle-timing audit.

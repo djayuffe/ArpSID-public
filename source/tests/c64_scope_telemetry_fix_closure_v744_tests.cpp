@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // c64_scope_telemetry_fix_closure_v744_tests.cpp
 // v744: Regression guard for the 0.0.679 C64 scope/telemetry authority fixes.
 //

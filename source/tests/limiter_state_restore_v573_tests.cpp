@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // limiter_state_restore_v573_tests.cpp — Output limiter state-restore formula (v573).
 //
 // Bug: After setState() / applyCanonicalStateRoot_(), the four limiter fields

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // single_sid_three_voice_engine.h — Authentic single-SID 3-voice C64 engine
 // (Audit #29 — architectural answer).
 //

@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #include "arpsid/core/c64_rom_cache_manager.h"
 #include "arpsid/core/c64_telemetry.h"
 #include <cassert>

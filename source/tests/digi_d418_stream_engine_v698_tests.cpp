@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // v698 - Authentic DIGI $D418 stream engine contract tests.
 
 #include "arpsid/engines/digi_d418_stream_engine.h"

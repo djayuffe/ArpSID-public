@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #include "arpsid/gui/kit_voice_config.h"
 #include "arpsid/engines/drum_engine_router.h"
 #include "arpsid/core/drum_context.h"

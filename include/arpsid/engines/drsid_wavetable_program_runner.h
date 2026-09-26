@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // drsid_wavetable_program_runner.h — Renders DrSidInstrumentProgram
 // register microprograms onto a live SIDChip (Audit #43, #44 wire-up).
 //

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // diagnostic_snapshot.h — POD snapshot for C64 STATE diagnostic dashboard.
 // (audit P1.11 added rsidPhysicalBlockerMask: 37 -> 38 uint64 counters.)
 //

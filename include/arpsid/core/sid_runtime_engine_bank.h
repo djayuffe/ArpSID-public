@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #pragma once
 #include "arpsid/engines/bitperfect_engine.h"
 #include "arpsid/engines/drsid_engine.h"

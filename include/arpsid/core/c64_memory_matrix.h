@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #pragma once
 
 #include "arpsid/core/c64_open_bus.h"

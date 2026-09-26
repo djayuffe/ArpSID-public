@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // Regression guard for the v838 user-togglable "VIC-II fast" mode.
 //
 // VIC:FAST trades only VIC-II cycle-exactness (it skips the per-cycle

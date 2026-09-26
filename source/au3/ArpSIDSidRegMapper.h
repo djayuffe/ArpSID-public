@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // ─── ArpSIDSidRegMapper.h ─────────────────────────────────────────────────────
 // Phase 3: Explicit SID register mapping layer.
 // Translates high-level synth state into authentic SID register images.

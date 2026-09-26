@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // state_apply_ownership_split_v814_tests.cpp
 //
 // Guard for P1-11/P1-12: state-root apply ownership must be split into

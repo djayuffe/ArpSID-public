@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // mix_state_persistence_v561_tests.cpp — MIX tab state persistence contract tests (v561).
 //
 // Tests cover:

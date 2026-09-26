@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // sid808_snare_body_routing_v869_tests.cpp
 //
 // v869 pins the deeper SID808 snare/body and shared-voice routing fix:

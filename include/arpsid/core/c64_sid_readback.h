@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #pragma once
 
 #include "arpsid/core/sid_combined_wave_model.h"

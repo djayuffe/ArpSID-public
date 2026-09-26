@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // =============================================================================
 // ArpSID — IPluginFactory3-compliant factory
 // Version synchronized through include/arpsid/version.h

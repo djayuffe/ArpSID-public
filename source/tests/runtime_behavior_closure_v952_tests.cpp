@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // v952 final runtime behavior closure.
 //
 // This is intentionally an executable DSP test, not a source-text contract:

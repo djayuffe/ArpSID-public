@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // gui_viewcontroller_wiring_v590_tests.cpp
 //
 // Pins the v590 GUI wiring guard:

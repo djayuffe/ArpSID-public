@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // v954 arpeggiator audio-render closure.
 //
 // Pins the P0 that the arpeggiator (the plugin's namesake feature) produced NO

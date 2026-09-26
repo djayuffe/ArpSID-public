@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // c64_play_bridge_routing_v855_tests.cpp
 //
 // v855 P0 timing-fix guards. The audio renderer consumes SID writes from

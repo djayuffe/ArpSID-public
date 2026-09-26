@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // v873: ClosedHat/Cowbell/Rim-derived GM percussion now consume their profiles
 // (distinct, audible, non-clamped voices) instead of collapsing to the generic
 // voice for their engine drum.

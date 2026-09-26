@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #include "arpsid/core/c64_cia.h"
 #include "arpsid/core/c64_d418_capture.h"
 #include "arpsid/core/c64_phi2_machine.h"

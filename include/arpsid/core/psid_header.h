@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #pragma once
 // PSID / RSID file header parser — deterministic, RT-safe, zero allocation.
 

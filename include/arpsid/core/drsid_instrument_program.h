@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // drsid_instrument_program.h — DrSID register-microprogram contract
 // (Audit DrSID §3 / §4B).
 //

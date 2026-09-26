@@ -12,7 +12,7 @@
 // NOTE: This file is #included as a single translation unit by factory.cpp.
 // Do NOT add it to the CMake PLUGIN_SOURCES list as a separate .cpp.
 //
-// Copyright (c) 2024 ArpSID Project. All rights reserved.
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // SPDX-License-Identifier: MIT
 
 

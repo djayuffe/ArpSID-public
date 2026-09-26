@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #pragma once
 #include "sid_runtime_voice_policy.h"
 #include "sid_runtime_synth_state.h"

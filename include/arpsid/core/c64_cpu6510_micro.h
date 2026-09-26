@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #pragma once
 // Bus-cycle-accurate 6510 microsequencer.
 // Covers all 151 official opcodes + all stable NMOS illegal opcodes.

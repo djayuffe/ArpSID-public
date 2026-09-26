@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // digi_sample_bank_v596.h - saved user-sample bank for the DIGI tab.
 
 #ifndef ARPSID_GUI_DIGI_SAMPLE_BANK_V596_H

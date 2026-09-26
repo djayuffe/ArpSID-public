@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // sid808_factory_musical_shape_v871_tests.cpp
 //
 // v871 guards every canonical SID808 factory slot (120..149), not only the

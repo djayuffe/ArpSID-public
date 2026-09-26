@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // fix-order #16: DIGI model + sample-bank state is one atomic persistence unit.
 // The adapter keeps legacy split selectors as private fail-closed compatibility
 // stubs, but the GUI/debug protocol must not advertise those split selectors as

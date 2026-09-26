@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // v963 GUI accessibility + tooltip coverage closure.
 //
 // Full-GUI audit pass (after v962 wiring): layout math verified robust at the

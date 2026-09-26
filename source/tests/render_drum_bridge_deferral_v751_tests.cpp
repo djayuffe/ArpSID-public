@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // render_drum_bridge_deferral_v751_tests.cpp
 //
 // audit P0-4: a render-drained state restore must NOT call the non-realtime

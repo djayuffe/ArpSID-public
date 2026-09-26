@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // sid808_snare_complete_closure_v868_tests.cpp
 //
 // v868 guards the remaining SID808 snare-audio audit:

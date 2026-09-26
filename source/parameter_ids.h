@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #pragma once
 
 // ── VST3 SDK include (conditional) ──────────────────────────────────────────

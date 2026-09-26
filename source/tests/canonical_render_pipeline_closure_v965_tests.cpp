@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // v965 canonical render-pipeline closure.
 // Pins the end-to-end authority/timing repairs found by the full pipeline audit:
 // one final event order, release reserve, exact sequencer/ARP boundaries,

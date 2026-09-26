@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // digi_panel_tab_v564_tests.cpp — DIGI tab NSView builder + wire-up contract
 // tests (v564).
 //

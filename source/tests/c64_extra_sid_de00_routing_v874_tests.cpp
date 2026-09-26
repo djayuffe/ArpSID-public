@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // v874 audit P0-1/P0-2/P1-8: a legally configured extra SID at $DE00-$DFE0 must be
 // routed by the runtime bus (writes reach the SID sink as the correct chip/reg), and
 // the runtime SID-base validator must share the parser's legal-range rule.

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // c64_psid_rsid_exactness_v612_tests.cpp
 //
 // 20 pin tests for the PSID/RSID exactness, run-failure, multi-SID, PAL/NTSC,

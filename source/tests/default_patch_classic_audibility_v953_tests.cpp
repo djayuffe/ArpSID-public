@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // v953 default-patch CLASSIC audibility closure.
 //
 // Pins the "synth classic don't work" P0: the shipped DEFAULT/init patch must

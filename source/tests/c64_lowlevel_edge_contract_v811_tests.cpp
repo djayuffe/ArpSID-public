@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // c64_lowlevel_edge_contract_v811_tests.cpp
 //
 // P1 hardening guard for the low-level 6510/CIA/VIC timing contracts identified

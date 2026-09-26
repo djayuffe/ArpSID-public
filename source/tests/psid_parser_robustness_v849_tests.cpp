@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // psid_parser_robustness_v849_tests.cpp
 //
 // Blocker-prevention guard for the low-level PSID/RSID header parser. A SID

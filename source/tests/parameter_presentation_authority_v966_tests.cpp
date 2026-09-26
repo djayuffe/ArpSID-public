@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // parameter_presentation_authority_v966_tests.cpp — v966 closure.
 //
 // One parameter-ID-aware presentation authority (format / parse / unit) is

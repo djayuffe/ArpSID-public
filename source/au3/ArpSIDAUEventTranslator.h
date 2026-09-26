@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // ─── ArpSIDAUEventTranslator.h ───────────────────────────────────────────────
 // Phase 2: AU-specific event translation layer.
 // Converts AURenderEvent linked list into canonical TimedEvent/EventBuffer.

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // mix_fx_processors.h — RT-safe FX processor implementations for MIX channel chain (v554).
 //
 // Five processor types corresponding to MixFxType in mix_panel_model.h:

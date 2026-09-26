@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // drsid_instrument_program_v523_tests.cpp
 //
 // Pins the DrSID register-microprogram contract (Audit DrSID §3, §4B):

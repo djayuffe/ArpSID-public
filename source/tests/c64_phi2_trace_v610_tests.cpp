@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // c64_phi2_trace_v610_tests.cpp
 // Wires the previously-dead-but-useful PHI2 bus trace (c64_phi2_trace.h) into
 // the live code path and pins its behavior:

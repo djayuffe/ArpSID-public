@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #include "runtime_test_common.h"
 
 #include <vector>

@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // sid_runtime_restore_dual_engine_v815_tests.cpp
 //
 // P1-13 guard: a prepared state restore must restore the serialized primary SID

@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #include "arpsid/core/scope_triple_buffer.h"
 #include "arpsid/core/c64_telemetry.h"
 #include "arpsid/engines/drsid_engine.h"

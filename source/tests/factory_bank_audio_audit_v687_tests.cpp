@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // Factory-bank audio closure: by default this is a bounded CI/closure audit that
 // verifies all factory slots structurally and audio-renders a deterministic
 // representative set covering synth, DrSID/drum, SID-808 and edge slots.  Set

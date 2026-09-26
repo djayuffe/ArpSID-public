@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #pragma once
 #include "sid_runtime_midi_ops.h"
 #include "sid_event_queue.h"

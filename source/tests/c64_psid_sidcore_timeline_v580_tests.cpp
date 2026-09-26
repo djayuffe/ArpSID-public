@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // c64_psid_sidcore_timeline_v580_tests.cpp
 // v580: Keep SIDCORE timeline and live shadow coherent for the C64/PSID
 // early-return render path.

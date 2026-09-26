@@ -10,7 +10,7 @@
 // 4. Embeds the ArpSIDViewController inside an NSWindow.
 // 5. Provides a menu bar with Panic, Preset Next/Prev, and Quit.
 //
-// Copyright (c) 2024 ArpSID Project. All rights reserved.
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // SPDX-License-Identifier: MIT
 
 #import "ArpSIDHostAppDelegate.h"
@@ -835,7 +835,7 @@ static void ArpSIDMIDINotifyProc(const MIDINotification* msg, void* refCon) {
     (void)sender;
     NSAlert* a = [[NSAlert alloc] init];
     a.messageText = @"ArpSID AUv3";
-    a.informativeText = @"MOS 6581/8580 SID synthesiser\nVersion 1.5.1\n© 2024 Uber Sound Solutions";
+    a.informativeText = @"MOS 6581/8580 SID synthesiser\nVersion 1.5.1\n© 2024-2026 Ulf Bertilsson";
     [a runModal];
 }
 

@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // ─── ArpSIDModMatrix.h ────────────────────────────────────────────────────────
 // Phase 3: Real modulation routing graph with explicit route objects.
 // Sources: LFO1-4, env, velocity, note, key-follow, macro 1-8, mod wheel,

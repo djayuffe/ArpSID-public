@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // v962 GUI wiring closure: DrSID user-kit library strip + SIDCORE popout Cmd-F.
 //
 // A reverse-wiring audit (defined action methods vs controls that reference

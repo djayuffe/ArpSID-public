@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // gm_drum_map_reference_v848_tests.cpp
 //
 // Guards the GUI-side GM drum key-map reference helpers used by the drum tabs.

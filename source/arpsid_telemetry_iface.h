@@ -8,7 +8,7 @@
 // controller retrieves canonical snapshots without
 // exposing the ring internals.
 //
-// Copyright (c) 2024 ArpSID Project. All rights reserved.
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // SPDX-License-Identifier: MIT
 
 #pragma once

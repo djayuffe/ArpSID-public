@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // sid808_spectral_authenticity_v872_tests.cpp
 //
 // v872 P1-10 — lifts the SID808 factory-drum guards from "musical shape exists"

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // sid_voice_allocator.h — Authentic SID-voice allocator for the single-SID
 // 3-voice (or dual-SID 6-voice) topology audit #29 demands.
 //

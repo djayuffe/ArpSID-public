@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // kit_state_blob.h — KIT tab full-state serialization blob (v560 key, schema v2).
 //
 // PURPOSE

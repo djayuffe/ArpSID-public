@@ -1,5 +1,5 @@
 // ArpSIDFileBankBridge.mm — ObjC bridge for file bank ops in AUv3 context
-// Copyright (c) 2024 ArpSID Project. All rights reserved.
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // SPDX-License-Identifier: MIT
 
 #import "ArpSIDFileBankBridge.h"

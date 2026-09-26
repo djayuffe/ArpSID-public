@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // drsid_kit_compiler.h — Compiles DrSidInstrumentProgram[] kits into a
 // runtime snapshot with register-trace fingerprints (Audit DrSID §3
 // follow-up; the slice that finalized the contract left this as the next

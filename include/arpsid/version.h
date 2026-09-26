@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #pragma once
 
 // Canonical version — must match CMakeLists.txt project(VERSION ...) and VERSION.txt.

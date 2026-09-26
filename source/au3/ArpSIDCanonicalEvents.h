@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // ─── ArpSIDCanonicalEvents.h ─────────────────────────────────────────────────
 // AU event helpers layered directly on top of the shared canonical event queue.
 // Shared core owns the event schema; this header only provides AU-side shaping

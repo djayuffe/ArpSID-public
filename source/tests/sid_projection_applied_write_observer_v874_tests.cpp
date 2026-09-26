@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // v874 audit (scoped mirror completeness): the applied-write observer of
 // renderSidRegisterQueueToStereo() must see EXACTLY the writes the render applies to the
 // audio engine — every one, once, in applied order — regardless of which projection path

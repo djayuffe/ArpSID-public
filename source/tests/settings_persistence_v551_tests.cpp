@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // settings_persistence_v551_tests.cpp — Contract tests for v551 settings persistence.
 //
 // Tests:

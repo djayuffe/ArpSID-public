@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #pragma once
 #include "sid_runtime_model.h"
 #include "sid_runtime_primitive_surface.h"

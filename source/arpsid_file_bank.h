@@ -5,7 +5,7 @@
 // All I/O is synchronous, lock-free, and may be called from any non-RT thread.
 // Binary format is platform-independent (little-endian, no padding).
 //
-// Copyright (c) 2024 ArpSID Project. All rights reserved.
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // SPDX-License-Identifier: MIT
 
 #include "arpsid/core/sid_state_codec.h"

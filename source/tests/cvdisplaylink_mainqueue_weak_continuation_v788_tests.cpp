@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // cvdisplaylink_mainqueue_weak_continuation_v788_tests.cpp
 //
 // fix-order #42: the CVDisplayLink callback already uses a zeroing weak-box

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // drsid_quick_kit_base_profile_parity_v967_tests.cpp — v967 closure.
 //
 // The on-screen DrSID quick-kit popup applies a GUI-side tone/motion table

@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // authority_staging_policy_v945_tests.cpp
 // Guard for v945 canonical param-specific staging and Phase2/AU3 policy hardening.
 

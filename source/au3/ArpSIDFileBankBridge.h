@@ -1,6 +1,6 @@
 // ArpSIDFileBankBridge.h — ObjC bridge for file bank operations in AU context
 // Wraps ArpSIDFileBank for use from ObjC/Swift UI layers.
-// Copyright (c) 2024 ArpSID Project. All rights reserved.
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // SPDX-License-Identifier: MIT
 #pragma once
 #import <Foundation/Foundation.h>

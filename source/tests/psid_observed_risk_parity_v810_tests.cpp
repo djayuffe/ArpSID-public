@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // psid_observed_risk_parity_v810_tests.cpp
 //
 // P1 guard: PSID does not use the RSID downgrade API (that API correctly

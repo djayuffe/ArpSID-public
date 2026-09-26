@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // theme_palette_v552.h — Theme color palette for SETTINGS theme application (v552).
 //
 // PURPOSE

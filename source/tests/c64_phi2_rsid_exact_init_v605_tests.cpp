@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // c64_phi2_rsid_exact_init_v605_tests.cpp
 // Regression tests for bus-cycle-accurate RSID init via C64Phi2Machine.
 //

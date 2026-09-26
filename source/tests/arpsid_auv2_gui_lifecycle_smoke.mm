@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // Runtime smoke for AUv2 raw-NSView reuse after a host detach/reopen cycle.
 
 #import <AppKit/AppKit.h>

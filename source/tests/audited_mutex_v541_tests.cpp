@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // audited_mutex_v541_tests.cpp
 //
 // Pins Audit #46 — the AUv2 instance carries multiple `std::mutex`

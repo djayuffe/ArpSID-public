@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #pragma once
 #include "sid_voice_identity.h"
 #include "sid_voice_token.h"

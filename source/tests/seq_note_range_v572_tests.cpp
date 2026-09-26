@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // seq_note_range_v572_tests.cpp — Sequencer step note formula consistency (v572).
 //
 // Three code paths map kParamSeqStep*Note [0,1] to a MIDI note (0..127):

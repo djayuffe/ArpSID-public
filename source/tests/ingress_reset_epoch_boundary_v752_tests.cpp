@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // ingress_reset_epoch_boundary_v752_tests.cpp
 //
 // audit P0-6 / fix-order #5: clearEnqueuedBeforeNow() must be a true reset

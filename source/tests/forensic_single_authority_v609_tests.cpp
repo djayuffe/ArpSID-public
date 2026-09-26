@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // forensic_single_authority_v609_tests.cpp
 //
 // Consolidation guard (Option A): the embedded forensic system inside the

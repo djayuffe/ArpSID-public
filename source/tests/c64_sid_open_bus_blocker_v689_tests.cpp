@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // c64_sid_open_bus_blocker_v689_tests.cpp
 //
 // Exactness audit #7: an actual SID-register open-bus read (program read a SID

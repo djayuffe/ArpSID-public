@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // absolute_p0_closure_v797_tests.cpp
 //
 // fix-order #51: source-status guard for the complete P0 closure surface.  This

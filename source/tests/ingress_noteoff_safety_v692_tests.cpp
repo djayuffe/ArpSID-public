@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // ingress_noteoff_safety_v692_tests.cpp
 //
 // Concurrency audit #2: under GENUINE ingress fullness (merge lanes + freelist +

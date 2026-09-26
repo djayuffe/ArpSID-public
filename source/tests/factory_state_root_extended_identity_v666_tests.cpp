@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #include "factory_patch_params.h"
 #include "parameter_ids.h"
 #include <cstdlib>

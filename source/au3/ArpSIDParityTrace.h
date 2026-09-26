@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // ─── ArpSIDParityTrace.h ─────────────────────────────────────────────────────
 // Phase 5: Host parity trace tool.
 // Records canonical events, param values, and audio output hashes per block.

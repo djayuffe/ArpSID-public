@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // kit_state_blob_v560_tests.cpp — KitStateBlob contract tests (v560).
 //
 // Tests cover:

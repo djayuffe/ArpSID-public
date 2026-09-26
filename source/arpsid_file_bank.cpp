@@ -20,7 +20,7 @@
 // [+132..+135] Blob size: uint32_le
 // [+136..] Binary state blob
 //
-// Copyright (c) 2024 ArpSID Project. All rights reserved.
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // SPDX-License-Identifier: MIT
 
 #include "arpsid_file_bank.h"

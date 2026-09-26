@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // fix-order #17: parameter automation diagnostics must distinguish a timed
 // param-intent queue drop from the dirty-flush fallback that still applies the
 // latest parameter value at the next block boundary. v952 strengthens this:

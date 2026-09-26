@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #include "arpsid/core/sid_state_codec.h"
 #include "arpsid/core/sid_runtime_state_root_presentation.h"
 #include "arpsid/core/sid_runtime_model.h"

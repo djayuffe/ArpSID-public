@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // c64_psid_play_jam_v577_tests.cpp
 // v577: Two-bug fix for remaining C64 PSID choppiness after v576.
 //

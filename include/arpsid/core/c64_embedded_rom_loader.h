@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: see project license
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // c64_embedded_rom_loader.h — loads the embedded verified stock C64 ROMs into a
 // C64Platform. The CRC32 of each image matches c64_pla.h's known-stock identity
 // table, so C64RomSet::loadX() auto-promotes trust to KnownStock, giving

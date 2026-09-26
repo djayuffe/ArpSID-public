@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // Correctness test for the bounded MPSC ingress ring (audit #8/#9/#10/#11):
 // multiple producers + single consumer, lock-free, lossless except genuine
 // fullness, no contention loss, FIFO per producer.

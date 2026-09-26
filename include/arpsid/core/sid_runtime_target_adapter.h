@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #pragma once
 #include "sid_runtime_execution.h"
 #include "sid_runtime_audio_kernel.h"

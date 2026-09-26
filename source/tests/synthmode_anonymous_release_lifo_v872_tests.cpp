@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // synthmode_anonymous_release_lifo_v872_tests.cpp
 //
 // v872 P1-8 — pins the anonymous same-note release policy so it cannot silently

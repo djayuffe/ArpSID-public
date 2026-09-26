@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // au3_sid808_render_event_smoke_v862.mm
 // Direct AUAudioUnit render-block smoke for dedicated SID-808 event ingress.
 

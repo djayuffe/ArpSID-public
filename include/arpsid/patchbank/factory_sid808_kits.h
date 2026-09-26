@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // factory_sid808_kits.h — Factory kit configurations for the SID-808
 // canonical slots (120..149) that route through `Sid808Engine` (audit #39, #74).
 //

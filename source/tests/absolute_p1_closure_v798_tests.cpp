@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // absolute_p1_closure_v798_tests.cpp
 //
 // fix-order #52: source/status guard for complete P1 closure. This is a

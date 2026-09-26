@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // c64_no_sink_potxy_blocker_v758_tests.cpp
 //
 // audit P1-13 / fix-order #11: a CPU read of POTX ($D419) / POTY ($D41A) with NO

@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // ─── ArpSIDStateSerializer.h ──────────────────────────────────────────────────
 // Canonical persistence goes through the SidStateRootV1 schema/codec.
 // Normalized parameter arrays are compatibility/UI import-export helpers only and

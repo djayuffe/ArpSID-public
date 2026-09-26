@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // render_state_restore_alloc_trap_v750_tests.cpp
 //
 // Behavioral test for audit P0-3: the realtime state-restore path

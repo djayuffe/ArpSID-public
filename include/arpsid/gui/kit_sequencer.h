@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // kit_sequencer.h — A8: Compile KIT grid to render-owned drum sequencer events.
 //
 // PURPOSE

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // settings_panel_model.h — SETTINGS tab data model (v544).
 //
 // PURPOSE

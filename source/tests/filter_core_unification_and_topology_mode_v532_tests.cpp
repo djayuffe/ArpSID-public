@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // filter_core_unification_and_topology_mode_v532_tests.cpp
 //
 // Closes two audit families in one slice:

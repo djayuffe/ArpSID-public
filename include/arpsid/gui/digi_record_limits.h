@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // digi_record_limits.h - central DIGI REC/import/sample length limits.
 
 #ifndef ARPSID_GUI_DIGI_RECORD_LIMITS_H

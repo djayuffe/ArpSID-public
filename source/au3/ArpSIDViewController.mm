@@ -1,7 +1,7 @@
 // ArpSIDViewController.mm — canonical native ArpSID GUI
 // Full realtime C64 GUI: oscilloscope · stereo meters · arp step grid
 // transport readout · voice LEDs · SID register hex · 120 Hz CVDisplayLink
-// Copyright (c) 2024 ArpSID Project. SPDX-License-Identifier: MIT
+// Copyright (C) 2024-2026 Ulf Bertilsson. SPDX-License-Identifier: MIT
 
 #import "ArpSIDViewController.h"
 #if !ARPSID_VST_COCOA_BRIDGE

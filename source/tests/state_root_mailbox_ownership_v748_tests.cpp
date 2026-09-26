@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // state_root_mailbox_ownership_v748_tests.cpp
 //
 // Behavioral tests for ArpSID::OwnershipMailbox (audit P0-1: state-root mailbox

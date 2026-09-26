@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // v956 DrSID factory-kit distinctness closure.
 //
 // The 40 canonical DrSID factory slots (80..119) are 8 primary-drum families x 5

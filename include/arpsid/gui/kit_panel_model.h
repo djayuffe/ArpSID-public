@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // kit_panel_model.h — KIT tab data model contract (v555).
 //
 // PURPOSE

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // Canonical product-tab identity and production navigation inventory.
 #ifndef ARPSID_GUI_TAB_ARCHITECTURE_H
 #define ARPSID_GUI_TAB_ARCHITECTURE_H

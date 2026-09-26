@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // bass_6581_authority_v507_tests.cpp
 //
 // Regression coverage for the 6581 vs 8580 bass treatment in

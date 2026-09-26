@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // sid_core_exactness_v854_tests.cpp
 //
 // Ultra-low-level SID core exactness guard. Pins the three v854 hardware fixes

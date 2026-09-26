@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #include "arpsid/core/psid_header.h"
 #include "arpsid/core/c64_6510.h"
 #include "arpsid/core/c64_bus.h"

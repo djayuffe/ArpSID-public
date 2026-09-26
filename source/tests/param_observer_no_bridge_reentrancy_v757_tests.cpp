@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // param_observer_no_bridge_reentrancy_v757_tests.cpp
 //
 // audit P0-12 / fix-order #10: the AUParameter observer block must not call back

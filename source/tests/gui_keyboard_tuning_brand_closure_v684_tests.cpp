@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #include "arpsid/core/math_utils.h"
 #include "parameter_ids.h"
 

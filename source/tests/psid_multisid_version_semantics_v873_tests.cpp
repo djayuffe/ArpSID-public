@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // v873: PSID extra-SID address bytes are version-gated per the HVSC/libsidplayfp
 // PSID v2NG spec (max 3 SIDs):
 //   v2: $7A/$7B reserved (mono)

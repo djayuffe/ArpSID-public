@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // c64_bus_event.h - cycle-tagged C64 bus event contract for SID/DIGI authority.
 
 #pragma once

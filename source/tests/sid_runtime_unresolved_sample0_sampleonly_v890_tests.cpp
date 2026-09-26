@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #include "arpsid/core/sid_host_cycle_dispatcher.h"
 #include <iostream>
 #include <string>

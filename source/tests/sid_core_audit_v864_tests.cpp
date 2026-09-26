@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // sid_core_audit_v864_tests.cpp
 //
 // Low-level SID-core audit closure guard. This pins the surfaces called out by

@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // sid808_musical_shape_v870_tests.cpp
 //
 // v870 guards the SID808 musical-shape closure:

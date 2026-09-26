@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #import "ArpSIDAUv2Shared.h"
 
 #import "../au3/ArpSIDAudioUnit.h"

@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // c64_psid_full_vbi_passive_v578_tests.cpp
 // Current contract: VBI PSID advancement is bounded by host time. Host cycles
 // accrue progressively to each play deadline, so a play may consume at most one

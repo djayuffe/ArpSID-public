@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // gm_drum_map_reference.h
 //
 // GUI-side (non-realtime) helpers that turn the canonical General MIDI drum note

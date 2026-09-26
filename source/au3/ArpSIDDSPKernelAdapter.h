@@ -6,7 +6,7 @@
 // It runs the kernel on the render thread and forwards parameter/MIDI
 // messages safely across thread boundaries.
 //
-// Copyright (c) 2024 ArpSID Project. All rights reserved.
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // SPDX-License-Identifier: MIT
 
 #pragma once

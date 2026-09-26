@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #pragma once
 
 // ─── v966 canonical host parameter presentation authority ───────────────────

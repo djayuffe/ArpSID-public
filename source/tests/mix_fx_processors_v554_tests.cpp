@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // mix_fx_processors_v554_tests.cpp — Contract tests for MIX FX processor chain (v554).
 //
 // Section I — Layout static_asserts (BiquadCoeffs, BiquadState, each processor, MixFxProcessor)

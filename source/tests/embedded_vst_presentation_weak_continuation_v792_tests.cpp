@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // embedded_vst_presentation_weak_continuation_v792_tests.cpp
 //
 // fix-order #46: prepareForEmbeddedVSTPresentation posts a main-queue

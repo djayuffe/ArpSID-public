@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // v961 arpeggiator gate-off timing closure (the former "P2" arp+non-poly dip).
 //
 // Root cause found: pendingGateOff_ carried TWO meanings — (a) the normal "this

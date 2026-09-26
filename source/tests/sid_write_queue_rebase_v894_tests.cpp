@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // v894 unsync closure tests.
 //
 // SidWrite.sampleOffset is BLOCK-LOCAL. Writes scheduled past the current

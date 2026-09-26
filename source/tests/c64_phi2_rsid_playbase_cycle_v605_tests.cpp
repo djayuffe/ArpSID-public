@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // c64_phi2_rsid_playbase_cycle_v605_tests.cpp — RSID PHI2-machine PlayBase cycle fix.
 //
 // Root cause of RSID mis-timed SID writes (found in v605 audit):

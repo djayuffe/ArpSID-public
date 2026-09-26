@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // c64_rom_helper_range_safe_v753_tests.cpp
 //
 // audit P0-8 / fix-order #6: C64RomSet::read{Basic,Kernal,Character}() and the

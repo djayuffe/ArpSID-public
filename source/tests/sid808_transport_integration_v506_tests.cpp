@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // sid808_transport_integration_v506_tests.cpp
 //
 // Regression coverage for the SID-808 / transport / BPM / ticks / Logic

@@ -8,7 +8,7 @@
 // ProcessorUID: A1B2C3D4-E5F6-0718-9A0B-1C2D3E4F5A6B
 // ControllerUID: B2C3D4E5-F607-1829-A0B1-C2D3E4F5A6B7
 //
-// Copyright (c) 2024 ArpSID Project. All rights reserved.
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // SPDX-License-Identifier: MIT
 
 #include "pluginterfaces/base/funknown.h"

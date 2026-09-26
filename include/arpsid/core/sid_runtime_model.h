@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #pragma once
 #include "sid_variant_profile.h"
 #include "sid_runtime_sizing.h"

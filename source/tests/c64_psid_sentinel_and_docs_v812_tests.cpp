@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // c64_psid_sentinel_and_docs_v812_tests.cpp
 //
 // P1/P2 guard: C64Psid remains a telemetry sentinel, not a render resolver mode,

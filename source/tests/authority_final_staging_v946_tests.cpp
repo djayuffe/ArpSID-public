@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // authority_final_staging_v946_tests.cpp
 // Final guard for v946: no pre-clamp split-brain on canonical staging ingress.
 

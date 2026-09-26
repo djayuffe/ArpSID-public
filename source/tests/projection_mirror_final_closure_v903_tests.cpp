@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #include "arpsid/core/sid_runtime_fractional_render.h"
 #include "arpsid/core/sid_runtime_synth_register_scheduler.h"
 #include "arpsid/engines/sid_register_engine.h"

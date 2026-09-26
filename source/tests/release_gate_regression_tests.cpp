@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #undef NDEBUG
 #include "arpsid/core/sid_event_timing.h"
 #include "arpsid/core/sid_ingress_merge.h"

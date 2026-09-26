@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // factory_sid808_kits_and_wavetable_runner_v536_tests.cpp
 //
 // Closes two architectural wire-ups in one slice:

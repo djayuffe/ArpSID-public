@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // v960 OpenBus VIC/Matrix authentic-telemetry closure.
 //
 // The SIDCORE / C64 SID-bus Metal backdrop (ArpSIDSidCoreMetalBackdropView) now

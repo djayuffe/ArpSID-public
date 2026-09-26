@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // sid808_prepare_resets_active_state_v872_tests.cpp
 //
 // v872 P2-5 regression — Sid808Engine::prepare() must clear active drum voices.

@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // release_closure_v701_tests.cpp
 //
 // Pass126 release-closure guard. This is a source-shape contract test: it keeps

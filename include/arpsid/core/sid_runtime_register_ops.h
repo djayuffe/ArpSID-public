@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #pragma once
 #include "sid_event_queue.h"
 #include "arpsid/engines/bitperfect_engine.h"

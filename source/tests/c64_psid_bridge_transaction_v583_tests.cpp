@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // c64_psid_bridge_transaction_v583_tests.cpp
 // v583: Transactional PSID play — BridgeTransaction for VBI and CIA paths.
 //

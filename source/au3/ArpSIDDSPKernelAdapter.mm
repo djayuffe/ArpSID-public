@@ -1,7 +1,7 @@
 // ArpSIDDSPKernelAdapter.mm
 // ArpSID AUv3 — ObjC++ Bridge Implementation
 //
-// Copyright (c) 2024 ArpSID Project. All rights reserved.
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // SPDX-License-Identifier: MIT
 
 #import "ArpSIDDSPKernelAdapter.h"

@@ -21,7 +21,7 @@
 // A2=1870(0x74E) A3=3741(0xE9D) A4=7482(0x1D3A) A5=14965(0x3A75)
 // C4=4450(0x1162) G3=3335(0xD07) D4=4994(0x1382) E3=2803(0xAF3)
 //
-// Copyright (c) 2024 ArpSID Project. All rights reserved.
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // SPDX-License-Identifier: MIT
 
 #include "arpsid/patchbank/forensic_patch_bank.h"

@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // bank_status_mainqueue_weak_continuation_v789_tests.cpp
 //
 // fix-order #43: synchronous bank/preset save/export handlers should not queue

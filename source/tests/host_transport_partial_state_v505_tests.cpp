@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // host_transport_partial_state_v505_tests.cpp
 //
 // Regression coverage for the host-transport snapshot when the host provides

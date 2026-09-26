@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #include "arpsid/core/c64_platform.h"
 #include "arpsid/core/sid_pro_json_c64_bridge.h"
 #include "arpsid/core/sid_pro_json_trace.h"

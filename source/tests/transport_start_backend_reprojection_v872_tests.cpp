@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // transport_start_backend_reprojection_v872_tests.cpp
 //
 // v872 root-cause regression — "drums stop working after Stop→Play until you

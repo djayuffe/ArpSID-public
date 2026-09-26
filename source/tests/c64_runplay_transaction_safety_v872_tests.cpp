@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // c64_runplay_transaction_safety_v872_tests.cpp
 //
 // v872 P1-1 regression — direct C64Runtime::runPlay() must be transaction-safe.

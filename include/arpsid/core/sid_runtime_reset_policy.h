@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #pragma once
 #include "sid_dynamic_state.h"
 #include "sid_event_queue.h"

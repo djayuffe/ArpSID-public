@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // Regression guard for the v840 C64P render-path stall instrumentation.
 //
 // Measurement (v839) proved the cycle-accurate emulation runs ~12x realtime, so

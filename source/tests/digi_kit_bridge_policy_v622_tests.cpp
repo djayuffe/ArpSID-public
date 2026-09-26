@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #include "arpsid/engines/digi_sampler_engine.h"
 #include "arpsid/gui/gui_realtime_projection_v588.h"
 #include <cstdlib>

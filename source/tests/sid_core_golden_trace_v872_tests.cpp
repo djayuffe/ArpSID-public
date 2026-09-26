@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // sid_core_golden_trace_v872_tests.cpp
 //
 // v872 P2-2 (partial) — a deterministic golden-trace REGRESSION harness for the

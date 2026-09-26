@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // Regression guard for the v839 user-togglable "6510 fast" mode.
 //
 // 6510:FAST keeps the CPU/CIA/VIC/SID emulation bit-exact — it is NOT the

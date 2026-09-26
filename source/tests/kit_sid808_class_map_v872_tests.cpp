@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // kit_sid808_class_map_v872_tests.cpp
 //
 // v872 P0 regression — KitDrumClass -> SidGMDrumClass routing. The KIT sequencer

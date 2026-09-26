@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #pragma once
 // SID-PRO JSON trace playback bridge for ArpSID's C64 bus/projection runtime.
 // Import/UI/offline path only. The bridge is deterministic, allocation-free

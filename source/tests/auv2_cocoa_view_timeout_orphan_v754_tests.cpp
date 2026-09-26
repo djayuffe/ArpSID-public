@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // auv2_cocoa_view_timeout_orphan_v754_tests.cpp
 //
 // audit P0-9 / fix-order #7: the AUv2 Cocoa view factory dispatches the editor

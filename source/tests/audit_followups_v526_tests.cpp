@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // audit_followups_v526_tests.cpp
 //
 // Pins the four follow-up fixes that closed the "ikke gjort i denne skiven"

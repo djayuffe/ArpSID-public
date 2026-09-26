@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // ArpSID full telemetry snapshot shared by AUv2, AUv3, VST3 and standalone.
 // This POD is presentation transport only; render engines remain the authority.
 //

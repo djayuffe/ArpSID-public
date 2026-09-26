@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #include "arpsid/core/c64_phi2_audio_scheduler.h"
 #include "arpsid/core/c64_phi2_machine.h"
 

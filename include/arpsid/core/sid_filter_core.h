@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // sid_filter_core.h — Canonical SID-filter helpers shared by SIDChip's
 // `SIDFilter` and SidRegisterEngine's `Filter` (Audit #31, #32).
 //

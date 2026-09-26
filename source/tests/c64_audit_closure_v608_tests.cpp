@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // c64_audit_closure_v608_tests.cpp
 // Pins the v608 audit-closure fixes:
 // I. 6510 reset sequence: SP -= 3, I/U set & B clear, PC = reset vector.

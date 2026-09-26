@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // v955 drum transport-start audibility closure.
 //
 // Pins the P1 that in the DEFAULT drum machine model (SidAuthentic), the Cowbell

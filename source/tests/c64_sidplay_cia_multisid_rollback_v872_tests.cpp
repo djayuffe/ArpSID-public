@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // c64_sidplay_cia_multisid_rollback_v872_tests.cpp
 //
 // v872 SIDPLAY closure, part 2 — behavioral proof for the render-transaction

@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #import <Cocoa/Cocoa.h>
 #import <Foundation/Foundation.h>
 

@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // sid808_snare_one_shot_v867_tests.cpp
 //
 // v867 guards the "wrong SID808 snare" audit:

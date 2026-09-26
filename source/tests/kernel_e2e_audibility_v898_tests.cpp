@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // v898 end-to-end audibility closure.
 //
 // Pins the fix chain for the "projection/SynthMode instruments are silent and

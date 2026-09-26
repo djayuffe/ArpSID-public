@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // drsid_user_kit_save_mode_normalization_v968_tests.cpp — v968 closure.
 //
 // A user "DrSID kit" is a drum-role patch by construction: _drumSaveUserKit

@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // tab_tooltip_coverage_v586_tests.cpp
 // v586: Tab tooltip coverage audit — all visible tabs in every flavor must
 // carry a non-generic tooltip string; two specific correctness invariants

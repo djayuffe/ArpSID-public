@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #pragma once
 // C64 runtime telemetry snapshot/gate — deterministic, RT-safe, zero allocation.
 

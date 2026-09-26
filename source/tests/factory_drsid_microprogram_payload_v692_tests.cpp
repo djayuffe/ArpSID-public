@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #include "arpsid/patchbank/factory_drsid_kits.h"
 #include <cstdlib>
 #include <iostream>

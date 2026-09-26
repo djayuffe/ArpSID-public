@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // sid808_engine_and_router_v535_tests.cpp
 //
 // Closes the engine-split architecture (audit #39 / #74):

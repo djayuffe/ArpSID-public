@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // test_suite_integrity_v969_tests.cpp — v969 closure.
 //
 // A test-suite audit (v969) found that an over-eager stale-target cleanup had

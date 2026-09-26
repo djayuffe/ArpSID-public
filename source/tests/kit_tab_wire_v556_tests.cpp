@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // kit_tab_wire_v556_tests.cpp — KIT tab wire-up completeness tests (v556).
 //
 // PURPOSE:

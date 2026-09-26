@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // digi_d418_stream_engine.h - 4-bit DIGI as PHI2-scheduled $D418 writes.
 //
 // This engine replaces the legacy DigiSamplerEngine for the standalone/private

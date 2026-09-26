@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #pragma once
 #include "sid_serializer_schema.h"
 #include "sid_runtime_state_root_presentation.h"

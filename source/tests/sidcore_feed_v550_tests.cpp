@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // sidcore_feed_v550_tests.cpp — Contract tests for the v550 SIDCORE register-write feed.
 //
 // Tests:

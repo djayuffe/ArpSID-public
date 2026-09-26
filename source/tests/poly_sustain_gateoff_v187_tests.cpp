@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #include "arpsid/core/sid_runtime_voice_policy.h"
 #include <iostream>
 static bool require(bool ok, const char* msg){ if(!ok) std::cerr << "FAIL: " << msg << "\n"; return ok; }

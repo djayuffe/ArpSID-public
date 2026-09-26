@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // v700 - GUI DIGI audition pad wiring contract guard.
 // This is intentionally a source-level guard because the full AU GUI/adapter
 // translation units require Apple SDK. It catches the exact contract that made

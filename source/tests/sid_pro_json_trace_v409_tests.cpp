@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 #include "arpsid/core/sid_pro_json_trace.h"
 #include <array>
 #include <cstdint>

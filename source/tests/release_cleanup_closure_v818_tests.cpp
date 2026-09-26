@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // release_cleanup_closure_v818_tests.cpp
 //
 // V818 final cleanup/source-release guard. Closes remaining P2 release-hygiene

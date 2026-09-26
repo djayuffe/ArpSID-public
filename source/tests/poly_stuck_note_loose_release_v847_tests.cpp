@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // poly_stuck_note_loose_release_v847_tests.cpp
 //
 // Guards the v847 poly stuck-note fix. The strict note-off matcher

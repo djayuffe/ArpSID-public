@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // ArpSIDViewController+ChromeAndPalette section interface.
 // Declares methods implemented in ArpSIDViewController_ChromeAndPalette.mm
 // for theme colours, window chrome, and palette helpers.

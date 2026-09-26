@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // sidplay_register_engine_v867_tests.cpp
 //
 // v867 guards the C64 SIDPLAY register-engine fixes:

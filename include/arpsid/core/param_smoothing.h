@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // param_smoothing.h — Canonical parameter-smoothing utilities (Audit #37).
 //
 // PROBLEM

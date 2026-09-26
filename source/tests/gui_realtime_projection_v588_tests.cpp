@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // gui_realtime_projection_v588_tests.cpp
 // Pins the RT-safe projection from GUI-owned MIX/KIT/DIGI models into render
 // intent and lightweight telemetry counts.

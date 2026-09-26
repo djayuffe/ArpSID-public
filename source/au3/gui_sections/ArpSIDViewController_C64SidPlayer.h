@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // ArpSIDViewController+C64SidPlayer section interface.
 // Declares C64 SID player panel action methods extracted from
 // ArpSIDViewController.mm into a dedicated section file.

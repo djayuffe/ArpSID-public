@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // ArpSID — VST3 native Cocoa view host.
 //
 // The canonical ArpSIDViewController is the only GUI implementation. The old

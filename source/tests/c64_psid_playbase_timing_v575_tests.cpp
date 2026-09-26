@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // c64_psid_playbase_timing_v575_tests.cpp — VBI PlayBase timing (v575).
 //
 // Root cause of choppy C64 playback (found after v574):

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // seq_swing_tempo_v571_tests.cpp — Sequencer swing tempo-preservation contract (v571).
 //
 // The sequencer step-duration lambda in arpsid_processor_phase2.cpp::processSequencer()

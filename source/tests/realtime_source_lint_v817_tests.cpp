@@ -1,3 +1,4 @@
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // realtime_source_lint_v817_tests.cpp
 //
 // Pass380 V817 source contract lint. This intentionally overlaps the focused

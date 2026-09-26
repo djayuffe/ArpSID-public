@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: BSD-3-Clause
+// Copyright (C) 2024-2026 Ulf Bertilsson
 // digi_panel_model.h — DIGI tab data model for ArpSID 0.0.444 (v596).
 //
 // PURPOSE
