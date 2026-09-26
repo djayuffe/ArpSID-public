@@ -13,6 +13,24 @@ post-FX) — with host-accurate parameter display, automation and state restore.
 
 ---
 
+## Screenshots
+
+Captured from the ArpSID standalone host (AUv3 presentation), running the shipped build.
+
+![ArpSID — main synth panel](docs/screenshots/arpsid-main-synth.png)
+
+*Main synth view — Master section, three VCO banks (VCO1–3), the multimode Filter, ADSR envelope and the Output/FX stage.*
+
+![ArpSID — DrSID drum machine](docs/screenshots/arpsid-drsid-drum-machine.png)
+
+*DrSID register/wavetable drum core — 16-step pattern grid (BD/SD/CP/CH), the SID-808 voice bank with its General-MIDI note map, the live `$D400–$D418` register scope, and the Analog SID control bank.*
+
+![ArpSID — SID register view](docs/screenshots/arpsid-sid-register-view.png)
+
+*SID-register (`$D400`) monitor — per-voice VCO, filter and envelope register read-outs for direct SynthMode inspection.*
+
+---
+
 ## Plug-in formats
 
 | Format | Notes |
