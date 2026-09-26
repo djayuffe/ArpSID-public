@@ -2,10 +2,11 @@ name: Build
 
 # Reusable build + verification pipeline, shared by CI and Release.
 #
-#   linux       full CTest suite + repository guard scripts
-#   linux-vst3  VST3, Linux x86_64 + aarch64, SDK validator
-#   windows-vst3 VST3, Windows x64 + arm64 (MSVC), SDK validator
-#   macos       AUv2 (5 flavors) + VST3, codesign verify, strict auval
+#   linux       full CTest suite + repository guard scripts (GCC and Clang)
+#   linux-sanitizers full CTest suite under AddressSanitizer + UBSan
+#   linux-vst3  VST3, Linux x86_64 + aarch64, SDK validator, host integration test
+#   windows-vst3 VST3, Windows x64 + arm64 (MSVC), SDK validator, host integration test
+#   macos       AUv2 (5 flavors) + VST3, codesign verify, strict auval, host integration test
 #   macos-apps  Standalone app + AUv3 (Logic-compatible app), launch smoke test
 #
 # Every job fails on ArpSID compiler/linker warnings, and the macOS job fails
@@ -35,12 +36,29 @@ env:
 
 jobs:
   linux:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { compiler: gcc,   cc: gcc,   cxx: g++ }
+          - { compiler: clang, cc: clang, cxx: clang++ }
     runs-on: ubuntu-24.04
+    env:
+      CC: ${{ matrix.cc }}
+      CXX: ${{ matrix.cxx }}
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 500M
     steps:
       - uses: actions/checkout@v7
         with: { ref: "${{ inputs.ref }}" }
-      - run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - run: sudo apt-get update && sudo apt-get install -y ninja-build ccache
+      - uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ccache-linux-${{ matrix.compiler }}-${{ github.sha }}
+          restore-keys: ccache-linux-${{ matrix.compiler }}-
       - name: Repository guards
+        if: matrix.compiler == 'gcc'
         run: |
           python3 scripts/check_version_coherence.py
           python3 scripts/verify_source_tree.py
@@ -51,8 +69,35 @@ jobs:
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DARPSID_BUILD_TESTS=ON
           cmake --build build --parallel "$(nproc)" 2>&1 | tee build.log
           scripts/ci/check_build_warnings.sh build.log "$GITHUB_WORKSPACE"
+          ccache --show-stats
       - name: Test
         run: ctest --test-dir build --parallel "$(nproc)" --output-on-failure --no-tests=error
+
+  linux-sanitizers:
+    runs-on: ubuntu-24.04
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.ccache
+      CCACHE_MAXSIZE: 500M
+      ASAN_OPTIONS: detect_leaks=1:abort_on_error=1
+      UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+    steps:
+      - uses: actions/checkout@v7
+        with: { ref: "${{ inputs.ref }}" }
+      - run: sudo apt-get update && sudo apt-get install -y ninja-build ccache
+      - uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: ccache-linux-asan-${{ github.sha }}
+          restore-keys: ccache-linux-asan-
+      - name: Build (ASan + UBSan)
+        run: |
+          set -o pipefail
+          cmake -S . -B build-asan -G Ninja -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+            -DARPSID_BUILD_TESTS=ON -DARPSID_ENABLE_SANITIZERS=ON
+          cmake --build build-asan --parallel "$(nproc)" 2>&1 | tee build-asan.log
+          scripts/ci/check_build_warnings.sh build-asan.log "$GITHUB_WORKSPACE"
+      - name: Test (ASan + UBSan)
+        run: ctest --test-dir build-asan --parallel "$(nproc)" --output-on-failure --no-tests=error
 
   source:
     if: inputs.release
@@ -92,8 +137,14 @@ jobs:
           set -o pipefail
           cmake -S . -B build-vst3 -G Ninja -DCMAKE_BUILD_TYPE=Release \
             -DARPSID_BUILD_VST3=ON -Dvst3sdk_SOURCE_DIR="${RUNNER_TEMP}/vst3sdk"
-          cmake --build build-vst3 --target arpsid_vst3 2>&1 | tee build-vst3.log
+          cmake --build build-vst3 --target arpsid_vst3 arpsid_vst3_host_tests 2>&1 | tee build-vst3.log
           scripts/ci/check_build_warnings.sh build-vst3.log "$GITHUB_WORKSPACE"
+      - name: VST3 host integration test
+        run: cmake --build build-vst3 --target arpsid_vst3_host_check
+      - name: Install layout
+        run: |
+          cmake --install build-vst3 --prefix "${RUNNER_TEMP}/stage"
+          test -f "${RUNNER_TEMP}/stage/lib/vst3/arpsid_vst3.vst3/Contents/${{ matrix.arch }}-linux/arpsid_vst3.so"
       - name: Package
         if: inputs.release
         run: |
@@ -127,9 +178,11 @@ jobs:
           set -o pipefail
           cmake -S . -B build-vst3 -A "${{ matrix.cmake_arch }}" \
             -DARPSID_BUILD_VST3=ON -Dvst3sdk_SOURCE_DIR="$(cygpath -m "${RUNNER_TEMP}/vst3sdk")"
-          cmake --build build-vst3 --config Release --target arpsid_vst3 -- -m -nologo -v:minimal 2>&1 | tee build-vst3.log
+          cmake --build build-vst3 --config Release --target arpsid_vst3 arpsid_vst3_host_tests -- -m -nologo -v:minimal 2>&1 | tee build-vst3.log
           scripts/ci/check_build_warnings.sh build-vst3.log "$(cygpath -w "$GITHUB_WORKSPACE")"
           test -d build-vst3/VST3/Release/arpsid_vst3.vst3
+      - name: VST3 host integration test
+        run: cmake --build build-vst3 --config Release --target arpsid_vst3_host_check
       - name: Package
         if: inputs.release
         run: |
@@ -192,7 +245,7 @@ jobs:
           cmake -S . -B build-vst3 -DCMAKE_BUILD_TYPE=Release \
             -DCMAKE_OSX_ARCHITECTURES="${MACOS_ARCHS}" -DCMAKE_OSX_DEPLOYMENT_TARGET="${MACOS_MIN}" \
             -DARPSID_BUILD_VST3=ON -Dvst3sdk_SOURCE_DIR="${RUNNER_TEMP}/vst3sdk"
-          cmake --build build-vst3 --target arpsid_vst3 --parallel "$(sysctl -n hw.ncpu)" 2>&1 | tee build-vst3.log
+          cmake --build build-vst3 --target arpsid_vst3 arpsid_vst3_host_tests --parallel "$(sysctl -n hw.ncpu)" 2>&1 | tee build-vst3.log
           scripts/ci/check_build_warnings.sh build-vst3.log "$GITHUB_WORKSPACE"
           vst="$(find build-vst3/VST3 -maxdepth 3 -type d -name 'arpsid_vst3.vst3' -print -quit)"
           test -n "$vst"
@@ -200,6 +253,9 @@ jobs:
           codesign --verify --deep --strict --verbose=2 "$vst"
           lipo -archs "$vst/Contents/MacOS/arpsid_vst3"
           echo "VST3_BUNDLE=$vst" >> "$GITHUB_ENV"
+
+      - name: VST3 host integration test
+        run: cmake --build build-vst3 --target arpsid_vst3_host_check
 
       - name: Package
         if: inputs.release

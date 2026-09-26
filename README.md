@@ -1,4 +1,4 @@
-# ArpSID 0.9.3
+# ArpSID 0.9.4
 
 **A Commodore 64 SID synthesizer and C64 tune player as an audio plug-in for macOS.**
 
@@ -166,13 +166,32 @@ ctest --test-dir build-release --output-on-failure
 # Create a clean source release archive
 ./build.sh --package-release --parallel 4
 
+# AddressSanitizer + UBSan build of the test suite (GCC/Clang)
+./build.sh --sanitize --build-dir build-asan --config RelWithDebInfo
+
 # VST3 (any platform; the rich editor is macOS-only, elsewhere hosts show
 # their generic parameter UI). Needs the Steinberg VST3 SDK:
-git clone --recurse-submodules https://github.com/steinbergmedia/vst3sdk.git
-cmake -S . -B build-vst3 -DCMAKE_BUILD_TYPE=Release -DARPSID_BUILD_VST3=ON \
-      -Dvst3sdk_SOURCE_DIR=$PWD/vst3sdk
-cmake --build build-vst3 --target arpsid_vst3   # also runs the SDK validator
+git clone --depth 1 --branch v3.8.1_build_84 --recurse-submodules --shallow-submodules \
+    https://github.com/steinbergmedia/vst3sdk.git ~/vst3sdk
+./build.sh --no-tests --build-dir build-vst3 --vst3-sdk ~/vst3sdk --install-vst3
 ```
+
+`--vst3-sdk` builds `arpsid_vst3` (the build runs the Steinberg validator) and
+the headless host integration test (`arpsid_vst3_host_check`); `--install-vst3`
+copies the bundle to `~/.vst3` on Linux (`arpsid_vst3_install_user`,
+override with `-DARPSID_USER_VST3_DIR=...`) or the user VST3 folder on macOS.
+The equivalent raw CMake steps:
+
+```bash
+cmake -S . -B build-vst3 -G Ninja -DCMAKE_BUILD_TYPE=Release \
+      -DARPSID_BUILD_VST3=ON -Dvst3sdk_SOURCE_DIR=$HOME/vst3sdk
+cmake --build build-vst3 --target arpsid_vst3 arpsid_vst3_host_check
+cmake --build build-vst3 --target arpsid_vst3_install_user        # ~/.vst3
+sudo cmake --install build-vst3 --prefix /usr                     # /usr/lib/vst3
+```
+
+On Linux, `ccache` is used automatically when installed
+(`-DARPSID_USE_CCACHE=OFF` to disable).
 
 Repository guards (run before/after changes):
 
@@ -201,10 +220,11 @@ requests:
 
 | Job | What it checks |
 |---|---|
-| `linux` | Repository guards, full build, full CTest suite. |
-| `linux-vst3` | VST3 for x86_64 and aarch64 + Steinberg SDK validator. |
-| `windows-vst3` | VST3 (MSVC) for x64 and arm64 + Steinberg SDK validator. |
-| `macos` | AUv2 (all five flavors) + VST3 build, code-signature check, strict `auval`. Public repository only. |
+| `linux` | Repository guards, full build and full CTest suite with GCC and with Clang. |
+| `linux-sanitizers` | Full CTest suite under AddressSanitizer + UndefinedBehaviorSanitizer. |
+| `linux-vst3` | VST3 for x86_64 and aarch64 + Steinberg SDK validator + VST3 host integration test + install layout. |
+| `windows-vst3` | VST3 (MSVC) for x64 and arm64 + Steinberg SDK validator + VST3 host integration test. |
+| `macos` | AUv2 (all five flavors) + VST3 build, code-signature check, strict `auval`, VST3 host integration test. Public repository only. |
 | `macos-apps` | Standalone app + AUv3 (Logic-compatible app): bundle/signature checks and a Standalone launch test. Public repository only. |
 
 Every job fails on any ArpSID compiler or linker warning, and the macOS job
@@ -258,7 +278,7 @@ everything except the ROM files and runs the same guard before committing.
 Verified on the Linux-buildable core with a green test suite. The
 following remain external, platform sign-off items and are **not** claimed as verified:
 macOS AUv2/AUv3 + Logic host validation, code signing / notarization / installer, a full
-build against the real Steinberg VST3 SDK in a host matrix, sanitizer/fuzz coverage, and
+third-party DAW host matrix, fuzz coverage, and
 strict physical C64 exactness beyond the documented boundaries
 ([`docs/C64_EXACTNESS_BOUNDARIES.md`](docs/C64_EXACTNESS_BOUNDARIES.md)).
 

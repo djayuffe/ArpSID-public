@@ -30,6 +30,13 @@
 #include "arpsid_preset_bank.h"
 #include "arpsid/core/sid_parameter_presentation.h"
 #include "gui/arpsid_vstgui_editor.h"
+#include "arpsid_vst_messages.h"
+#include "arpsid/core/sid_midi_cc_mapping.h"
+#include "arpsid/core/sid_runtime_state_root_presentation.h"
+#include "au3/ArpSIDStateSerializer.h"
+#include "factory_patch_params.h"
+#include "pluginterfaces/vst/ivstmessage.h"
+#include "base/source/fobject.h"
 
 #include <array>
 #include <string>
@@ -111,6 +118,59 @@ public:
         livePushUser_ = user;
     }
 
+    // ── Factory presets ──────────────────────────────────────────────────────
+    // Program (kIsProgramChange) and BankSlot select a factory patch. Hosts
+    // report program-list selections, program-change automation and editor
+    // preset picks to the controller on the UI thread; the controller asks the
+    // processor (IMessage, off the audio thread) to apply the patch and then
+    // mirrors the patch's parameter values back to the host.
+    tresult PLUGIN_API setParamNormalized(Steinberg::Vst::ParamID tag,
+                                          Steinberg::Vst::ParamValue value) override {
+        const tresult result = EditController::setParamNormalized(tag, value);
+        if (result == kResultOk && !mirroringState_ &&
+            (tag == (Steinberg::Vst::ParamID)kParamProgram ||
+             tag == (Steinberg::Vst::ParamID)kParamBankSlot)) {
+            const int slot = canonicalFactorySlotFromNormalizedBankSlot((float)value);
+            if (slot != loadedFactorySlot_)
+                loadFactoryPatch_(slot);
+        }
+        return result;
+    }
+
+    // Processor state -> controller parameters (project load, undo, duplicate).
+    tresult PLUGIN_API setComponentState(IBStream* state) override {
+        if (!state) return kResultFalse;
+        IBStreamer s(state, kLittleEndian);
+        uint32 version = 0;
+        if (!s.readInt32u(version)) return kResultFalse;
+        int64 end = 0;
+        if (state->seek(0, IBStream::kIBSeekEnd, &end) != kResultOk) return kResultFalse;
+        if (end <= (int64)sizeof(uint32) || end > (int64)(64 * 1024 * 1024)) return kResultFalse;
+        state->seek(sizeof(uint32), IBStream::kIBSeekSet, nullptr);
+        std::vector<uint8_t> blob((size_t)(end - (int64)sizeof(uint32)));
+        int32 nRead = 0;
+        if (state->read(blob.data(), (int32)blob.size(), &nRead) != kResultOk || nRead <= 0)
+            return kResultFalse;
+        const uint32_t magic = (version >= 4u) ? kSidBinaryStateMagic : kSidBinaryPatchStateMagic;
+        SidStateRootV1 root{};
+        if (!decodeStateToRoot(blob.data(), (size_t)nRead, root, magic)) return kResultFalse;
+        sanitizePersistentStateRootForSerialization(root);
+        if (!root.valid()) return kResultFalse;
+        mirrorStateRootToParameters_(root, /*notifyHost*/ false);
+        return kResultOk;
+    }
+
+    // Editor on-screen keyboard -> processor (see arpsid_vst_messages.h).
+    void sendUiMidi(uint8_t status, uint8_t data1, uint8_t data2) {
+        IPtr<IMessage> msg = owned(allocateMessage());
+        if (!msg) return;
+        msg->setMessageID(kVstMsgUiMidi);
+        msg->getAttributes()->setInt(kVstMsgAttrStatus, status);
+        msg->getAttributes()->setInt(kVstMsgAttrData1, data1);
+        msg->getAttributes()->setInt(kVstMsgAttrData2, data2);
+        sendMessage(msg);
+    }
+
     // ── IPluginBase ─────────────────────────────────────────────────────────
     // v966: display and text parsing delegate to the shared parameter-ID-aware
     // presentation authority so host text matches the canonical DSP laws
@@ -157,7 +217,11 @@ public:
                 id = (Steinberg::Vst::ParamID)((int)kParamHostCtrlBreathBase + ch);
                 return kResultOk;
             case kCtrlExpression:
+            case kCtrlFoot:        // CC4: same expression law as the AU/raw-MIDI path
                 id = (Steinberg::Vst::ParamID)((int)kParamHostCtrlExpressionBase + ch);
+                return kResultOk;
+            case kCtrlVolume:      // CC7: channel volume -> master volume
+                id = (Steinberg::Vst::ParamID)kParamMasterVolume;
                 return kResultOk;
             case kCtrlSustainOnOff:
                 id = (Steinberg::Vst::ParamID)((int)kParamHostCtrlSustainBase + ch);
@@ -171,8 +235,18 @@ public:
             case kPitchBend:
                 id = (Steinberg::Vst::ParamID)((int)kParamHostCtrlPitchBendBase + ch);
                 return kResultOk;
-            default:
+            default: {
+                // Shared realtime CC law (sid_midi_cc_mapping.h), e.g. the
+                // AKAI MPK mini knobs CC70-77: same targets as AU/standalone.
+                if (midiControllerNumber >= 0 && midiControllerNumber < 128) {
+                    const ParamID mapped = sidMappedRealtimeCcParam((uint8_t)midiControllerNumber);
+                    if (mapped != (ParamID)kNumParams) {
+                        id = (Steinberg::Vst::ParamID)mapped;
+                        return kResultOk;
+                    }
+                }
                 return kResultFalse;
+            }
         }
     }
 
@@ -261,7 +335,9 @@ private:
 
             int32 flags = info.automatable ? ParameterInfo::kCanAutomate : ParameterInfo::kIsReadOnly;
             if (i == (int)kParamProgram) {
-                flags = ParameterInfo::kIsList;
+                // Host program lists / program-change messages drive this;
+                // setParamNormalized() turns it into a factory patch load.
+                flags = ParameterInfo::kIsProgramChange | ParameterInfo::kIsList;
             } else if (i == (int)kParamPanic ||
                        i == (int)kParamVirtualGate ||
                        i == (int)kParamBankCommand) {
@@ -309,6 +385,36 @@ private:
     static constexpr ProgramListID kProgramListId_ = 1;
     // Canonical factory preset count: 180 slots, not legacy 128.
     static constexpr int32         kMaxPresets_     = ArpSID::kCanonicalFactoryPatchSlotCount;
+
+    void loadFactoryPatch_(int slot) {
+        slot = std::clamp(slot, 0, kCanonicalFactoryPatchSlotMax);
+        loadedFactorySlot_ = slot;
+        if (IPtr<IMessage> msg = owned(allocateMessage())) {
+            msg->setMessageID(kVstMsgLoadFactoryPatch);
+            msg->getAttributes()->setInt(kVstMsgAttrSlot, slot);
+            sendMessage(msg);
+        }
+        const SidStateRootV1 root = makeFactoryPatchStateRootForSlot(slot);
+        if (root.valid())
+            mirrorStateRootToParameters_(root, /*notifyHost*/ true);
+    }
+
+    // Copy a state root's host-visible parameter values into the controller.
+    // Guarded so the Program/BankSlot writes do not re-trigger a patch load.
+    void mirrorStateRootToParameters_(const SidStateRootV1& root, bool notifyHost) {
+        std::array<float, kNumParams> params{};
+        exportPersistentPresentationParamsFromStateRoot(root, params.data(), kNumParams);
+        mirroringState_ = true;
+        for (int i = 0; i < kNumParams; ++i)
+            EditController::setParamNormalized((Steinberg::Vst::ParamID)i, (ParamValue)params[(size_t)i]);
+        mirroringState_ = false;
+        loadedFactorySlot_ = canonicalFactorySlotFromNormalizedBankSlot(params[(size_t)kParamBankSlot]);
+        if (notifyHost && componentHandler)
+            componentHandler->restartComponent(kParamValuesChanged);
+    }
+
+    bool mirroringState_ = false;
+    int loadedFactorySlot_ = -1;
 
     void pushLiveParam_(Steinberg::Vst::ParamID id, Steinberg::Vst::ParamValue value) noexcept {
         if (livePushFn_)

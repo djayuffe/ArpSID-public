@@ -3,6 +3,8 @@
 #import <Foundation/Foundation.h>
 
 #include "arpsid_vst_cocoa_bridge.h"
+#include "arpsid_vst_messages.h"
+#include "pluginterfaces/vst/ivstmessage.h"
 #import "au3/ArpSIDViewController.h"
 #import "au3/ArpSIDDSPKernelAdapter.h"
 #include "parameter_ids.h"
@@ -270,6 +272,10 @@ IArpSIDTelemetryProvider* arpsidGetActiveTelemetryProvider() noexcept {
 - (void)setParameterValue:(float)value forID:(int)paramID {
     if (!_controller || paramID < 0 || paramID >= ArpSID::kNumParams) return;
     const ParamValue v = (ParamValue)ArpSID::sanitizeNormalizedParamValue(paramID, value, ArpSID::defaultNormalizedParamValue(paramID));
+    // VST3 editor contract: update the controller's own value, then tell the
+    // host. setParamNormalized() is also where Program/BankSlot selections
+    // become factory patch loads.
+    _controller->setParamNormalized((ParamID)paramID, v);
     _controller->beginEdit((ParamID)paramID);
     _controller->performEdit((ParamID)paramID, v);
     _controller->endEdit((ParamID)paramID);
@@ -282,7 +288,23 @@ IArpSIDTelemetryProvider* arpsidGetActiveTelemetryProvider() noexcept {
     [self setParameterValue:((float)value / 255.0f) forID:pid];
 }
 - (void)injectMIDIBytes:(const uint8_t*)data length:(uint32_t)length {
-    (void)data; (void)length;
+    // On-screen keyboard: forward note on/off to the processor, which queues
+    // them for the audio thread (arpsid_vst_messages.h).
+    if (!_controller || !data) return;
+    for (uint32_t i = 0; i + 3 <= length; ) {
+        const uint8_t status = data[i];
+        const uint8_t kind = status & 0xF0u;
+        if (kind != 0x80u && kind != 0x90u) { ++i; continue; }
+        Steinberg::IPtr<Steinberg::Vst::IMessage> msg = Steinberg::owned(_controller->allocateMessage());
+        if (msg) {
+            msg->setMessageID(ArpSID::kVstMsgUiMidi);
+            msg->getAttributes()->setInt(ArpSID::kVstMsgAttrStatus, status);
+            msg->getAttributes()->setInt(ArpSID::kVstMsgAttrData1, data[i + 1] & 0x7F);
+            msg->getAttributes()->setInt(ArpSID::kVstMsgAttrData2, data[i + 2] & 0x7F);
+            _controller->sendMessage(msg);
+        }
+        i += 3;
+    }
 }
 - (NSArray*)factoryPresets { [self _refreshCurrentPresetFromProgram]; return _factoryPresets; }
 - (ArpSIDVSTPreset*)currentPreset { [self _refreshCurrentPresetFromProgram]; return _currentPreset; }

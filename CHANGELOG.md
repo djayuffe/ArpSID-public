@@ -5,6 +5,51 @@ All notable changes to ArpSID are documented here. The project uses
 version is `VERSION.txt`, mirrored by `project(VERSION)` in `CMakeLists.txt`
 and `include/arpsid/version.h`.
 
+## [0.9.4] — 2026-09-26
+
+### Fixed (VST3)
+
+- **Factory presets load.** Picking a program in the host's program list,
+  a Program Change mapped by the host, or the Program/Bank slot parameters now
+  loads that factory patch. Before, the processor ignored both parameters and
+  no factory patch could be loaded in a VST3 host. The controller sends the
+  load to the processor (IConnectionPoint message, off the audio thread) and
+  mirrors every parameter back to the host.
+- **Controller follows project state.** `setComponentState` is implemented, so
+  after a project or preset is restored the host's parameter view shows the
+  restored values instead of defaults.
+- **MIDI on all 16 channels.** The MIDI input bus declared one channel, so
+  hosts could drop everything outside channel 1 (including GM drums on
+  channel 10).
+- **Host timing.** The processor now requests tempo, transport, musical
+  position, cycle, bar position and time signature from the host
+  (`IProcessContextRequirements`); it requested nothing before.
+- **MIDI CC mapping** covers the same realtime CC law as the other formats:
+  CC2 and CC70–77 (filter, envelope, LFO) plus CC4 (foot) and CC7 (volume),
+  on every channel. Previously only 7 CCs were mapped.
+- **Editor on-screen keyboard** (macOS) plays notes; it was silent. Editor
+  parameter edits now also update the controller's own value.
+- `setState` and preset loads no longer race the audio thread: `process()`
+  try-locks the state and outputs one silent block while a load is in
+  progress, never waiting on the UI thread.
+
+### Added
+
+- `arpsid_vst3_host_tests`: a headless VST3 host test that loads the built
+  bundle and checks all of the above. CI runs it on Linux (x86_64, aarch64),
+  Windows (x64, arm64) and macOS.
+
+### Build
+
+- Linux: `./build.sh --vst3-sdk DIR [--install-vst3]` builds the VST3, runs the
+  validator and host test, and installs to `~/.vst3`. `cmake --install` puts
+  the bundle in `<prefix>/lib/vst3`; `arpsid_vst3_install_user` copies it to
+  the per-user folder (Linux and Windows).
+- `-DARPSID_ENABLE_SANITIZERS=ON` (`./build.sh --sanitize`) builds with
+  AddressSanitizer + UBSan; CI runs the full suite under both.
+- ccache is used automatically when installed; CI caches it.
+- CI builds and tests the core with Clang as well as GCC.
+
 ## [0.9.3] — 2026-09-26
 
 ### Added

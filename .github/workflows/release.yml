@@ -147,15 +147,17 @@ jobs:
 
           **Windows.** Copy `arpsid_vst3.vst3` to `C:\Program Files\Common Files\VST3\`.
 
-          **Linux.** Copy `arpsid_vst3.vst3` to `~/.vst3/`.
+          **Linux.** Copy `arpsid_vst3.vst3` to `~/.vst3/` (or `/usr/lib/vst3/` for all users).
 
           On Windows and Linux the VST3 uses the host's generic parameter editor; the
           rich ArpSID editor is macOS-only. The C64 tune player needs your own
           KERNAL/BASIC/CHARGEN ROM dumps; none are bundled.
 
           Every asset in this release was built by CI after the full test suite, the
-          Steinberg VST3 validator (every VST3 build), strict `auval` on all five AU
-          flavors (zero warnings) and a Standalone launch test passed. Verify downloads
+          Steinberg VST3 validator and the ArpSID VST3 host integration test (every
+          VST3 build), strict `auval` on all five AU flavors (zero warnings) and a
+          Standalone launch test passed. The core test suite also runs under GCC,
+          Clang and AddressSanitizer + UBSan. Verify downloads
           against `SHA256SUMS.txt`.
           EOF
       - name: Create or update release

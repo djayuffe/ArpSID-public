@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(ArpSID VERSION 0.9.3 LANGUAGES CXX)
+project(ArpSID VERSION 0.9.4 LANGUAGES CXX)
 include(cmake/ArpSIDSourceTreeGuard.cmake)
 
 option(ARPSID_BUILD_ALL "Enable the stable ArpSID product set for the current platform" OFF)
@@ -20,6 +20,27 @@ endif()
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+
+# Compiler cache: picked up automatically when ccache is installed (the test
+# suite is ~480 executables, so warm rebuilds are much faster).
+option(ARPSID_USE_CCACHE "Use ccache as the compiler launcher when available" ON)
+if(ARPSID_USE_CCACHE AND NOT CMAKE_CXX_COMPILER_LAUNCHER)
+    find_program(ARPSID_CCACHE_PROGRAM ccache)
+    if(ARPSID_CCACHE_PROGRAM)
+        set(CMAKE_CXX_COMPILER_LAUNCHER "${ARPSID_CCACHE_PROGRAM}")
+        set(CMAKE_OBJCXX_COMPILER_LAUNCHER "${ARPSID_CCACHE_PROGRAM}")
+    endif()
+endif()
+
+# AddressSanitizer + UndefinedBehaviorSanitizer for GCC/Clang test builds.
+option(ARPSID_ENABLE_SANITIZERS "Build with -fsanitize=address,undefined (GCC/Clang)" OFF)
+if(ARPSID_ENABLE_SANITIZERS)
+    if(MSVC)
+        message(FATAL_ERROR "ARPSID_ENABLE_SANITIZERS supports GCC and Clang only")
+    endif()
+    add_compile_options(-fsanitize=address,undefined -fno-sanitize-recover=undefined -fno-omit-frame-pointer)
+    add_link_options(-fsanitize=address,undefined)
+endif()
 
 
 if(APPLE)
@@ -543,6 +564,72 @@ if(ARPSID_BUILD_VST3)
 
     # Custom VSTGUI editor is enabled; controller::createView(kEditor) returns
     # a concrete ArpSIDVSTGUIEditor and the target now compiles the editor TU.
+
+    # Headless VST3 host test: loads the built bundle through the SDK hosting
+    # layer and checks factory program loading, controller state restore,
+    # MIDI CC mapping, the MIDI bus layout and on-screen-keyboard notes.
+    # Run it with: cmake --build <dir> --target arpsid_vst3_host_check
+    set(_arpsid_vst3_host_sources
+        source/tests/vst3_host_integration_tests.cpp
+        ${vst3sdk_SOURCE_DIR}/public.sdk/source/common/memorystream.cpp)
+    if(APPLE)
+        list(APPEND _arpsid_vst3_host_sources ${vst3sdk_SOURCE_DIR}/public.sdk/source/vst/hosting/module_mac.mm)
+        set_source_files_properties(${vst3sdk_SOURCE_DIR}/public.sdk/source/vst/hosting/module_mac.mm
+            PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+    elseif(WIN32)
+        list(APPEND _arpsid_vst3_host_sources ${vst3sdk_SOURCE_DIR}/public.sdk/source/vst/hosting/module_win32.cpp)
+    else()
+        list(APPEND _arpsid_vst3_host_sources ${vst3sdk_SOURCE_DIR}/public.sdk/source/vst/hosting/module_linux.cpp)
+    endif()
+    add_executable(arpsid_vst3_host_tests EXCLUDE_FROM_ALL ${_arpsid_vst3_host_sources})
+    target_compile_features(arpsid_vst3_host_tests PRIVATE cxx_std_17)
+    target_include_directories(arpsid_vst3_host_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/source)
+    target_link_libraries(arpsid_vst3_host_tests PRIVATE sdk_hosting)
+    if(APPLE)
+        target_link_libraries(arpsid_vst3_host_tests PRIVATE "-framework Cocoa")
+    elseif(UNIX)
+        target_link_libraries(arpsid_vst3_host_tests PRIVATE ${CMAKE_DL_LIBS})
+    endif()
+    add_dependencies(arpsid_vst3_host_tests arpsid_vst3)
+    set(_arpsid_vst3_bundle "${CMAKE_BINARY_DIR}/VST3/$<CONFIG>/arpsid_vst3.vst3")
+    add_custom_target(arpsid_vst3_host_check
+        COMMAND $<TARGET_FILE:arpsid_vst3_host_tests> "${_arpsid_vst3_bundle}"
+        DEPENDS arpsid_vst3_host_tests
+        USES_TERMINAL
+        VERBATIM)
+    if(ARPSID_BUILD_TESTS)
+        add_test(NAME Vst3HostIntegrationTests
+            COMMAND arpsid_vst3_host_tests "${_arpsid_vst3_bundle}")
+    endif()
+
+    # Linux/Windows install: `cmake --install` puts the bundle under
+    # <prefix>/lib/vst3 (Linux, the system VST3 path when prefix=/usr) or
+    # <prefix>/VST3; `arpsid_vst3_install_user` copies it to the per-user
+    # VST3 folder. macOS has its own rules further down.
+    if(NOT APPLE)
+        if(WIN32)
+            set(_arpsid_vst3_install_subdir "VST3")
+            file(TO_CMAKE_PATH "$ENV{LOCALAPPDATA}/Programs/Common/VST3" _arpsid_default_user_vst3)
+        else()
+            set(_arpsid_vst3_install_subdir "lib/vst3")
+            set(_arpsid_default_user_vst3 "$ENV{HOME}/.vst3")
+        endif()
+        set(ARPSID_USER_VST3_DIR "${_arpsid_default_user_vst3}" CACHE PATH
+            "Per-user VST3 install directory (arpsid_vst3_install_user)")
+        install(DIRECTORY "${_arpsid_vst3_bundle}"
+            DESTINATION "${_arpsid_vst3_install_subdir}"
+            USE_SOURCE_PERMISSIONS)
+        add_custom_target(arpsid_vst3_install_user
+            COMMAND "${CMAKE_COMMAND}" -E make_directory "${ARPSID_USER_VST3_DIR}"
+            COMMAND "${CMAKE_COMMAND}" -E rm -rf "${ARPSID_USER_VST3_DIR}/arpsid_vst3.vst3"
+            COMMAND "${CMAKE_COMMAND}" -E copy_directory "${_arpsid_vst3_bundle}"
+                    "${ARPSID_USER_VST3_DIR}/arpsid_vst3.vst3"
+            DEPENDS arpsid_vst3
+            COMMENT "Installing arpsid_vst3.vst3 to ${ARPSID_USER_VST3_DIR}"
+            VERBATIM)
+    endif()
 endif()
 
 # ─── Shared AU version integer (used in both AUv2 and AUv3 plists) ───────────

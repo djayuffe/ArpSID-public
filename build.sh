@@ -7,6 +7,9 @@
 #
 # macOS AUv2 install is opt-in only:
 #   ./build.sh --install-auv2
+#
+# VST3 (any platform; needs the Steinberg VST3 SDK):
+#   ./build.sh --vst3-sdk ~/vst3sdk --install-vst3
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -26,6 +29,10 @@ TARGET=""
 TEST_FILTER=""
 PARALLEL="${ARPSID_BUILD_JOBS:-}"
 GENERATOR="${ARPSID_CMAKE_GENERATOR:-}"
+BUILD_VST3=0
+INSTALL_VST3=0
+VST3_SDK="${VST3SDK_DIR:-}"
+SANITIZE=0
 
 usage() {
   cat <<USAGE
@@ -42,6 +49,12 @@ Options:
   --test-filter REGEX   Run only matching CTest tests
   --no-tests            Configure/build only; skip CTest
   --parallel N          Parallel build jobs passed to cmake --build
+  --vst3                Also build the VST3 plug-in, run the SDK validator and
+                        the host integration test (needs --vst3-sdk or VST3SDK_DIR)
+  --vst3-sdk DIR        Steinberg VST3 SDK checkout (implies --vst3)
+  --install-vst3        Build the VST3 and copy it to the per-user VST3 folder
+                        (~/.vst3 on Linux, ~/Library/Audio/Plug-Ins/VST3 on macOS)
+  --sanitize            Build with AddressSanitizer + UBSan (GCC/Clang)
   --install-auv2        macOS only: install built ArpSID.component after build
   --clear-au-cache      macOS only: clear AudioComponent registrar cache after install
   --release-check       Build and run the curated release-closure contract suite
@@ -56,6 +69,8 @@ Examples:
   ./build.sh
   ./build.sh --build-dir build-release --parallel 8
   ./build.sh --test-filter 'Auv2Version|VersionCoherence'
+  ./build.sh --vst3-sdk ~/vst3sdk --install-vst3
+  ./build.sh --sanitize --build-dir build-asan
   ./build.sh --install-auv2 --clear-au-cache
   ./build.sh --release-check
   ./build.sh --package-release
@@ -87,6 +102,15 @@ while [ "$#" -gt 0 ]; do
     --parallel)
       [ "$#" -ge 2 ] || { echo "--parallel requires a value" >&2; exit 2; }
       PARALLEL="$2"; shift 2 ;;
+    --vst3)
+      BUILD_VST3=1; shift ;;
+    --vst3-sdk)
+      [ "$#" -ge 2 ] || { echo "--vst3-sdk requires a value" >&2; exit 2; }
+      VST3_SDK="$2"; BUILD_VST3=1; shift 2 ;;
+    --install-vst3)
+      BUILD_VST3=1; INSTALL_VST3=1; shift ;;
+    --sanitize)
+      SANITIZE=1; shift ;;
     --install-auv2)
       INSTALL_AUV2=1; shift ;;
     --clear-au-cache)
@@ -144,6 +168,19 @@ elif command -v ninja >/dev/null 2>&1; then
   CMAKE_CONFIGURE_ARGS+=(-G Ninja)
 fi
 CMAKE_CONFIGURE_ARGS+=(-DCMAKE_BUILD_TYPE="$CONFIG")
+if [ "$BUILD_VST3" -eq 1 ]; then
+  if [ -z "$VST3_SDK" ] || [ ! -f "$VST3_SDK/CMakeLists.txt" ]; then
+    echo "VST3 build needs the Steinberg VST3 SDK: pass --vst3-sdk DIR or set VST3SDK_DIR." >&2
+    echo "  git clone --depth 1 --branch v3.8.1_build_84 --recurse-submodules --shallow-submodules \\" >&2
+    echo "    https://github.com/steinbergmedia/vst3sdk.git ~/vst3sdk" >&2
+    exit 10
+  fi
+  VST3_SDK="$(cd "$VST3_SDK" && pwd)"
+  CMAKE_CONFIGURE_ARGS+=(-DARPSID_BUILD_VST3=ON -Dvst3sdk_SOURCE_DIR="$VST3_SDK")
+fi
+if [ "$SANITIZE" -eq 1 ]; then
+  CMAKE_CONFIGURE_ARGS+=(-DARPSID_ENABLE_SANITIZERS=ON)
+fi
 if [ "$INSTALL_AUV2" -eq 1 ] || [ "$VALIDATE_AUV2" -eq 1 ]; then
   CMAKE_CONFIGURE_ARGS+=(-DARPSID_BUILD_AUV2=ON)
 fi
@@ -170,6 +207,19 @@ fi
 
 echo "[ArpSID] build: cmake ${BUILD_ARGS[*]}"
 cmake "${BUILD_ARGS[@]}"
+
+if [ "$BUILD_VST3" -eq 1 ]; then
+  echo "[ArpSID] VST3: build (runs the SDK validator) + host integration test"
+  cmake --build "$BUILD_DIR" --config "$CONFIG" --target arpsid_vst3 ${PARALLEL:+--parallel "$PARALLEL"}
+  cmake --build "$BUILD_DIR" --config "$CONFIG" --target arpsid_vst3_host_check
+  if [ "$INSTALL_VST3" -eq 1 ]; then
+    if [ "$(uname -s)" = "Darwin" ]; then
+      cmake --build "$BUILD_DIR" --config "$CONFIG" --target arpsid_install_user
+    else
+      cmake --build "$BUILD_DIR" --config "$CONFIG" --target arpsid_vst3_install_user
+    fi
+  fi
+fi
 
 if [ "$RELEASE_CHECK" -eq 1 ]; then
   echo "[ArpSID] release-check: build arpsid_release_closure_suite"

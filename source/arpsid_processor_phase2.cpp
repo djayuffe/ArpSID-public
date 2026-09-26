@@ -88,8 +88,19 @@ tresult PLUGIN_API ArpSIDProcessorPhase2::initialize(FUnknown* context) {
     // Audio buses: stereo output only (instrument)
     addAudioOutput(STR16("Stereo Out"), SpeakerArr::kStereo);
 
-    // Event input bus (MIDI)
-    addEventInput(STR16("MIDI In"), 1);
+    // Event input bus (MIDI): all 16 channels. ArpSID is multi-channel (GM
+    // channel-10 drum promotion, per-channel host controllers); a 1-channel bus
+    // lets hosts drop everything outside MIDI channel 1.
+    addEventInput(STR16("MIDI In"), 16);
+
+    // Ask hosts for the timing information the arpeggiator/sequencer host sync
+    // and transport handling consume (AudioEffect defaults to requesting none).
+    processContextRequirements.needTempo()
+                              .needTransportState()
+                              .needProjectTimeMusic()
+                              .needCycleMusic()
+                              .needBarPositionMusic()
+                              .needTimeSignature();
 
     // Create shared runtime engine bank
     engineBank_.create(44100.0);
@@ -232,7 +243,10 @@ tresult PLUGIN_API ArpSIDProcessorPhase2::setState(IBStream* state) {
     ArpSID::sanitizePersistentStateRootForSerialization(root);
     if (!root.valid()) return kResultFalse;
 
-    applyCanonicalStateRoot_(root);
+    {
+        std::lock_guard<std::mutex> applyLock(stateApplyMutex_);
+        applyCanonicalStateRoot_(root);
+    }
 
     syncSerializableParamShadow();
     return kResultOk;
@@ -697,6 +711,13 @@ tresult PLUGIN_API ArpSIDProcessorPhase2::process(ProcessData& data) {
         zeroProcessOutputs();
         return kResultOk;
     }
+    // A state/preset load is rewriting the runtime on the UI thread: never wait
+    // for it, emit silence for this block instead.
+    std::unique_lock<std::mutex> stateApplyLock(stateApplyMutex_, std::try_to_lock);
+    if (!stateApplyLock.owns_lock()) {
+        zeroProcessOutputs();
+        return kResultOk;
+    }
     ArpSID::SidRealtimeScope arpsidRtScope_("ArpSIDProcessorPhase2::process");
     ArpSID::requireSidTablesPrewarmedForRealtime("ArpSIDProcessorPhase2::process missing SID table prewarm");
 
@@ -754,9 +775,10 @@ tresult PLUGIN_API ArpSIDProcessorPhase2::process(ProcessData& data) {
     // 1. Process parameter changes from host
     processParameterChanges(data);
 
-    // 2. Process MIDI events
+    // 2. Process MIDI events (host events, then on-screen keyboard notes)
     midiEvents.clear();
     processMIDIEvents(data);
+    drainUiMidiQueue_();
 
     // 2b. Host context is already ingested exactly once through the canonical
     // VST ProcessContext -> TransportState -> SidCanonicalHostBlock path above.
@@ -1113,6 +1135,71 @@ tresult PLUGIN_API ArpSIDProcessorPhase2::process(ProcessData& data) {
     syncSerializableParamShadow();
     pendingParams.clear();  // discard stale pending; process() will regenerate
     return kResultOk;
+}
+
+// ─── IConnectionPoint: non-realtime commands from the controller ─────────────
+// Hosts deliver IMessage on their main/UI thread, never inside process(), so a
+// factory patch is applied through the same non-RT path as setState().
+tresult PLUGIN_API ArpSIDProcessorPhase2::notify(IMessage* message) {
+    if (!message || !message->getMessageID())
+        return AudioEffect::notify(message);
+    IAttributeList* attrs = message->getAttributes();
+    if (FIDStringsEqual(message->getMessageID(), ArpSID::kVstMsgLoadFactoryPatch)) {
+        int64 slot = -1;
+        if (!attrs || attrs->getInt(ArpSID::kVstMsgAttrSlot, slot) != kResultOk)
+            return kInvalidArgument;
+        if (slot < 0 || slot > ArpSID::kCanonicalFactoryPatchSlotMax)
+            return kInvalidArgument;
+        bool applied = false;
+        {
+            std::lock_guard<std::mutex> applyLock(stateApplyMutex_);
+            applied = applyFactoryPatchSnapshot_(static_cast<int>(slot));
+        }
+        if (!applied)
+            return kResultFalse;
+        syncSerializableParamShadow();
+        return kResultOk;
+    }
+    if (FIDStringsEqual(message->getMessageID(), ArpSID::kVstMsgUiMidi)) {
+        int64 status = 0, data1 = 0, data2 = 0;
+        if (!attrs ||
+            attrs->getInt(ArpSID::kVstMsgAttrStatus, status) != kResultOk ||
+            attrs->getInt(ArpSID::kVstMsgAttrData1, data1) != kResultOk ||
+            attrs->getInt(ArpSID::kVstMsgAttrData2, data2) != kResultOk)
+            return kInvalidArgument;
+        ArpSID::VstUiMidiEvent ev{};
+        ev.status = static_cast<uint8_t>(status & 0xFF);
+        ev.data1 = static_cast<uint8_t>(data1 & 0x7F);
+        ev.data2 = static_cast<uint8_t>(data2 & 0x7F);
+        return uiMidiQueue_.push(ev) ? kResultOk : kResultFalse;
+    }
+    return AudioEffect::notify(message);
+}
+
+// Audio thread: feed on-screen-keyboard notes into the same canonical ingress
+// path as host note events (held-note mirror + timed MIDI event at offset 0).
+void ArpSIDProcessorPhase2::drainUiMidiQueue_() noexcept {
+    ArpSID::VstUiMidiEvent ev{};
+    while (uiMidiQueue_.pop(ev)) {
+        const uint8_t kind = ev.status & 0xF0u;
+        const int channel = ev.status & 0x0F;
+        const bool noteOn = kind == 0x90u && ev.data2 > 0;
+        const bool noteOff = kind == 0x80u || (kind == 0x90u && ev.data2 == 0);
+        if (!noteOn && !noteOff) continue;
+        mirrorVstMidiHeldIngress_(channel, ev.data1, -1, noteOn ? ev.data2 : 0, noteOn);
+        SidTimedEvent tev{};
+        tev.type = noteOn ? SidTimedEventType::MidiNoteOn : SidTimedEventType::MidiNoteOff;
+        assignApproxIntraSampleTiming_(tev, 0, 0u, 2u, sampleRate, currentSidClockHz());
+        tev.channel = static_cast<uint8_t>(channel);
+        tev.pitch = static_cast<int16_t>(ev.data1);
+        tev.noteId = -1;
+        tev.value = noteOn ? static_cast<float>(ev.data2) / 127.0f : 0.0f;
+        ArpSID::sidWrapperPushEvent(runtimeModel_, tev, currentProcessSamples_);
+        if (noteOn) {
+            midiActivityMeter = 1.0f;
+            lastMidiNote = ev.data1;
+        }
+    }
 }
 
 // ─── Parameter Changes ───────────────────────────────────────────────────────

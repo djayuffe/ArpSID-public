@@ -28,6 +28,8 @@
 #include "arpsid/core/sid_runtime_mod_ops.h"
 
 #include "public.sdk/source/vst/vstaudioeffect.h"
+#include "pluginterfaces/vst/ivstmessage.h"
+#include "arpsid_vst_messages.h"
 #include "pluginterfaces/vst/ivstevents.h"
 #include "pluginterfaces/vst/ivstparameterchanges.h"
 #include "parameter_ids.h"
@@ -77,6 +79,9 @@ public:
     // IPluginBase
     Steinberg::tresult PLUGIN_API initialize(Steinberg::FUnknown* context) override;
     Steinberg::tresult PLUGIN_API queryInterface(const Steinberg::TUID _iid, void** obj) override;
+    // IConnectionPoint: non-realtime controller commands (factory preset load,
+    // editor keyboard notes). See arpsid_vst_messages.h.
+    Steinberg::tresult PLUGIN_API notify(Steinberg::Vst::IMessage* message) override;
     Steinberg::tresult PLUGIN_API terminate() override;
     
     // IAudioProcessor
@@ -298,6 +303,12 @@ public:
         return ArpSID::isFactorySnapshotMetadataOrTransientParam(static_cast<int>(pid));
     }
     bool applyFactoryPatchSnapshot_(int slot) noexcept;
+    void drainUiMidiQueue_() noexcept;
+    ArpSID::VstUiMidiQueue<256> uiMidiQueue_;
+    // Held by setState() and factory-patch loads (UI thread) while they rewrite
+    // the runtime state. process() only try-locks it and outputs one silent
+    // block if a load is in progress, so the audio thread never waits.
+    std::mutex stateApplyMutex_{};
     void renderAudioSlice_(float* outL, float* outR, Steinberg::int32 numOutChannels, Steinberg::int32 offset, Steinberg::int32 sliceFrames) noexcept;
     // P0-FIX: Apply reverb and limiter post-FX in-place over [outL, outR, n].
     // Called once per block after the canonical render pass writes raw audio.
