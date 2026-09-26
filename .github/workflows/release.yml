@@ -1,79 +1,205 @@
 name: Release
 
-# Manually triggered: builds the release assets from the selected ref, creates
-# the v<VERSION.txt> tag and GitHub release, and uploads the assets.
+# Manually triggered. Builds the release assets, then creates the
+# v<VERSION.txt> tag + GitHub release, or - if that release already exists -
+# rebuilds from its tag and replaces/adds the assets.
+#
+# Assets:
+#   ArpSID-<v>-source.zip                  ROM-free source (scripts/package_release.sh)
+#   ArpSID-<v>-vst3-linux-x86_64.zip       VST3, Linux x86_64 (generic host UI)
+#   ArpSID-<v>-vst3-macos-universal.zip    VST3, macOS arm64+x86_64, ad-hoc signed
+#   ArpSID-<v>-auv2-macos-universal.zip    AUv2 (5 flavors), macOS arm64+x86_64, ad-hoc signed
+#   SHA256SUMS.txt
 on:
   workflow_dispatch:
     inputs:
       draft:
-        description: "Create the release as a draft"
+        description: "Create a new release as a draft (ignored when the release exists)"
         type: boolean
         default: false
 
 permissions:
   contents: write
 
+env:
+  VST3SDK_TAG: v3.8.1_build_84
+
 jobs:
-  release:
+  prepare:
     runs-on: ubuntu-24.04
-    env:
-      VST3SDK_TAG: v3.8.1_build_84
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      tag: ${{ steps.v.outputs.tag }}
+      ref: ${{ steps.v.outputs.ref }}
+      exists: ${{ steps.v.outputs.exists }}
     steps:
       - uses: actions/checkout@v4
-
-      - name: Read version
-        id: version
+      - id: v
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          version="$(tr -d '[:space:]' < VERSION.txt)"
           python3 scripts/check_version_coherence.py
-          echo "version=${version}" >> "$GITHUB_OUTPUT"
-          echo "tag=v${version}" >> "$GITHUB_OUTPUT"
+          version="$(tr -d '[:space:]' < VERSION.txt)"
+          tag="v${version}"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            exists=true; ref="$tag"     # rebuild exactly what the release tagged
+          else
+            exists=false; ref="$GITHUB_SHA"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "ref=$ref" >> "$GITHUB_OUTPUT"
+          echo "exists=$exists" >> "$GITHUB_OUTPUT"
+          echo "version=$version tag=$tag exists=$exists ref=$ref"
 
-      - name: Install build tools
-        run: sudo apt-get update && sudo apt-get install -y ninja-build zip rsync
+  source:
+    needs: prepare
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: "${{ needs.prepare.outputs.ref }}" }
+      - run: sudo apt-get update && sudo apt-get install -y zip rsync
+      - name: Package source
+        run: |
+          v="${{ needs.prepare.outputs.version }}"
+          mkdir -p "${RUNNER_TEMP}/dist"
+          RELEASE_NAME="ArpSID-${v}-source" PACKAGE_OUT="${RUNNER_TEMP}/dist/ArpSID-${v}-source.zip" \
+            scripts/package_release.sh "${GITHUB_WORKSPACE}"
+      - uses: actions/upload-artifact@v4
+        with: { name: source, path: "${{ runner.temp }}/dist/*" }
 
+  linux-vst3:
+    needs: prepare
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: "${{ needs.prepare.outputs.ref }}" }
+      - run: sudo apt-get update && sudo apt-get install -y ninja-build zip
       - name: Fetch Steinberg VST3 SDK
         run: |
           git clone --depth 1 --branch "${VST3SDK_TAG}" --recurse-submodules --shallow-submodules \
-            https://github.com/steinbergmedia/vst3sdk.git "${RUNNER_TEMP}/vst3sdk" \
-          || git clone --depth 1 --recurse-submodules --shallow-submodules \
             https://github.com/steinbergmedia/vst3sdk.git "${RUNNER_TEMP}/vst3sdk"
-
       - name: Build VST3 (runs the SDK validator)
         run: |
           cmake -S . -B build-vst3 -G Ninja -DCMAKE_BUILD_TYPE=Release \
             -DARPSID_BUILD_VST3=ON -Dvst3sdk_SOURCE_DIR="${RUNNER_TEMP}/vst3sdk"
           cmake --build build-vst3 --target arpsid_vst3
-
-      - name: Package assets
+      - name: Package
         run: |
-          v="${{ steps.version.outputs.version }}"
-          mkdir -p dist
-          (cd build-vst3/VST3/Release && zip -qr "${GITHUB_WORKSPACE}/dist/ArpSID-${v}-vst3-linux-x86_64.zip" arpsid_vst3.vst3)
-          rm -rf build-vst3
-          RELEASE_NAME="ArpSID-${v}-source" PACKAGE_OUT="${GITHUB_WORKSPACE}/dist/ArpSID-${v}-source.zip" \
-            scripts/package_release.sh "${GITHUB_WORKSPACE}"
-          (cd dist && sha256sum *.zip > SHA256SUMS.txt && cat SHA256SUMS.txt)
+          v="${{ needs.prepare.outputs.version }}"
+          mkdir -p "${RUNNER_TEMP}/dist"
+          (cd build-vst3/VST3/Release && zip -qr "${RUNNER_TEMP}/dist/ArpSID-${v}-vst3-linux-x86_64.zip" arpsid_vst3.vst3)
+      - uses: actions/upload-artifact@v4
+        with: { name: linux-vst3, path: "${{ runner.temp }}/dist/*" }
 
-      - name: Extract release notes from CHANGELOG.md
+  macos:
+    needs: prepare
+    runs-on: macos-15
+    env:
+      MACOS_ARCHS: "arm64;x86_64"
+      MACOS_MIN: "12.0"
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: "${{ needs.prepare.outputs.ref }}" }
+      - name: Toolchain
         run: |
-          v="${{ steps.version.outputs.version }}"
+          xcodebuild -version
+          cmake --version
+      - name: Fetch Steinberg VST3 SDK
+        run: |
+          git clone --depth 1 --branch "${VST3SDK_TAG}" --recurse-submodules --shallow-submodules \
+            https://github.com/steinbergmedia/vst3sdk.git "${RUNNER_TEMP}/vst3sdk"
+
+      - name: Build AUv2 (universal, ad-hoc signed)
+        run: |
+          cmake -S . -B build-auv2 -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_ARCHITECTURES="${MACOS_ARCHS}" -DCMAKE_OSX_DEPLOYMENT_TARGET="${MACOS_MIN}" \
+            -DARPSID_BUILD_AUV2=ON -DARPSID_CODESIGN_IDENTITY=-
+          cmake --build build-auv2 --target arpsid_auv2 -j "$(sysctl -n hw.ncpu)"
+
+      - name: Verify AUv2 bundle, install and run strict auval (all 5 flavors)
+        run: |
+          comp="$(find build-auv2 -maxdepth 4 -type d -name ArpSID.component -print -quit)"
+          test -n "$comp"
+          lipo -archs "$comp/Contents/MacOS/ArpSID"
+          codesign --verify --deep --strict --verbose=2 "$comp"
+          /usr/bin/plutil -p "$comp/Contents/Info.plist" | grep -E '"(name|version|subtype)"'
+          sh scripts/macos/install_auv2_component.sh "$comp" "$HOME/Library/Audio/Plug-Ins/Components" -
+          ARPSID_AUVAL_RETRIES=4 ARPSID_AUVAL_RETRY_DELAY=3 \
+            sh scripts/macos/verify_auv2_component.sh "$HOME/Library/Audio/Plug-Ins/Components/ArpSID.component"
+          echo "AUV2_COMPONENT=$comp" >> "$GITHUB_ENV"
+
+      - name: Build VST3 (universal, runs the SDK validator)
+        run: |
+          cmake -S . -B build-vst3 -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_ARCHITECTURES="${MACOS_ARCHS}" -DCMAKE_OSX_DEPLOYMENT_TARGET="${MACOS_MIN}" \
+            -DARPSID_BUILD_VST3=ON -Dvst3sdk_SOURCE_DIR="${RUNNER_TEMP}/vst3sdk"
+          cmake --build build-vst3 --target arpsid_vst3 -j "$(sysctl -n hw.ncpu)"
+          vst="$(find build-vst3/VST3 -maxdepth 3 -type d -name 'arpsid_vst3.vst3' -print -quit)"
+          test -n "$vst"
+          codesign --force --deep --sign - "$vst"
+          codesign --verify --deep --strict --verbose=2 "$vst"
+          lipo -archs "$vst/Contents/MacOS/arpsid_vst3"
+          echo "VST3_BUNDLE=$vst" >> "$GITHUB_ENV"
+
+      - name: Package
+        run: |
+          v="${{ needs.prepare.outputs.version }}"
+          mkdir -p "${RUNNER_TEMP}/dist"
+          ditto -c -k --keepParent "$AUV2_COMPONENT" "${RUNNER_TEMP}/dist/ArpSID-${v}-auv2-macos-universal.zip"
+          ditto -c -k --keepParent "$VST3_BUNDLE"    "${RUNNER_TEMP}/dist/ArpSID-${v}-vst3-macos-universal.zip"
+      - uses: actions/upload-artifact@v4
+        with: { name: macos, path: "${{ runner.temp }}/dist/*" }
+
+  release:
+    needs: [prepare, source, linux-vst3, macos]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: "${{ needs.prepare.outputs.ref }}" }
+      - uses: actions/download-artifact@v4
+        with: { path: dist, merge-multiple: true }
+      - name: Checksums
+        run: (cd dist && sha256sum *.zip > SHA256SUMS.txt && cat SHA256SUMS.txt && ls -l)
+      - name: Release notes
+        run: |
+          v="${{ needs.prepare.outputs.version }}"
           awk -v v="$v" '
             $0 ~ "^## \\[" v "\\]" {on=1; next}
             on && /^## \[/ {exit}
             on {print}
           ' CHANGELOG.md > release-notes.md
           test -s release-notes.md
+          cat >> release-notes.md <<'EOF'
 
-      - name: Create tag and release
+          ### Installing the macOS builds
+
+          The macOS plug-ins are universal (Apple silicon + Intel), ad-hoc signed
+          and **not notarized**. After unzipping, clear the download quarantine:
+
+          ```bash
+          # AUv2 (all five flavors: ArpSID, ArpSID Instrument, DrSID, SID-808, C64 player)
+          xattr -dr com.apple.quarantine ArpSID.component
+          mv ArpSID.component ~/Library/Audio/Plug-Ins/Components/
+          # VST3
+          xattr -dr com.apple.quarantine arpsid_vst3.vst3
+          mv arpsid_vst3.vst3 ~/Library/Audio/Plug-Ins/VST3/
+          ```
+
+          Then rescan in your host (in Logic: restart, or run `killall -9 AudioComponentRegistrar`).
+          The C64 tune player needs your own KERNAL/BASIC/CHARGEN ROM dumps; none are bundled.
+          EOF
+      - name: Create or update release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          tag="${{ steps.version.outputs.tag }}"
-          draft=""
-          if [ "${{ inputs.draft }}" = "true" ]; then draft="--draft"; fi
-          gh release create "$tag" dist/* \
-            --target "${GITHUB_SHA}" \
-            --title "ArpSID ${{ steps.version.outputs.version }}" \
-            --notes-file release-notes.md \
-            $draft
+          tag="${{ needs.prepare.outputs.tag }}"
+          if [ "${{ needs.prepare.outputs.exists }}" = "true" ]; then
+            gh release upload "$tag" dist/* --clobber
+            gh release edit "$tag" --notes-file release-notes.md
+          else
+            draft=""
+            if [ "${{ inputs.draft }}" = "true" ]; then draft="--draft"; fi
+            gh release create "$tag" dist/* --target "${{ needs.prepare.outputs.ref }}" \
+              --title "ArpSID ${{ needs.prepare.outputs.version }}" --notes-file release-notes.md $draft
+          fi
