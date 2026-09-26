@@ -47,6 +47,11 @@ capabilities overlap — not forced feature identity.
 
 ## Sound engines
 
+Each SID exposes three independent voices — triangle, sawtooth, variable-pulse and
+noise waveforms, with per-voice pulse-width modulation, ring modulation and hard sync —
+feeding one shared multimode filter (low-, band- and high-pass, selectable per voice)
+and a master volume. ArpSID drives that silicon through several complementary engines:
+
 - **BitPerfect / classic SID** — SID-accurate register, waveform, ADSR and multimode
   filter behavior; glide/portamento laws; fractional-cycle rendering.
 - **SID-register / SynthMode** — direct `$D400`-register synthesis with a canonical
@@ -100,9 +105,34 @@ arrives at sample K never affects samples before K.
   and parses every host-visible parameter across AUv2/AUv3/VST3 using the *same*
   canonical DSP laws (so displayed values match what the engine actually renders), with
   Unicode-safe VST3 strings.
-- **180-slot factory patch bank** spanning synth, DrSID, SID-808 and DIGI families, with
-  full save/restore of state (including the DIGI user-sample bank).
-- MIDI CC → parameter mapping, and opt-in GM channel-10 drum promotion.
+- **Full parameter automation** — every host-visible parameter is automatable, and value
+  changes take effect on the exact canonical sample timeline.
+- MIDI CC → parameter mapping, opt-in GM channel-10 drum promotion, and PAL/NTSC-aware
+  note handling.
+
+## Standalone host & GUI
+
+- **Standalone macOS host** — a full "visual host" shell that loads the AUv3 presentation
+  with an on-screen velocity keyboard, transport (play / stop / record), tempo control and
+  a preset/bank browser, so the instrument runs without a DAW.
+- **Tabbed editor** — a MAIN synth panel (Master, three VCO banks, multimode filter, ADSR
+  and Output/FX) plus dedicated LFO/ARP, SEQ, MACRO, KIT, DIGI, MIX, FORENSIC and SIDCORE
+  pages.
+- **Live SID register scope** — a `$D400–$D418` register monitor with per-voice VCO,
+  filter and envelope read-outs plus PK/RMS output metering, driven only by
+  render-published telemetry.
+- **DrSID drum view** — a 16-step pattern grid, the SID-808 voice bank with its
+  General-MIDI note map, and the Analog SID control bank.
+
+See the [Screenshots](#screenshots) above.
+
+## Presets, banks and state
+
+- **180-slot factory patch bank** spanning the synth, DrSID, SID-808 and DIGI families.
+- **User banks and kits** — save and recall user patches and drum kits, and import/export
+  DrSID kits as `.arpsidbank` / `.json` drum libraries.
+- **Full state restore** — the complete instrument state, including the DIGI user-sample
+  bank, is serialized for host save/restore and cross-format state transfer.
 
 ## Architecture highlights
 
@@ -188,6 +218,22 @@ without appropriate rights.
 ---
 
 ## Release history
+
+ArpSID follows a strict per-pass "closure" discipline: every change lands as a
+numbered, test-pinned entry. The recent milestones are summarized here; the complete
+pass-by-pass audit trail is preserved (collapsed) below them.
+
+### Recent milestones
+
+- **v970 — test build-graph closure.** Compile the heavyweight `forensic_patch_bank.cpp` once into a static `arpsid_forensic_patchbank` library that 14 test targets link, instead of recompiling it per target. No shipped-artifact change.
+- **v969 — test-suite integrity.** Audited every test source, restored one genuinely-orphaned guard (`auv3_render_scratch_transport_v591`), and de-flaked the triple-buffer multi-consumer test. No production source changed.
+- **v968 — DrSID kit-save normalization.** User-kit SAVE normalizes to DrSID mode (`DrSidEnable=1`/`SynthMode=0`) for `.arpsid`/`.json`, and four pre-v965 tests were re-pinned to current contracts.
+- **v967 — DrSID quick-kit parity.** Re-synced the GUI "Standard" quick-kit tone table to the factory base voicing and fixed the slot-(-1) no-op apply path.
+- **v966 — parameter presentation authority.** One shared, parameter-ID-aware service formats/parses every host-visible parameter across AUv2/AUv3/VST3 using the canonical DSP laws, with real UTF-8⇄UTF-16 for VST3.
+- **v965 — canonical render pipeline closure.** One timed-event ordering authority across ingress, storage and dispatch; sample-boundary-safe structural changes; exact-offset post-FX; render-owned telemetry.
+
+<details>
+<summary>Full pass-by-pass closure changelog (preserved audit trail)</summary>
 
 ### v970 — test build-graph closure (handoff 22.7)
 
@@ -1154,3 +1200,5 @@ This pass promotes the uploaded TypeScript C64-core mapping into explicit C++ in
 Pre-0.0.674 per-pass closure notes — including the v0.0.605 series — have been
 moved to [docs/CHANGELOG_ARCHIVE.md](docs/CHANGELOG_ARCHIVE.md) to keep this
 README focused on current releases.
+
+</details>
