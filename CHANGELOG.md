@@ -33,6 +33,11 @@ and `include/arpsid/version.h`.
   try-locks the state and outputs one silent block while a load is in
   progress, never waiting on the UI thread.
 
+### Fixed (core)
+
+- 6510 CPU: decimal-mode `SBC` left-shifted a negative intermediate (undefined
+  behaviour, found by the new UBSan job). The result bits are unchanged.
+
 ### Added
 
 - `arpsid_vst3_host_tests`: a headless VST3 host test that loads the built

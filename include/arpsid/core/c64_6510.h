@@ -624,7 +624,7 @@ private:
             if (lo < 0) { lo -= 6; --hi; }
             if (hi < 0) hi -= 6;
             setFlag_(C, binary < 0x100u);
-            state_.a = static_cast<uint8_t>(((hi << 4) | (lo & 0x0F)) & 0xFF);
+            state_.a = static_cast<uint8_t>(((static_cast<unsigned>(hi) << 4) | static_cast<unsigned>(lo & 0x0F)) & 0xFFu);
         } else {
             setFlag_(C, binary < 0x100u);
             state_.a = binary8;
