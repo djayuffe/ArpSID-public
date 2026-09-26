@@ -5,6 +5,21 @@ All notable changes to ArpSID are documented here. The project uses
 version is `VERSION.txt`, mirrored by `project(VERSION)` in `CMakeLists.txt`
 and `include/arpsid/version.h`.
 
+## [0.9.1] — 2026-09-26
+
+### Fixed
+
+- Stepped parameter defaults now sit exactly on their value grid, so a host
+  that sets the declared default reads the same value back. `auval` previously
+  warned "Parameter did not retain default value when set" for 37 parameters
+  (VCO waveforms, arp pattern length, sequencer length and the 32 sequencer
+  step notes); the 16 host pitch-bend defaults had the same off-grid drift.
+  The DSP decodes every new default to exactly the same value as before
+  (same waveform, 17-step lengths, MIDI note 64, centred pitch bend), so
+  patches sound identical. Guarded by the new `ParameterDefaultGridTests`.
+- Removed an unused duplicate of the AUv2 editor-deferral predicate from the
+  non-AUv2 build of the macOS editor (`-Wunused-function`).
+
 ## [0.9.0] — 2026-09-26
 
 First public, cleanly versioned release. This consolidates the entire

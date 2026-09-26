@@ -6468,14 +6468,11 @@ static BOOL ArpSIDShouldDeferAuv2OOPBootstrap_v831(void) {
 }
 #else
 // v909: non-AUv2 wrappers (VST3 cocoa bridge, AUv3) share this translation
-// unit, and the (unreachable) deferred-editor scheduler still references both
-// symbols. Keep the same neutered definitions so every wrapper compiles and
-// behaves identically: no deferral, zero delay.
+// unit, and the (unreachable) deferred-editor scheduler still references the
+// delay constant. Keep it neutered so every wrapper compiles and behaves
+// identically: zero delay. (loadView never consults the deferral decision
+// outside the AUv2 component, so no deferral predicate is defined here.)
 static constexpr NSTimeInterval ArpSIDAuv2OOPEditorBuildDelaySeconds_v834 = 0.0;
-
-static BOOL ArpSIDShouldDeferAuv2OOPBootstrap_v831(void) {
-    return NO;
-}
 #endif
 
 @interface ArpSIDMIDIHUDView : NSView

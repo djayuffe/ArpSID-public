@@ -783,6 +783,12 @@ struct ParamInfo {
     bool automatable;
 };
 
+// Grid point `index` of a parameter with `steps` equal steps (see
+// normalizedParamStepCount / sanitizeNormalizedParamValue).
+constexpr float stepGridNorm(int index, int steps) noexcept {
+    return static_cast<float>(index) / static_cast<float>(steps);
+}
+
 // Parameter metadata table (must be kNumParams long)
 inline const std::array<ParamInfo, kNumParams> kParamInfos = []{
     std::array<ParamInfo, kNumParams> a{};
@@ -799,7 +805,9 @@ inline const std::array<ParamInfo, kNumParams> kParamInfos = []{
     set(kParamVoiceSpread, "Voice Spread", "", 0.0f);
 
     // VCOs
-    set(kParamVCO1Waveform, "VCO1 Waveform", "", 0.25f);
+    // Stepped defaults sit exactly on the sanitize grid so a host that sets
+    // the declared default reads the same value back (auval default check).
+    set(kParamVCO1Waveform, "VCO1 Waveform", "", stepGridNorm(2, 7)); // Pulse (idx 2/8)
     set(kParamVCO1PulseWidth, "VCO1 Pulse Width", "", 0.5f);
     set(kParamVCO1Detune, "VCO1 Detune", "", 0.5f);
     set(kParamVCO1Level, "VCO1 Level", "", 0.8f);
@@ -811,7 +819,7 @@ inline const std::array<ParamInfo, kNumParams> kParamInfos = []{
     // True-tune default: all three generated oscillators start at concert pitch.
     // Detune remains available per patch, but a clean/default note must not
     // sound falsely tuned merely because VCO2/VCO3 were pre-spread.
-    set(kParamVCO2Waveform,    "VCO2 Waveform",    "", 0.125f); // Sawtooth (idx 1/8)
+    set(kParamVCO2Waveform,    "VCO2 Waveform",    "", stepGridNorm(1, 7)); // Sawtooth (idx 1/8)
     set(kParamVCO2PulseWidth,  "VCO2 Pulse Width", "", 0.5f);
     set(kParamVCO2Detune,      "VCO2 Detune",      "", 0.5f);
     set(kParamVCO2Level,       "VCO2 Level",       "", 0.65f);
@@ -820,7 +828,7 @@ inline const std::array<ParamInfo, kNumParams> kParamInfos = []{
     set(kParamVCO2SyncEnable,  "VCO2 Sync",        "", 0.0f);
     set(kParamVCO2RingModEnable,"VCO2 RingMod",    "", 0.0f);
 
-    set(kParamVCO3Waveform,    "VCO3 Waveform",    "", 0.125f); // Sawtooth (idx 1/8)
+    set(kParamVCO3Waveform,    "VCO3 Waveform",    "", stepGridNorm(1, 7)); // Sawtooth (idx 1/8)
     set(kParamVCO3PulseWidth,  "VCO3 Pulse Width", "", 0.5f);
     set(kParamVCO3Detune,      "VCO3 Detune",      "", 0.5f);
     set(kParamVCO3Level,       "VCO3 Level",       "", 0.65f);
@@ -877,7 +885,7 @@ inline const std::array<ParamInfo, kNumParams> kParamInfos = []{
     set(kParamArpLatch, "Arp Latch", "", 0.0f);
     set(kParamArpTranspose, "Arp Transpose", "", 0.5f);
     set(kParamArpRandom, "Arp Random", "", 0.0f);
-    set(kParamArpPatternLength, "Arp Pattern Length", "", 0.5f);
+    set(kParamArpPatternLength, "Arp Pattern Length", "", stepGridNorm(16, 31)); // 17 steps
 
     // Drums
     set(kParamDrSidEnable, "DrSID Enable", "", 0.0f);
@@ -896,7 +904,7 @@ inline const std::array<ParamInfo, kNumParams> kParamInfos = []{
     set(kParamSeqTempo, "Seq Tempo", "bpm", 0.4f);
     set(kParamSeqSwing, "Seq Swing", "", 0.0f);
     set(kParamSeqMode, "Seq Mode", "", 0.0f);
-    set(kParamSeqLength, "Seq Length", "steps", 0.5f);
+    set(kParamSeqLength, "Seq Length", "steps", stepGridNorm(16, 31)); // 17 steps
 
     // Steps
     int id = kParamSeqStep1Note;
@@ -919,7 +927,7 @@ inline const std::array<ParamInfo, kNumParams> kParamInfos = []{
         std::snprintf(stepNoteNames[sidx],     sizeof(stepNoteNames[sidx]),     "Seq Step %d Note",     step);
         std::snprintf(stepVelocityNames[sidx], sizeof(stepVelocityNames[sidx]), "Seq Step %d Vel",      step);
         std::snprintf(stepGateNames[sidx],     sizeof(stepGateNames[sidx]),     "Seq Step %d Gate",     step);
-        set(id++, stepNoteNames[sidx],     "", 0.5f);
+        set(id++, stepNoteNames[sidx],     "", stepGridNorm(64, 127)); // MIDI note 64
         set(id++, stepVelocityNames[sidx], "", 1.0f);
         set(id++, stepGateNames[sidx],     "", 1.0f);
     }
@@ -1077,7 +1085,7 @@ set(kParamSidClockSystem, "SID Clock System (legacy mirror)", "", 0.0f, false);
         set((int)kParamHostCtrlSustainBase + ch, "Host MIDI Sustain", "", 0.0f, false);
         set((int)kParamHostCtrlSostenutoBase + ch, "Host MIDI Sostenuto", "", 0.0f, false);
         set((int)kParamHostCtrlChannelPressureBase + ch, "Host MIDI Channel Pressure", "", 0.0f, false);
-        set((int)kParamHostCtrlPitchBendBase + ch, "Host MIDI Pitch Bend", "", 0.5f, false);
+        set((int)kParamHostCtrlPitchBendBase + ch, "Host MIDI Pitch Bend", "", stepGridNorm(8192, 16383), false); // centre
         set((int)kParamHostCtrlRpnMsbBase + ch, "Host MIDI RPN MSB", "", 1.0f, false);
         set((int)kParamHostCtrlRpnLsbBase + ch, "Host MIDI RPN LSB", "", 1.0f, false);
         set((int)kParamHostCtrlNrpnMsbBase + ch, "Host MIDI NRPN MSB", "", 0.0f, false);

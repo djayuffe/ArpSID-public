@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(ArpSID VERSION 0.9.0 LANGUAGES CXX)
+project(ArpSID VERSION 0.9.1 LANGUAGES CXX)
 include(cmake/ArpSIDSourceTreeGuard.cmake)
 
 option(ARPSID_BUILD_ALL "Enable the stable ArpSID product set for the current platform" OFF)
@@ -5655,6 +5655,18 @@ add_test(NAME ParameterPresentationAuthorityV966Tests
   COMMAND ParameterPresentationAuthorityV966Tests)
 if(TARGET arpsid_release_closure_suite)
   add_dependencies(arpsid_release_closure_suite ParameterPresentationAuthorityV966Tests)
+endif()
+
+add_executable(ParameterDefaultGridTests
+  source/tests/parameter_default_grid_tests.cpp)
+target_compile_features(ParameterDefaultGridTests PRIVATE cxx_std_17)
+target_include_directories(ParameterDefaultGridTests PRIVATE
+  ${CMAKE_CURRENT_SOURCE_DIR}
+  ${CMAKE_CURRENT_SOURCE_DIR}/source
+  ${CMAKE_CURRENT_SOURCE_DIR}/include)
+add_test(NAME ParameterDefaultGridTests COMMAND ParameterDefaultGridTests)
+if(TARGET arpsid_release_closure_suite)
+  add_dependencies(arpsid_release_closure_suite ParameterDefaultGridTests)
 endif()
 
 add_executable(DrSidQuickKitBaseProfileParityV967Tests
