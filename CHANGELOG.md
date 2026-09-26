@@ -44,6 +44,12 @@ to 380 and closure revisions up to v970) into one release.
 
 ### Fixed
 
+- VST3 now builds off macOS (verified on Linux against VST3 SDK 3.8.1; the
+  SDK validator passes 47/47). The Cocoa editor sources are compiled only on
+  Apple, with a portable bridge elsewhere; ArpSID's duplicate module entry
+  points (`arpsid_module_init.cpp`), which collided with the SDK's own
+  `linuxmain.cpp`/`dllmain.cpp` and skipped `InitModule`, were removed; and the
+  SDK's example targets (which need GTK on Linux) are disabled.
 - AUv2/AUv3 `AudioComponents` version integer now uses Apple's
   `major << 16 | minor << 8 | patch` encoding, so hosts display the real
   version (previously `major*10000 + minor*100 + patch`).

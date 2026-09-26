@@ -162,6 +162,13 @@ ctest --test-dir build-release --output-on-failure
 
 # Create a clean source release archive
 ./build.sh --package-release --parallel 4
+
+# VST3 (any platform; the rich editor is macOS-only, elsewhere hosts show
+# their generic parameter UI). Needs the Steinberg VST3 SDK:
+git clone --recurse-submodules https://github.com/steinbergmedia/vst3sdk.git
+cmake -S . -B build-vst3 -DCMAKE_BUILD_TYPE=Release -DARPSID_BUILD_VST3=ON \
+      -Dvst3sdk_SOURCE_DIR=$PWD/vst3sdk
+cmake --build build-vst3 --target arpsid_vst3   # also runs the SDK validator
 ```
 
 Repository guards (run before/after changes):

@@ -417,6 +417,10 @@ if(ARPSID_BUILD_VST3)
         set(SMTG_ENABLE_USE_OF_JACK OFF CACHE BOOL "" FORCE)
         set(SMTG_ADD_VSTGUI       OFF CACHE BOOL "" FORCE)
         set(SMTG_ENABLE_VSTGUI_SUPPORT OFF CACHE BOOL "" FORCE)
+        # - SDK plug-in/hosting examples: not needed, and on Linux the example
+        #   editor host requires GTK 3 just to configure.
+        set(SMTG_ENABLE_VST3_PLUGIN_EXAMPLES  OFF CACHE BOOL "" FORCE)
+        set(SMTG_ENABLE_VST3_HOSTING_EXAMPLES OFF CACHE BOOL "" FORCE)
 
         add_subdirectory(${vst3sdk_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/vst3sdk EXCLUDE_FROM_ALL)
     endif()
@@ -425,19 +429,29 @@ if(ARPSID_BUILD_VST3)
         smtg_enable_vst3_sdk()
     endif()
 
+    # The rich editor is the native Cocoa GUI (Objective-C++), so it is macOS
+    # only. Elsewhere the plug-in builds headless: the editor reports no
+    # supported platform view and hosts show their generic parameter UI.
+    if(APPLE)
+        set(_arpsid_vst3_gui_sources
+            source/gui/arpsid_vst_cocoa_bridge.mm
+            source/au3/ArpSIDViewController.mm
+            source/au3/ArpSIDDigiAudioQueueCapture.mm
+            source/au3/ArpSIDFileBankBridge.mm)
+    else()
+        set(_arpsid_vst3_gui_sources
+            source/gui/arpsid_vst_headless_bridge.cpp)
+    endif()
+
     if(COMMAND smtg_add_vst3plugin)
         smtg_add_vst3plugin(arpsid_vst3
             source/arpsid_processor_phase2.cpp
-            source/arpsid_module_init.cpp
             source/factory.cpp
             source/plugin_ids.cpp
             source/forensic_patch_bank.cpp
             source/arpsid_file_bank.cpp
             source/gui/arpsid_vstgui_editor.cpp
-            source/gui/arpsid_vst_cocoa_bridge.mm
-            source/au3/ArpSIDViewController.mm
-            source/au3/ArpSIDDigiAudioQueueCapture.mm
-            source/au3/ArpSIDFileBankBridge.mm
+            ${_arpsid_vst3_gui_sources}
             )
     else()
         message(FATAL_ERROR "Steinberg SDK CMake function smtg_add_vst3plugin is unavailable in this SDK checkout")

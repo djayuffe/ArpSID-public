@@ -576,7 +576,7 @@ private:
 
     // Safe parameter read helper (normalized 0..1). Never returns NaN.
     inline float getParam(Steinberg::Vst::ParamID pid) const {
-        if (pid < 0 || pid >= static_cast<Steinberg::Vst::ParamID>(paramValues.size()))
+        if (pid >= static_cast<Steinberg::Vst::ParamID>(paramValues.size()))
             return 0.0f;
         return ArpSID::sanitizeNormalizedParamValue(static_cast<int>(pid), paramValues[static_cast<size_t>(pid)],
                                                    ArpSID::defaultNormalizedParamValue(static_cast<int>(pid)));
