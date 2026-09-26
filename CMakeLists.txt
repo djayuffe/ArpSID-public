@@ -116,6 +116,13 @@ if(MSVC)
     # /fp:precise, not /fp:fast: ArpSID relies on NaN/Inf sanitation (see the
     # -ffast-math note below), which fast floating-point may optimise away.
     add_compile_options(/W4 /WX- /permissive- /fp:precise /utf-8)
+    # Match the GCC/Clang warning policy (-Wall -Wextra -Wpedantic
+    # -Wno-unused-parameter): /W4 additionally reports implicit numeric
+    # narrowing (-Wconversion), shadowing (-Wshadow) and constant conditions,
+    # none of which the other toolchains enable.
+    #   C4244/C4267/C4305  implicit narrowing        C4100  unused parameter
+    #   C4456..C4459       declaration shadowing     C4127  constant condition
+    add_compile_options(/wd4244 /wd4267 /wd4305 /wd4100 /wd4456 /wd4457 /wd4458 /wd4459 /wd4127)
     add_compile_definitions(_CRT_SECURE_NO_WARNINGS NOMINMAX)
 else()
     add_compile_options(-Wall -Wextra -Wpedantic -Wno-unused-parameter)

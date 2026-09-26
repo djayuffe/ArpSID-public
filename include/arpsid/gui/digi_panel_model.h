@@ -90,8 +90,8 @@ inline constexpr std::uint8_t  kDigiStepDefaultVelocity = 100u;
 inline constexpr std::uint8_t  kDigiTuneBias    = 128u;  ///< bias: 128 == 0 semitones
 inline constexpr int           kDigiTuneMin     = -12;
 inline constexpr int           kDigiTuneMax     = +12;
-inline constexpr std::uint8_t  kDigiTuneBiasMin = static_cast<std::uint8_t>(128u + kDigiTuneMin);  // 116
-inline constexpr std::uint8_t  kDigiTuneBiasMax = static_cast<std::uint8_t>(128u + kDigiTuneMax);  // 140
+inline constexpr std::uint8_t  kDigiTuneBiasMin = static_cast<std::uint8_t>(128 + kDigiTuneMin);   // 116
+inline constexpr std::uint8_t  kDigiTuneBiasMax = static_cast<std::uint8_t>(128 + kDigiTuneMax);   // 140
 
 /// Playback flag bits.
 inline constexpr std::uint8_t  kDigiFlagLoop    = 0x01u;
