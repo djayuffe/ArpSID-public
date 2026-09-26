@@ -29,9 +29,6 @@ void require(bool condition, const char* message) {
 void requireContains(const std::string& text, const char* needle, const char* message) {
     require(text.find(needle) != std::string::npos, message);
 }
-void requireNotContains(const std::string& text, const char* needle, const char* message) {
-    require(text.find(needle) == std::string::npos, message);
-}
 } // namespace
 
 int main() {

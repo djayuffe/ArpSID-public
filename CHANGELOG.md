@@ -18,6 +18,8 @@ and `include/arpsid/version.h`.
 - VST3: no longer links the SDK's `base` library twice (Apple `ld` duplicate
   library warning), and warnings from Steinberg SDK sources are silenced so
   build logs show only ArpSID diagnostics.
+- Removed two unused helper functions (one in the AUv2 component, one in a
+  source-contract test) caught by the new warning gate.
 
 ### Build, CI and releases
 

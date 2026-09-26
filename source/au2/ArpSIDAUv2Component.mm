@@ -198,11 +198,6 @@ static const std::vector<AudioUnitParameterID>& hostVisibleParameterList() {
     return sIDs;
 }
 
-static inline bool auv2ParameterIsBooleanParamID(AudioUnitParameterID pid) noexcept {
-    return pid < (AudioUnitParameterID)ArpSID::kNumParams &&
-           ArpSID::isBooleanNormalizedParam(static_cast<int>(pid));
-}
-
 static inline UInt32 auv2ParameterStepCountForParamID(AudioUnitParameterID pid) noexcept {
     if (pid >= (AudioUnitParameterID)ArpSID::kNumParams) return 0;
     return static_cast<UInt32>(ArpSID::normalizedParamStepCount(static_cast<int>(pid)));
