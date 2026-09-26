@@ -119,6 +119,7 @@ jobs:
 
       - name: Verify AUv2 bundle, install and run strict auval (all 5 flavors)
         run: |
+          set -o pipefail
           comp="$(find build-auv2 -maxdepth 4 -type d -name ArpSID.component -print -quit)"
           test -n "$comp"
           lipo -archs "$comp/Contents/MacOS/ArpSID"
@@ -126,7 +127,15 @@ jobs:
           /usr/bin/plutil -p "$comp/Contents/Info.plist" | grep -E '"(name|version|subtype)"'
           sh scripts/macos/install_auv2_component.sh "$comp" "$HOME/Library/Audio/Plug-Ins/Components" -
           ARPSID_AUVAL_RETRIES=4 ARPSID_AUVAL_RETRY_DELAY=3 \
-            sh scripts/macos/verify_auv2_component.sh "$HOME/Library/Audio/Plug-Ins/Components/ArpSID.component"
+            sh scripts/macos/verify_auv2_component.sh "$HOME/Library/Audio/Plug-Ins/Components/ArpSID.component" \
+            2>&1 | tee "${RUNNER_TEMP}/auval.log"
+          # auval passes with parameter-default drift reported only as a WARNING;
+          # treat it as a release blocker (see ParameterDefaultGridTests).
+          if grep -q "did not retain default value" "${RUNNER_TEMP}/auval.log"; then
+            echo "::error::auval reports parameters that do not retain their default value"
+            grep -B8 "did not retain default value" "${RUNNER_TEMP}/auval.log" | grep -E "Parameter ID|Name:|retrievedValue" | head -40
+            exit 1
+          fi
           echo "AUV2_COMPONENT=$comp" >> "$GITHUB_ENV"
 
       - name: Build VST3 (universal, runs the SDK validator)
