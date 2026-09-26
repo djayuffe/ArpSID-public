@@ -1,0 +1,169 @@
+name: Build
+
+# Reusable build + verification pipeline, shared by CI and Release.
+#
+#   linux       full CTest suite + repository guard scripts
+#   linux-vst3  VST3 plug-in + Steinberg SDK validator
+#   macos       AUv2 (5 flavors) + VST3, codesign verify, strict auval
+#
+# Every job fails on ArpSID compiler/linker warnings, and the macOS job fails
+# on any auval WARNING. With `release: true` the macOS plug-ins are built
+# universal and all assets are uploaded as workflow artifacts.
+on:
+  workflow_call:
+    inputs:
+      ref:
+        description: "Git ref to build (default: the triggering commit)"
+        type: string
+        default: ""
+      release:
+        description: "Build release assets (universal macOS, packaging, artifacts)"
+        type: boolean
+        default: false
+      macos:
+        description: "Run the macOS job"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+env:
+  VST3SDK_TAG: v3.8.1_build_84
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with: { ref: "${{ inputs.ref }}" }
+      - run: sudo apt-get update && sudo apt-get install -y ninja-build
+      - name: Repository guards
+        run: |
+          python3 scripts/check_version_coherence.py
+          python3 scripts/verify_source_tree.py
+          python3 scripts/check_audit_closure.py
+      - name: Build (core + tests)
+        run: |
+          set -o pipefail
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DARPSID_BUILD_TESTS=ON
+          cmake --build build --parallel "$(nproc)" 2>&1 | tee build.log
+          scripts/ci/check_build_warnings.sh build.log "$GITHUB_WORKSPACE"
+      - name: Test
+        run: ctest --test-dir build --parallel "$(nproc)" --output-on-failure --no-tests=error
+
+  source:
+    if: inputs.release
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with: { ref: "${{ inputs.ref }}" }
+      - run: sudo apt-get update && sudo apt-get install -y zip rsync
+      - name: Package source
+        run: |
+          scripts/ci/check_public_tree.sh
+          v="$(tr -d '[:space:]' < VERSION.txt)"
+          mkdir -p "${RUNNER_TEMP}/dist"
+          RELEASE_NAME="ArpSID-${v}-source" PACKAGE_OUT="${RUNNER_TEMP}/dist/ArpSID-${v}-source.zip" \
+            scripts/package_release.sh "${GITHUB_WORKSPACE}"
+      - uses: actions/upload-artifact@v7
+        with: { name: source, path: "${{ runner.temp }}/dist/*" }
+
+  linux-vst3:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+        with: { ref: "${{ inputs.ref }}" }
+      - run: sudo apt-get update && sudo apt-get install -y ninja-build zip
+      - name: Fetch Steinberg VST3 SDK
+        run: |
+          git clone --depth 1 --branch "${VST3SDK_TAG}" --recurse-submodules --shallow-submodules \
+            https://github.com/steinbergmedia/vst3sdk.git "${RUNNER_TEMP}/vst3sdk"
+      - name: Build VST3 (runs the SDK validator)
+        run: |
+          set -o pipefail
+          cmake -S . -B build-vst3 -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DARPSID_BUILD_VST3=ON -Dvst3sdk_SOURCE_DIR="${RUNNER_TEMP}/vst3sdk"
+          cmake --build build-vst3 --target arpsid_vst3 2>&1 | tee build-vst3.log
+          scripts/ci/check_build_warnings.sh build-vst3.log "$GITHUB_WORKSPACE"
+      - name: Package
+        if: inputs.release
+        run: |
+          v="$(tr -d '[:space:]' < VERSION.txt)"
+          mkdir -p "${RUNNER_TEMP}/dist"
+          (cd build-vst3/VST3/Release && zip -qr "${RUNNER_TEMP}/dist/ArpSID-${v}-vst3-linux-x86_64.zip" arpsid_vst3.vst3)
+      - uses: actions/upload-artifact@v7
+        if: inputs.release
+        with: { name: linux-vst3, path: "${{ runner.temp }}/dist/*" }
+
+  macos:
+    if: inputs.macos
+    runs-on: macos-15
+    env:
+      MACOS_ARCHS: ${{ inputs.release && 'arm64;x86_64' || 'arm64' }}
+      MACOS_MIN: "12.0"
+    steps:
+      - uses: actions/checkout@v7
+        with: { ref: "${{ inputs.ref }}" }
+      - name: Toolchain
+        run: xcodebuild -version && cmake --version
+      - name: Fetch Steinberg VST3 SDK
+        run: |
+          git clone --depth 1 --branch "${VST3SDK_TAG}" --recurse-submodules --shallow-submodules \
+            https://github.com/steinbergmedia/vst3sdk.git "${RUNNER_TEMP}/vst3sdk"
+
+      - name: Build AUv2 (ad-hoc signed)
+        run: |
+          set -o pipefail
+          cmake -S . -B build-auv2 -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_ARCHITECTURES="${MACOS_ARCHS}" -DCMAKE_OSX_DEPLOYMENT_TARGET="${MACOS_MIN}" \
+            -DARPSID_BUILD_AUV2=ON -DARPSID_CODESIGN_IDENTITY=-
+          cmake --build build-auv2 --target arpsid_auv2 --parallel "$(sysctl -n hw.ncpu)" 2>&1 | tee build-auv2.log
+          scripts/ci/check_build_warnings.sh build-auv2.log "$GITHUB_WORKSPACE"
+
+      - name: Verify AUv2, install and run strict auval (all 5 flavors)
+        run: |
+          set -o pipefail
+          comp="$(find build-auv2 -maxdepth 4 -type d -name ArpSID.component -print -quit)"
+          test -n "$comp"
+          lipo -archs "$comp/Contents/MacOS/ArpSID"
+          codesign --verify --deep --strict --verbose=2 "$comp"
+          sh scripts/macos/install_auv2_component.sh "$comp" "$HOME/Library/Audio/Plug-Ins/Components" -
+          ARPSID_AUVAL_RETRIES=4 ARPSID_AUVAL_RETRY_DELAY=3 \
+            sh scripts/macos/verify_auv2_component.sh "$HOME/Library/Audio/Plug-Ins/Components/ArpSID.component" \
+            2>&1 | tee "${RUNNER_TEMP}/auval.log"
+          # auval passes with WARNING-level findings; treat every one as a failure.
+          warnings="$(grep -E '^[[:space:]]*WARNING' "${RUNNER_TEMP}/auval.log" | sort | uniq -c || true)"
+          if [ -n "$warnings" ]; then
+            echo "::error::auval reported warnings"
+            echo "$warnings"
+            exit 1
+          fi
+          echo "auval: all flavors passed with no warnings"
+          echo "AUV2_COMPONENT=$comp" >> "$GITHUB_ENV"
+
+      - name: Build VST3 (runs the SDK validator)
+        run: |
+          set -o pipefail
+          cmake -S . -B build-vst3 -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_OSX_ARCHITECTURES="${MACOS_ARCHS}" -DCMAKE_OSX_DEPLOYMENT_TARGET="${MACOS_MIN}" \
+            -DARPSID_BUILD_VST3=ON -Dvst3sdk_SOURCE_DIR="${RUNNER_TEMP}/vst3sdk"
+          cmake --build build-vst3 --target arpsid_vst3 --parallel "$(sysctl -n hw.ncpu)" 2>&1 | tee build-vst3.log
+          scripts/ci/check_build_warnings.sh build-vst3.log "$GITHUB_WORKSPACE"
+          vst="$(find build-vst3/VST3 -maxdepth 3 -type d -name 'arpsid_vst3.vst3' -print -quit)"
+          test -n "$vst"
+          codesign --force --deep --sign - "$vst"
+          codesign --verify --deep --strict --verbose=2 "$vst"
+          lipo -archs "$vst/Contents/MacOS/arpsid_vst3"
+          echo "VST3_BUNDLE=$vst" >> "$GITHUB_ENV"
+
+      - name: Package
+        if: inputs.release
+        run: |
+          v="$(tr -d '[:space:]' < VERSION.txt)"
+          mkdir -p "${RUNNER_TEMP}/dist"
+          ditto -c -k --keepParent "$AUV2_COMPONENT" "${RUNNER_TEMP}/dist/ArpSID-${v}-auv2-macos-universal.zip"
+          ditto -c -k --keepParent "$VST3_BUNDLE"    "${RUNNER_TEMP}/dist/ArpSID-${v}-vst3-macos-universal.zip"
+      - uses: actions/upload-artifact@v7
+        if: inputs.release
+        with: { name: macos, path: "${{ runner.temp }}/dist/*" }

@@ -1,4 +1,4 @@
-# ArpSID 0.9.1
+# ArpSID 0.9.2
 
 **A Commodore 64 SID synthesizer and C64 tune player as an audio plug-in for macOS.**
 
@@ -190,6 +190,37 @@ cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DARPSID_BUILD_TESTS=ON
 cmake --build build
 ctest --test-dir build --output-on-failure -j4
 ```
+
+## CI and releases
+
+GitHub Actions (`.github/workflows/`) runs on every push to `main` and on pull
+requests:
+
+| Job | What it checks |
+|---|---|
+| `linux` | Repository guards, full build, full CTest suite. |
+| `linux-vst3` | VST3 build + Steinberg SDK validator. |
+| `macos` | AUv2 (all five flavors) + VST3 build, code-signature check, strict `auval`. Public repository only. |
+
+Every job fails on any ArpSID compiler or linker warning, and the macOS job
+fails on any `auval` warning.
+
+**Making a release** (public repository):
+
+1. Bump `VERSION.txt`, `project(VERSION)` in `CMakeLists.txt`,
+   `include/arpsid/version.h` and the README title, and add a
+   `## [x.y.z]` entry to `CHANGELOG.md` (`python3 scripts/check_version_coherence.py`
+   checks they agree).
+2. Push to `main`. The **Release** workflow sees the `VERSION.txt` change,
+   reruns the whole pipeline and publishes `vx.y.z` with the source zip,
+   Linux VST3, universal macOS AUv2 and VST3 and `SHA256SUMS.txt`. Pushing a
+   `vx.y.z` tag works too, and a manual run rebuilds an existing release.
+
+Releases are only published from the public repository and refuse any tree
+that carries the real C64 ROMs (`scripts/ci/check_public_tree.sh`). From the
+private repository, mirror a commit with
+`scripts/sync_public_mirror.sh <path-to-ArpSID-public> --push`: it copies
+everything except the ROM files and runs the same guard before committing.
 
 ## Documentation
 

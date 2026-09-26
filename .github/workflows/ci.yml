@@ -1,0 +1,22 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    uses: ./.github/workflows/build.yml
+    with:
+      # macOS runners bill 10x on private repositories; the public mirror runs
+      # the AUv2/VST3 + auval job on every push.
+      macos: ${{ !github.event.repository.private }}

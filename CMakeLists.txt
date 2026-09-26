@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(ArpSID VERSION 0.9.1 LANGUAGES CXX)
+project(ArpSID VERSION 0.9.2 LANGUAGES CXX)
 include(cmake/ArpSIDSourceTreeGuard.cmake)
 
 option(ARPSID_BUILD_ALL "Enable the stable ArpSID product set for the current platform" OFF)
@@ -423,6 +423,15 @@ if(ARPSID_BUILD_VST3)
         set(SMTG_ENABLE_VST3_HOSTING_EXAMPLES OFF CACHE BOOL "" FORCE)
 
         add_subdirectory(${vst3sdk_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/vst3sdk EXCLUDE_FROM_ALL)
+
+        # Third-party SDK sources are not ours to fix: silence their warnings so
+        # the build log only shows ArpSID diagnostics (ArpSID targets keep
+        # their full warning set).
+        foreach(_arpsid_sdk_target IN ITEMS pluginterfaces base sdk_common sdk sdk_hosting validator moduleinfotool)
+            if(TARGET ${_arpsid_sdk_target})
+                target_compile_options(${_arpsid_sdk_target} PRIVATE -w)
+            endif()
+        endforeach()
     endif()
 
     if(COMMAND smtg_enable_vst3_sdk)
@@ -465,10 +474,8 @@ if(ARPSID_BUILD_VST3)
         ${vst3sdk_SOURCE_DIR}/vstgui4
     )
 
-
-    if(TARGET base)
-        target_link_libraries(arpsid_vst3 PRIVATE base)
-    endif()
+    # `sdk` already links the SDK's `base` library; linking it again here made
+    # Apple ld warn about duplicate libraries.
 
 
     # Newer Apple Clang/Xcode toolchains break third-party VSTGUI targets with:

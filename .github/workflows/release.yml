@@ -1,16 +1,24 @@
 name: Release
 
-# Manually triggered. Builds the release assets, then creates the
-# v<VERSION.txt> tag + GitHub release, or - if that release already exists -
-# rebuilds from its tag and replaces/adds the assets.
-#
-# Assets:
+# Publishes v<VERSION.txt> as a GitHub release with these assets:
 #   ArpSID-<v>-source.zip                  ROM-free source (scripts/package_release.sh)
 #   ArpSID-<v>-vst3-linux-x86_64.zip       VST3, Linux x86_64 (generic host UI)
 #   ArpSID-<v>-vst3-macos-universal.zip    VST3, macOS arm64+x86_64, ad-hoc signed
 #   ArpSID-<v>-auv2-macos-universal.zip    AUv2 (5 flavors), macOS arm64+x86_64, ad-hoc signed
 #   SHA256SUMS.txt
+#
+# Triggers:
+#   - push to main that changes VERSION.txt  -> releases the new version (no-op if it exists)
+#   - push of a tag v<VERSION.txt>           -> releases that tag
+#   - manual run                             -> creates the release, or rebuilds the
+#                                               existing one from its tag and replaces assets
+# Every release is gated on the full build pipeline (tests, validators, auval).
+# It refuses to run in a private repository or on a tree with real C64 ROMs.
 on:
+  push:
+    branches: [main]
+    paths: [VERSION.txt]
+    tags: ["v*"]
   workflow_dispatch:
     inputs:
       draft:
@@ -18,11 +26,12 @@ on:
         type: boolean
         default: false
 
-permissions:
-  contents: write
+concurrency:
+  group: release
+  cancel-in-progress: false
 
-env:
-  VST3SDK_TAG: v3.8.1_build_84
+permissions:
+  contents: read
 
 jobs:
   prepare:
@@ -32,8 +41,16 @@ jobs:
       tag: ${{ steps.v.outputs.tag }}
       ref: ${{ steps.v.outputs.ref }}
       exists: ${{ steps.v.outputs.exists }}
+      proceed: ${{ steps.v.outputs.proceed }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+      - name: Refuse private repositories
+        if: github.event.repository.private
+        run: |
+          echo "::error::Releases are published from the public mirror only (the private tree carries real C64 ROMs)."
+          exit 1
+      - name: Public-tree guard (no real ROMs)
+        run: scripts/ci/check_public_tree.sh
       - id: v
         env:
           GH_TOKEN: ${{ github.token }}
@@ -41,132 +58,49 @@ jobs:
           python3 scripts/check_version_coherence.py
           version="$(tr -d '[:space:]' < VERSION.txt)"
           tag="v${version}"
-          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            exists=true; ref="$tag"     # rebuild exactly what the release tagged
-          else
-            exists=false; ref="$GITHUB_SHA"
-          fi
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "tag=$tag" >> "$GITHUB_OUTPUT"
-          echo "ref=$ref" >> "$GITHUB_OUTPUT"
-          echo "exists=$exists" >> "$GITHUB_OUTPUT"
-          echo "version=$version tag=$tag exists=$exists ref=$ref"
-
-  source:
-    needs: prepare
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-        with: { ref: "${{ needs.prepare.outputs.ref }}" }
-      - run: sudo apt-get update && sudo apt-get install -y zip rsync
-      - name: Package source
-        run: |
-          v="${{ needs.prepare.outputs.version }}"
-          mkdir -p "${RUNNER_TEMP}/dist"
-          RELEASE_NAME="ArpSID-${v}-source" PACKAGE_OUT="${RUNNER_TEMP}/dist/ArpSID-${v}-source.zip" \
-            scripts/package_release.sh "${GITHUB_WORKSPACE}"
-      - uses: actions/upload-artifact@v4
-        with: { name: source, path: "${{ runner.temp }}/dist/*" }
-
-  linux-vst3:
-    needs: prepare
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v4
-        with: { ref: "${{ needs.prepare.outputs.ref }}" }
-      - run: sudo apt-get update && sudo apt-get install -y ninja-build zip
-      - name: Fetch Steinberg VST3 SDK
-        run: |
-          git clone --depth 1 --branch "${VST3SDK_TAG}" --recurse-submodules --shallow-submodules \
-            https://github.com/steinbergmedia/vst3sdk.git "${RUNNER_TEMP}/vst3sdk"
-      - name: Build VST3 (runs the SDK validator)
-        run: |
-          cmake -S . -B build-vst3 -G Ninja -DCMAKE_BUILD_TYPE=Release \
-            -DARPSID_BUILD_VST3=ON -Dvst3sdk_SOURCE_DIR="${RUNNER_TEMP}/vst3sdk"
-          cmake --build build-vst3 --target arpsid_vst3
-      - name: Package
-        run: |
-          v="${{ needs.prepare.outputs.version }}"
-          mkdir -p "${RUNNER_TEMP}/dist"
-          (cd build-vst3/VST3/Release && zip -qr "${RUNNER_TEMP}/dist/ArpSID-${v}-vst3-linux-x86_64.zip" arpsid_vst3.vst3)
-      - uses: actions/upload-artifact@v4
-        with: { name: linux-vst3, path: "${{ runner.temp }}/dist/*" }
-
-  macos:
-    needs: prepare
-    runs-on: macos-15
-    env:
-      MACOS_ARCHS: "arm64;x86_64"
-      MACOS_MIN: "12.0"
-    steps:
-      - uses: actions/checkout@v4
-        with: { ref: "${{ needs.prepare.outputs.ref }}" }
-      - name: Toolchain
-        run: |
-          xcodebuild -version
-          cmake --version
-      - name: Fetch Steinberg VST3 SDK
-        run: |
-          git clone --depth 1 --branch "${VST3SDK_TAG}" --recurse-submodules --shallow-submodules \
-            https://github.com/steinbergmedia/vst3sdk.git "${RUNNER_TEMP}/vst3sdk"
-
-      - name: Build AUv2 (universal, ad-hoc signed)
-        run: |
-          cmake -S . -B build-auv2 -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_OSX_ARCHITECTURES="${MACOS_ARCHS}" -DCMAKE_OSX_DEPLOYMENT_TARGET="${MACOS_MIN}" \
-            -DARPSID_BUILD_AUV2=ON -DARPSID_CODESIGN_IDENTITY=-
-          cmake --build build-auv2 --target arpsid_auv2 -j "$(sysctl -n hw.ncpu)"
-
-      - name: Verify AUv2 bundle, install and run strict auval (all 5 flavors)
-        run: |
-          set -o pipefail
-          comp="$(find build-auv2 -maxdepth 4 -type d -name ArpSID.component -print -quit)"
-          test -n "$comp"
-          lipo -archs "$comp/Contents/MacOS/ArpSID"
-          codesign --verify --deep --strict --verbose=2 "$comp"
-          /usr/bin/plutil -p "$comp/Contents/Info.plist" | grep -E '"(name|version|subtype)"'
-          sh scripts/macos/install_auv2_component.sh "$comp" "$HOME/Library/Audio/Plug-Ins/Components" -
-          ARPSID_AUVAL_RETRIES=4 ARPSID_AUVAL_RETRY_DELAY=3 \
-            sh scripts/macos/verify_auv2_component.sh "$HOME/Library/Audio/Plug-Ins/Components/ArpSID.component" \
-            2>&1 | tee "${RUNNER_TEMP}/auval.log"
-          # auval passes with parameter-default drift reported only as a WARNING;
-          # treat it as a release blocker (see ParameterDefaultGridTests).
-          if grep -q "did not retain default value" "${RUNNER_TEMP}/auval.log"; then
-            echo "::error::auval reports parameters that do not retain their default value"
-            grep -B8 "did not retain default value" "${RUNNER_TEMP}/auval.log" | grep -E "Parameter ID|Name:|retrievedValue" | head -40
+          if [ "${GITHUB_REF_TYPE}" = "tag" ] && [ "${GITHUB_REF_NAME}" != "$tag" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match VERSION.txt (${version})"
             exit 1
           fi
-          echo "AUV2_COMPONENT=$comp" >> "$GITHUB_ENV"
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            exists=true
+          else
+            exists=false
+          fi
+          proceed=true
+          ref="$GITHUB_SHA"
+          if [ "$exists" = "true" ]; then
+            if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+              ref="$tag"        # rebuild exactly what the release tagged
+            else
+              proceed=false     # automatic trigger for an existing release: nothing to do
+              echo "::notice::Release ${tag} already exists; nothing to do (run manually to rebuild its assets)."
+            fi
+          fi
+          {
+            echo "version=$version"; echo "tag=$tag"; echo "ref=$ref"
+            echo "exists=$exists"; echo "proceed=$proceed"
+          } >> "$GITHUB_OUTPUT"
+          echo "version=$version tag=$tag exists=$exists proceed=$proceed ref=$ref"
 
-      - name: Build VST3 (universal, runs the SDK validator)
-        run: |
-          cmake -S . -B build-vst3 -DCMAKE_BUILD_TYPE=Release \
-            -DCMAKE_OSX_ARCHITECTURES="${MACOS_ARCHS}" -DCMAKE_OSX_DEPLOYMENT_TARGET="${MACOS_MIN}" \
-            -DARPSID_BUILD_VST3=ON -Dvst3sdk_SOURCE_DIR="${RUNNER_TEMP}/vst3sdk"
-          cmake --build build-vst3 --target arpsid_vst3 -j "$(sysctl -n hw.ncpu)"
-          vst="$(find build-vst3/VST3 -maxdepth 3 -type d -name 'arpsid_vst3.vst3' -print -quit)"
-          test -n "$vst"
-          codesign --force --deep --sign - "$vst"
-          codesign --verify --deep --strict --verbose=2 "$vst"
-          lipo -archs "$vst/Contents/MacOS/arpsid_vst3"
-          echo "VST3_BUNDLE=$vst" >> "$GITHUB_ENV"
-
-      - name: Package
-        run: |
-          v="${{ needs.prepare.outputs.version }}"
-          mkdir -p "${RUNNER_TEMP}/dist"
-          ditto -c -k --keepParent "$AUV2_COMPONENT" "${RUNNER_TEMP}/dist/ArpSID-${v}-auv2-macos-universal.zip"
-          ditto -c -k --keepParent "$VST3_BUNDLE"    "${RUNNER_TEMP}/dist/ArpSID-${v}-vst3-macos-universal.zip"
-      - uses: actions/upload-artifact@v4
-        with: { name: macos, path: "${{ runner.temp }}/dist/*" }
+  build:
+    needs: prepare
+    if: needs.prepare.outputs.proceed == 'true'
+    uses: ./.github/workflows/build.yml
+    with:
+      ref: ${{ needs.prepare.outputs.ref }}
+      release: true
+      macos: true
 
   release:
-    needs: [prepare, source, linux-vst3, macos]
+    needs: [prepare, build]
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with: { ref: "${{ needs.prepare.outputs.ref }}" }
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v8
         with: { path: dist, merge-multiple: true }
       - name: Checksums
         run: (cd dist && sha256sum *.zip > SHA256SUMS.txt && cat SHA256SUMS.txt && ls -l)
@@ -197,6 +131,10 @@ jobs:
 
           Then rescan in your host (in Logic: restart, or run `killall -9 AudioComponentRegistrar`).
           The C64 tune player needs your own KERNAL/BASIC/CHARGEN ROM dumps; none are bundled.
+
+          Every asset in this release was built by CI after the full test suite,
+          the Steinberg VST3 validator and strict `auval` (all five AU flavors,
+          zero warnings) passed. Verify downloads against `SHA256SUMS.txt`.
           EOF
       - name: Create or update release
         env:

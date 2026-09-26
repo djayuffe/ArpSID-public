@@ -5,6 +5,33 @@ All notable changes to ArpSID are documented here. The project uses
 version is `VERSION.txt`, mirrored by `project(VERSION)` in `CMakeLists.txt`
 and `include/arpsid/version.h`.
 
+## [0.9.2] — 2026-09-26
+
+### Fixed
+
+- AUv2 now honours host-owned user presets: `PresentPreset` with a negative
+  preset number keeps the host's name (reported back by `PresentPreset` and
+  in the saved state) instead of snapping to a factory slot and dropping it.
+  The audible state and factory-preset authority are untouched. This clears
+  the last `auval` warning ("Preset name is not retained in retrieved class
+  data").
+- VST3: no longer links the SDK's `base` library twice (Apple `ld` duplicate
+  library warning), and warnings from Steinberg SDK sources are silenced so
+  build logs show only ArpSID diagnostics.
+
+### Build, CI and releases
+
+- New CI workflow on every push and pull request: full test suite, VST3 SDK
+  validator and, on the public repository, macOS AUv2 + VST3 builds with
+  strict `auval` on all five flavors. Any ArpSID compiler/linker warning or
+  `auval` warning fails the build.
+- Releases publish automatically when a `VERSION.txt` bump lands on `main`
+  (or a `v*` tag is pushed), gated on that full pipeline; they refuse private
+  repositories and trees containing real C64 ROMs.
+- `scripts/sync_public_mirror.sh` mirrors the private tree to the public
+  repository, keeping the ROM placeholder and guarding against ROM leaks.
+- GitHub Actions moved to Node 24 releases; Dependabot keeps them current.
+
 ## [0.9.1] — 2026-09-26
 
 ### Fixed

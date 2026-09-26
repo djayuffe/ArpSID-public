@@ -707,6 +707,10 @@ struct ArpSIDAUv2Instance {
     NSInteger cachedPresentPresetNumber = 0;
     bool hasExplicitPresetSelection = false;
     __strong NSString* cachedPresentPresetName = nil;
+    // Host-owned user preset (PresentPreset with a negative number): the host
+    // keeps the state; we only report its name/number back. Cleared by any
+    // genuine factory-preset selection.
+    __strong NSString* userPresentPresetName = nil;
     std::atomic<int> pinnedPresetSlotCache{0};
     std::atomic<float> pinnedBankSlotParamCache{ArpSID::canonicalNormalizedBankSlotValue(0)};
     std::atomic<float> pinnedProgramParamCache{ArpSID::canonicalNormalizedProgramValue(0)};
@@ -1012,6 +1016,8 @@ static void cachePresentPresetState(ArpSIDAUv2Instance* impl,
                                     NSString* presetName,
                                     bool explicitSelection = true);
 
+static void setUserPresentPresetName(ArpSIDAUv2Instance* impl, NSString* name);
+
 static NSInteger cachedPinnedPresetSlotForInstance(ArpSIDAUv2Instance* impl) noexcept {
     if (!impl) return 0;
     return (NSInteger)ArpSID::normalizeFactoryPatchSlot(
@@ -1036,6 +1042,9 @@ static bool readStickyPresetSlotFromWrappedAudioUnit(ArpSIDAUv2Instance* impl, N
 static bool synchronizeAuv2PresetCacheFromWrappedAudioUnit(ArpSIDAUv2Instance* impl) {
     NSInteger slot = -1;
     if (!readStickyPresetSlotFromWrappedAudioUnit(impl, &slot)) return false;
+    if ((NSInteger)ArpSID::normalizeFactoryPatchSlot((int)slot) != cachedPinnedPresetSlotForInstance(impl)) {
+        setUserPresentPresetName(impl, nil); // GUI picked a different factory preset
+    }
     cachePresentPresetState(impl, slot, defaultFactoryPresetNameForNumber(slot, componentFlavorForInstance(impl)), true);
     return true;
 }
@@ -1182,17 +1191,27 @@ static void cacheParameterValuesFromFactoryPresetRoot(ArpSIDAUv2Instance* impl, 
 static void snapshotPresentPresetState(ArpSIDAUv2Instance* impl,
                                       NSInteger* outPresetNumber,
                                       NSString** outPresetName,
-                                      bool* outHasExplicitSelection = nullptr) {
+                                      bool* outHasExplicitSelection = nullptr,
+                                      bool* outIsUserPreset = nullptr) {
     if (outPresetNumber) *outPresetNumber = 0;
     if (outPresetName) *outPresetName = @"";
+    if (outIsUserPreset) *outIsUserPreset = false;
     if (!impl) return;
     std::lock_guard<ArpSID::AuditedStateMutex> lock(impl->stateMutex);
     if (outPresetNumber) *outPresetNumber = impl->cachedPresentPresetNumber;
     if (outHasExplicitSelection) *outHasExplicitSelection = impl->hasExplicitPresetSelection;
+    const bool isUserPreset = impl->userPresentPresetName.length > 0;
+    if (outIsUserPreset) *outIsUserPreset = isUserPreset;
     if (outPresetName) {
-        NSString* presetName = impl->cachedPresentPresetName;
+        NSString* presetName = isUserPreset ? impl->userPresentPresetName : impl->cachedPresentPresetName;
         *outPresetName = presetName.length > 0 ? presetName : @"";
     }
+}
+
+static void setUserPresentPresetName(ArpSIDAUv2Instance* impl, NSString* name) {
+    if (!impl) return;
+    std::lock_guard<ArpSID::AuditedStateMutex> lock(impl->stateMutex);
+    impl->userPresentPresetName = name.length > 0 ? [name copy] : nil;
 }
 
 
@@ -1302,9 +1321,10 @@ static bool fillPresentPresetForInstance(ArpSIDAUv2Instance* impl, AUPreset* out
     // can show stale slot 0 after GUI-side sticky selection.
     const NSInteger presetNumber = cachedPinnedPresetSlotForInstance(impl);
     NSString* presetName = nil;
-    snapshotPresentPresetState(impl, nullptr, &presetName);
+    bool isUserPreset = false;
+    snapshotPresentPresetState(impl, nullptr, &presetName, nullptr, &isUserPreset);
     if (presetName.length == 0) presetName = defaultFactoryPresetNameForNumber(presetNumber, componentFlavorForInstance(impl));
-    outPreset->presetNumber = (SInt32)presetNumber;
+    outPreset->presetNumber = isUserPreset ? (SInt32)-1 : (SInt32)presetNumber;
     outPreset->presetName = (__bridge_retained CFStringRef)[(presetName.length > 0 ? presetName : @"") copy];
     return true;
 
@@ -3071,6 +3091,18 @@ static OSStatus componentSetProperty(void* self,
             // setCurrentPreset:. Swallow that re-entry instead of recursing.
             if (!tryBeginPresetBridgeApply(impl)) return noErr;
             const AUPreset* preset = static_cast<const AUPreset*>(inData);
+            // A negative number is a host-owned user preset: the host restores
+            // its state through ClassInfo and only labels it here. Record the
+            // name (reported back by PresentPreset and in ClassInfo) and leave
+            // the audible state and the factory-slot authority untouched.
+            if (preset->presetNumber < 0) {
+                NSString* userName = preset->presetName ? (__bridge NSString*)preset->presetName : nil;
+                setUserPresentPresetName(impl, userName.length > 0 ? userName : @"User Preset");
+                endPresetBridgeApply(impl);
+                notifyPropertyListeners(impl, kAudioUnitProperty_PresentPreset, kAudioUnitScope_Global, 0);
+                return noErr;
+            }
+            setUserPresentPresetName(impl, nil); // explicit factory preset selection
             const ArpSID::ComponentFlavor flavor = componentFlavorForInstance(impl);
             const NSInteger requestedNumber = (NSInteger)ArpSID::normalizeFactoryPatchSlot((int)preset->presetNumber);
             const NSInteger safeNumber = auv2FactorySlotAllowedForFlavor(flavor, requestedNumber)
