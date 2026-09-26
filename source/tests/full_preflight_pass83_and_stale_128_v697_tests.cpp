@@ -16,7 +16,6 @@ int main() {
     const std::string pre = readFile(root + "/scripts/run_full_ctest_preflight.sh");
     const std::string mac = readFile(root + "/scripts/macos_full_build_install_clear_au_logic_cache.sh");
     const std::string cmake = readFile(root + "/CMakeLists.txt");
-    const std::string audit = readFile(root + "/AUDIT_PROGRESSION.md");
 
     require(pre.find("parallel build failed; retrying serial build") != std::string::npos,
             "pass83 preflight has serial retry for readable compiler errors");
@@ -28,8 +27,6 @@ int main() {
             "CMake comments no longer describe factory as full 128-slot");
     require(cmake.find("canonical 180-slot factory bank") != std::string::npos,
             "CMake comments describe canonical 180-slot factory bank");
-    require(audit.find("128-slot factory bank sweep.") == std::string::npos,
-            "audit progression no longer has unqualified stale 128-slot factory wording");
 
     std::cout << "FullPreflightPass83AndStale128V697Tests PASS\n";
     return 0;

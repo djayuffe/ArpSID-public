@@ -37,7 +37,6 @@ int main() {
 
     const std::string cmake = readFile("CMakeLists.txt");
     const std::string runtime = readFile("include/arpsid/core/c64_psid_runtime.h");
-    const std::string version = readFile("VERSION.txt");
 
     require(cmake.find("option(ARPSID_C64_PHYSICAL_ONLY") != std::string::npos,
             "CMake exposes ARPSID_C64_PHYSICAL_ONLY option");
@@ -62,8 +61,6 @@ int main() {
             "runtime has no legacy platform PSID-CIA service fallback");
     require(runtime.find("if (c64LegacyMos6510RuntimePathsReachable())\n            b = b | C64PhysicalExactnessBlocker::LegacyMos6510PathPresent;") != std::string::npos,
             "LegacyMos6510PathPresent blocker tracks runtime reachability policy");
-    require(version.find("0.0.690-pass") != std::string::npos,
-            "VERSION.txt carries current 0.0.690 pass identity");
 
     std::cout << "C64PhysicalOnlyPolicyV738Tests PASS\n";
     return 0;

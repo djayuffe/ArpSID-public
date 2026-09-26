@@ -44,7 +44,7 @@
 
 // Mirror of ArpSIDDSPKernel::kC64PsidMaxInstructionsPerPlay (v574 value).
 // If the kernel constant changes, this test intentionally fails to flag the
-// discrepancy and force an AUDIT_PROGRESSION.md update.
+// discrepancy so the budget change is reviewed deliberately.
 static constexpr uint32_t kTestedPlayBudget = 4096u;
 
 // The old (broken) value for documentation.

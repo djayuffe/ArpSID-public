@@ -3,7 +3,7 @@
 // mix_panel_model_v547_tests.cpp
 //
 // Pins:
-// * v547 MIX tab data model + FX chain architecture (TAB_ARCHITECTURE.md §5)
+// * v547 MIX tab data model + FX chain architecture (docs/TAB_ARCHITECTURE.md §5)
 // * Layout pins: MixChannel=72, MixSendBus=32, MixMaster=32, MixPanelModel<1.5KB
 // * Defaults: 16 channels, 2 send buses, audit-correct master limiter on
 // * Validator: well-formed defaults; invalid input rejected

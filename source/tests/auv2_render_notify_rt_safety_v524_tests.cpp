@@ -90,7 +90,18 @@ int main() {
         std::atomic<std::uint64_t> snapshotsRejected{0u};
 
         std::thread publisher([&]{
-            for (std::uint64_t i = 1; i <= 200000u; ++i) {
+            // Publish at least 200k times, then keep going (bounded) until the
+            // reader has both accepted and rejected a snapshot, so a reader
+            // starved by a loaded parallel CTest run cannot fail the sanity
+            // checks below. The torn-pair invariant itself is unchanged.
+            constexpr std::uint64_t kMinPublishes = 200000u;
+            constexpr std::uint64_t kMaxPublishes = 200000000u;
+            for (std::uint64_t i = 1; i <= kMaxPublishes; ++i) {
+                if (i > kMinPublishes &&
+                    snapshotsAccepted.load(std::memory_order_relaxed) > 0u &&
+                    snapshotsRejected.load(std::memory_order_relaxed) > 0u) {
+                    break;
+                }
                 // Mark publishing-in-progress (odd generation).
                 std::uint32_t g = generation.load(std::memory_order_relaxed);
                 generation.store(g + 1u, std::memory_order_release);

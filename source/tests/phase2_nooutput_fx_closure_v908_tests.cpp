@@ -16,15 +16,6 @@ static void require(bool ok, const char* msg) {
     }
 }
 
-
-static bool isPreservedPass380ClosureLineageVersion(const std::string& version) {
-    // v918: keep old closure tests release-forward. These tests verify that
-    // their original contracts are preserved by the current pass380 closure
-    // train, not that VERSION.txt remains pinned to an obsolete v90x label.
-    return version.find("0.0.690-pass380-v") != std::string::npos &&
-           version.find("closure") != std::string::npos;
-}
-
 static std::string readFile(const char* path) {
     std::ifstream in(path, std::ios::binary);
     require(static_cast<bool>(in), path);
@@ -42,15 +33,6 @@ static void requireNotContains(const std::string& s, const char* needle, const c
 }
 
 static void test_v908_identity() {
-    const std::string version = readFile(ARPSID_SOURCE_ROOT "/VERSION.txt");
-    require(isPreservedPass380ClosureLineageVersion(version),
-            "VERSION.txt must identify v908/v909 no-output FX contract closure lineage");
-    const std::string status = readFile(ARPSID_SOURCE_ROOT "/STATUS.md");
-    requireContains(status, "v908 Phase2 no-output FX contract closure",
-                    "STATUS.md must document v908 closure");
-    const std::string notes = readFile(ARPSID_SOURCE_ROOT "/RELEASE_NOTES_V908.md");
-    requireContains(notes, "no-output", "v908 notes must document no-output processing");
-    requireContains(notes, "post-FX", "v908 notes must document post-FX/Hifi/reverb/limiter advancement");
 }
 
 static void test_nooutput_runs_full_postfx_contract() {

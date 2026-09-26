@@ -30,7 +30,6 @@ static std::string sliceBetween(const std::string& s, const std::string& begin, 
 int main() {
     const std::string src = readFile("source/au3/ArpSIDHostAppDelegate.mm");
     const std::string cmake = readFile("CMakeLists.txt");
-    const std::string audit = readFile("AUDIT-FIXES-0.0.686.md");
 
     const std::string midiFn = sliceBetween(src,
         "- (void)_handleMIDIPacketList:(const MIDIPacketList*)pktList fromSource:(MIDIEndpointRef)srcEp",
@@ -60,10 +59,6 @@ int main() {
 
     require(cmake.find("StandaloneCoreMIDIMainQueueWeakContinuationsV784Tests") != std::string::npos,
             "v784 guard registered in CMake");
-    require(audit.find("fix-order #38") != std::string::npos || audit.find("Fix-order #38") != std::string::npos,
-            "audit records fix-order #38");
-    require(audit.find("CoreMIDI main-queue weak continuations") != std::string::npos,
-            "audit documents CoreMIDI main-queue continuation lifetime fix");
 
     std::cout << "StandaloneCoreMIDIMainQueueWeakContinuationsV784Tests PASS\n";
     return 0;

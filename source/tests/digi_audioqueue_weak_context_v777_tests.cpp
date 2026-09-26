@@ -61,7 +61,6 @@ int main() {
     const std::string vc = readFile("source/au3/ArpSIDViewController.mm");
     const std::string code = stripComments(vc);
     const std::string cmake = readFile("CMakeLists.txt");
-    const std::string audit = readFile("AUDIT-FIXES-0.0.686.md");
 
     requireContains(code, "@interface ArpSIDDigiAQControllerContext", "DIGI AQ weak context class exists");
     requireContains(code, "@property (atomic, weak) ArpSIDViewController* controller", "DIGI AQ context holds a zeroing weak controller");
@@ -79,8 +78,6 @@ int main() {
     requireContains(code, "ArpSIDReleaseRetainedObjCContext_v777(_digiAQRecordContext_v777_);", "record context is released on stop/failure/teardown paths");
 
     requireContains(cmake, "DigiAudioQueueWeakContextV777Tests", "v777 guard registered in CMake");
-    requireContains(audit, "Fix-order #31", "audit records fix-order #31");
-    requireContains(audit, "AudioQueue", "audit documents AudioQueue context lifetime fix");
 
     std::cout << "DigiAudioQueueWeakContextV777Tests PASS\n";
     return 0;

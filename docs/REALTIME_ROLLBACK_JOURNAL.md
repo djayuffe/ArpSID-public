@@ -4,7 +4,7 @@
 
 PSID/RSID bridge transactions must be rollback-safe without copying an entire `C64Platform` in the realtime audio callback.
 
-Earlier pass380 hardening removed the full platform copy from the stack, but kept a persistent full-platform scratch in `ArpSIDDSPKernel`. V813 removes that scratch and moves rollback ownership into `C64Platform` itself.
+Earlier hardening removed the full platform copy from the stack, but kept a persistent full-platform scratch in `ArpSIDDSPKernel`. V813 removes that scratch and moves rollback ownership into `C64Platform` itself.
 
 ## Current implementation
 

@@ -43,8 +43,6 @@ static std::string functionBody(const std::string& src, const std::string& sig) 
 
 int main() {
     const std::string kernel = readText("source/au3/ArpSIDDSPKernel.hpp");
-    const std::string todo = readText("TODO.md");
-    const std::string patching = readText("PATCHING.md");
 
     const std::string prepareBody = functionBody(kernel, "void prepareStateRootForApplyNonRealtime_(SidStateRootV1& dst)");
     require(prepareBody.find("sidCanonicalizeStateRootForApply(dst)") != std::string::npos,
@@ -77,11 +75,6 @@ int main() {
             "component flavor policy is enforced during restore projection");
     require(afterSwap.find("runtimeExecutionOwner_->projectStateToBackends(true);") != std::string::npos,
             "restore projects the applied state to backends after flavor policy");
-
-    require(todo.find("P1-13") != std::string::npos && todo.find("P1-14") != std::string::npos,
-            "TODO tracks P1-13/P1-14 completion state");
-    require(patching.find("V816") != std::string::npos,
-            "PATCHING documents V816 integration guard");
 
     std::cout << "Sid808RestoreFlavorIntegrationV816Tests PASS\n";
     return 0;

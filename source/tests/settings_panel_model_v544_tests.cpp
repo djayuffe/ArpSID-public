@@ -2,7 +2,7 @@
 // Copyright (C) 2024-2026 Ulf Bertilsson
 // settings_panel_model_v544_tests.cpp
 //
-// Pins the SETTINGS-tab data model (v544 — TAB_ARCHITECTURE.md §8):
+// Pins the SETTINGS-tab data model (v544 — docs/TAB_ARCHITECTURE.md §8):
 //
 // A. POD layout pinned at 32 bytes
 // B. Every enum has a stable string name + monotonic numeric domain

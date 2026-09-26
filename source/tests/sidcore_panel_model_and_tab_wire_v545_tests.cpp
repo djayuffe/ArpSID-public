@@ -11,7 +11,7 @@
 // Combined with the v544 NSView builders existing in the AUv2
 // build target, this is the wire-up evidence.
 //
-// B. SIDCORE panel model (v545 — TAB_ARCHITECTURE.md §6). Pins:
+// B. SIDCORE panel model (v545 — docs/TAB_ARCHITECTURE.md §6). Pins:
 // - SidCoreRegisterWriteEvent layout (16 bytes, trivially copyable)
 // - SidCoreLiveSnapshot layout (32 bytes, trivially copyable)
 // - Event flag bits stable

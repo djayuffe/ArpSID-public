@@ -79,7 +79,7 @@ int main() {
         std::string(ARPSID_SOURCE_ROOT) + "/source/au2/ArpSIDAUv2Component.mm";
     const std::string auv2 = readTextFile(auv2Path);
     const std::string d418SpecPath =
-        std::string(ARPSID_SOURCE_ROOT) + "/TECHNICAL_D418_CANONICAL_4BIT_NIBBLE_SPEC.md";
+        std::string(ARPSID_SOURCE_ROOT) + "/docs/D418_NIBBLE_SPEC.md";
     const std::string d418Spec = readTextFile(d418SpecPath);
     // device-bound AudioQueue capture backend.
     const std::string aqcapPath =

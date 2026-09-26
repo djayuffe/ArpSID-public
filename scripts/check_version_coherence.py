@@ -1,4 +1,11 @@
 #!/usr/bin/env python3
+"""Check that every place carrying the ArpSID version agrees with VERSION.txt.
+
+VERSION.txt holds a plain MAJOR.MINOR.PATCH version and is the single source of
+truth. To release a new version, update VERSION.txt, project(VERSION) in
+CMakeLists.txt, include/arpsid/version.h, the README title and add a
+CHANGELOG.md entry; this script (also run by CTest) fails if any disagree.
+"""
 from __future__ import annotations
 
 from pathlib import Path
@@ -6,8 +13,6 @@ import re
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-EXPECTED_REVISION = 970
-EXPECTED_VERSION = "0.0.690-pass380-v970-test-build-graph-closure"
 
 
 def fail(message: str) -> None:
@@ -23,51 +28,26 @@ def text(rel: str) -> str:
 
 
 version = text("VERSION.txt").strip()
-if version != EXPECTED_VERSION:
-    fail(f"VERSION.txt is {version!r}, expected {EXPECTED_VERSION!r}")
+m = re.fullmatch(r"(\d+)\.(\d+)\.(\d+)", version)
+if not m:
+    fail(f"VERSION.txt is {version!r}, expected plain MAJOR.MINOR.PATCH")
+major, minor, patch = m.groups()
 
-for rel in ("README.md", "STATUS.md", "TODO.md", "RELEASE_NOTES_V970.md"):
-    body = text(rel)
-    if not re.search(r"\bv970\b", body, re.IGNORECASE):
-        fail(f"{rel} does not identify v970")
+cmake = text("CMakeLists.txt")
+if f"project(ArpSID VERSION {version} LANGUAGES CXX)" not in cmake:
+    fail(f"CMakeLists.txt project(VERSION) does not match {version}")
 
-for rel in ("README.md", "AI2AI.md", "RELEASE_SOURCE_ONLY_CLOSURE.md"):
-    if EXPECTED_VERSION not in text(rel):
-        fail(f"{rel} does not identify the exact package qualifier")
+header = text("include/arpsid/version.h")
+for name, value in (("MAJOR", major), ("MINOR", minor), ("PATCH", patch)):
+    if not re.search(rf"^#define ARPSID_PLUGIN_VERSION_{name} {value}$", header, re.M):
+        fail(f"version.h ARPSID_PLUGIN_VERSION_{name} does not match {value}")
+if f'#define ARPSID_PLUGIN_VERSION "{version}"' not in header:
+    fail(f"version.h ARPSID_PLUGIN_VERSION does not match {version}")
 
-# The highest closure revision represented by production release metadata and
-# tests must agree with VERSION.txt. This prevents a hash-consistent but stale
-# v951/v952 label around v961+ production code.
-revisions: set[int] = set()
-for path in (ROOT / "source" / "tests").glob("*v[0-9]*_tests.cpp"):
-    for m in re.finditer(r"v(\d+)", path.name, re.IGNORECASE):
-        revisions.add(int(m.group(1)))
-for rel in ("CMakeLists.txt", "STATUS.md", "TODO.md"):
-    for m in re.finditer(r"\bv(\d+)\b", text(rel), re.IGNORECASE):
-        revisions.add(int(m.group(1)))
-if not revisions:
-    fail("could not discover any closure revisions")
-maximum = max(revisions)
-if maximum != EXPECTED_REVISION:
-    fail(f"highest packaged closure revision is v{maximum}, expected v{EXPECTED_REVISION}")
+if not text("README.md").startswith(f"# ArpSID {version}\n"):
+    fail(f"README.md title does not name {version}")
 
-if not (ROOT / "source/tests/canonical_render_pipeline_closure_v965_tests.cpp").is_file():
-    fail("v965 executable closure test is missing")
+if f"## [{version}]" not in text("CHANGELOG.md"):
+    fail(f"CHANGELOG.md has no entry for {version}")
 
-if not (ROOT / "source/tests/parameter_presentation_authority_v966_tests.cpp").is_file():
-    fail("v966 executable closure test is missing")
-
-if not (ROOT / "source/tests/drsid_quick_kit_base_profile_parity_v967_tests.cpp").is_file():
-    fail("v967 executable closure test is missing")
-
-if not (ROOT / "source/tests/drsid_user_kit_save_mode_normalization_v968_tests.cpp").is_file():
-    fail("v968 executable closure test is missing")
-
-if not (ROOT / "source/tests/test_suite_integrity_v969_tests.cpp").is_file():
-    fail("v969 executable closure test is missing")
-
-if not (ROOT / "source/tests/build_graph_forensic_patchbank_lib_v970_tests.cpp").is_file():
-    fail("v970 executable closure test is missing")
-
-print(f"OK: package identity is coherent at {EXPECTED_VERSION}")
-print(f"OK: highest closure revision is v{maximum}")
+print(f"OK: version is coherent at {version}")

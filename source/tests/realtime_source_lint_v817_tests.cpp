@@ -67,8 +67,6 @@ int main() {
     const std::string platform = readText("include/arpsid/core/c64_platform.h");
     const std::string c64Runtime = readText("include/arpsid/core/c64_psid_runtime.h");
     const std::string model = readText("include/arpsid/core/sid_runtime_model.h");
-    const std::string todo = readText("TODO.md");
-    const std::string patching = readText("PATCHING.md");
 
     const std::string rtApply = bodyOf(kernel, "applyPreparedStateRootRT_(SidStateRootV1& preparedRoot) noexcept");
     require(!containsAny(rtApply, {
@@ -124,11 +122,6 @@ int main() {
         "ensureParameterCapacity",
         "syncVariantPresentationMirrors_();"
     }), "runtime-model by-swap apply must remain RT-only");
-
-    require(todo.find("P2-05/P2-06/P2-07") != std::string::npos,
-            "TODO tracks the V817 source-lint closure bucket");
-    require(patching.find("V817") != std::string::npos,
-            "PATCHING documents V817 source-lint guard");
 
     std::cout << "RealtimeSourceLintV817Tests PASS\n";
     return 0;

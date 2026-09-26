@@ -3,7 +3,7 @@
 // sidcore_panel_model.h — SIDCORE tab data model (v545).
 //
 // PURPOSE
-// ------// The SIDCORE tab (TAB_ARCHITECTURE.md §6) is a forensic debug surface
+// ------// The SIDCORE tab (docs/TAB_ARCHITECTURE.md §6) is a forensic debug surface
 // that visualizes:
 // * Last N SID register writes ($D400..$D41C) as a timeline
 // * Per-voice frequency / pulse-width / waveform / gate scope

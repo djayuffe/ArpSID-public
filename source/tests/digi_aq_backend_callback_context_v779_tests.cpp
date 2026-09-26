@@ -43,7 +43,6 @@ int main() {
     const std::string hdr = stripComments(readFile("source/au3/ArpSIDDigiAudioQueueCapture.h"));
     const std::string src = stripComments(readFile("source/au3/ArpSIDDigiAudioQueueCapture.mm"));
     const std::string cmake = readFile("CMakeLists.txt");
-    const std::string audit = readFile("AUDIT-FIXES-0.0.686.md");
 
     requireContains(hdr, "struct AQCallbackContext", "backend callback context type exists");
     requireContains(hdr, "std::atomic<AQCapture*> owner{nullptr};", "context owns atomic owner pointer");
@@ -72,8 +71,6 @@ int main() {
             "static callbacks must not cast userData directly to AQCapture");
 
     requireContains(cmake, "DigiAQBackendCallbackContextV779Tests", "v779 guard registered in CMake");
-    requireContains(audit, "Fix-order #33", "audit records fix-order #33");
-    requireContains(audit, "AQCapture backend", "audit documents backend context lifetime fix");
 
     std::cout << "DigiAQBackendCallbackContextV779Tests PASS\n";
     return 0;

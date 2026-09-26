@@ -30,7 +30,6 @@ static std::string sliceBetween(const std::string& s, const std::string& begin, 
 int main() {
     const std::string src = readFile("source/au3/ArpSIDAudioUnit.mm");
     const std::string cmake = readFile("CMakeLists.txt");
-    const std::string audit = readFile("AUDIT-FIXES-0.0.686.md");
 
     const std::string method = sliceBetween(src,
         "requestViewControllerWithCompletionHandler", "#endif\n\n@end");
@@ -54,10 +53,6 @@ int main() {
 
     require(cmake.find("AU3RequestViewControllerWeakDispatchV791Tests") != std::string::npos,
             "v791 guard registered in CMake");
-    require(audit.find("fix-order #45") != std::string::npos || audit.find("Fix-order #45") != std::string::npos,
-            "audit records fix-order #45");
-    require(audit.find("AU3 requestViewController weak dispatch") != std::string::npos,
-            "audit documents requestViewController weak dispatch hardening");
 
     std::cout << "AU3RequestViewControllerWeakDispatchV791Tests PASS\n";
     return 0;

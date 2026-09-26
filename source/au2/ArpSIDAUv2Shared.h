@@ -6,9 +6,10 @@
 #include "ArpSIDComponentFlavor.h"
 
 #ifndef ARPSID_AUDIOCOMPONENT_VERSION
+// Apple AudioComponent encoding: major << 16 | minor << 8 | patch.
 #define ARPSID_AUDIOCOMPONENT_VERSION \
-    ((ARPSID_PLUGIN_VERSION_MAJOR * 10000u) + \
-     (ARPSID_PLUGIN_VERSION_MINOR * 100u) + \
+    ((ARPSID_PLUGIN_VERSION_MAJOR << 16) | \
+     (ARPSID_PLUGIN_VERSION_MINOR << 8) | \
       ARPSID_PLUGIN_VERSION_PATCH)
 #endif
 

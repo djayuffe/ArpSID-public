@@ -49,6 +49,6 @@ missing_files = [x for x in REQUIRED_FILES if not (ROOT / x).exists()]
 if missing_files:
     fail("required closure files missing: " + ", ".join(missing_files))
 
-print("OK: source tree guard is compatible with the current package")
+print("OK: source tree guard passed")
 print("ROOT:", ROOT)
 print("ArpSIDDSPKernel.hpp sha256:", hashlib.sha256(KERNEL.read_bytes()).hexdigest())

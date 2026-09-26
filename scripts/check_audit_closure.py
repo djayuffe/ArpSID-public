@@ -1,12 +1,11 @@
 #!/usr/bin/env python3
+"""Fail fast if the DrSID/SID-808/DIGI kit audit fixes or their regression
+guards have been lost from the source tree."""
 from __future__ import annotations
 from pathlib import Path
-import json
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-MATRIX = ROOT / "docs/audit/AUDIT_FINDINGS_CLOSURE_MATRIX.json"
-
 REQUIRED_FILES = [
     "source/tests/kit_sid808_factory_voice_precedence_v637_tests.cpp",
     "source/tests/drsid_kit_payload_v638_tests.cpp",
@@ -24,24 +23,9 @@ REQUIRED_FILES = [
     "scripts/run_full_closure_validation.sh",
 ]
 
-CODE_FIXABLE = {"P1-01", "P1-02", "P1-03", "P1-04", "P1-05", "P1-06", "P1-07", "P1-08"}
-ACCEPTABLE = {"FIXED", "FIXED_WITH_SCOPE", "FIXED_FOR_CURRENT_ARCHITECTURE", "FIXED_COMPAT_DEPRECATED", "FIXED_FOR_FOCUSED_AUDIO_PATHS", "MOSTLY_FIXED"}
-
 def fail(msg: str) -> None:
     print(f"FAIL: {msg}", file=sys.stderr)
     sys.exit(1)
-
-if not MATRIX.exists():
-    fail(f"missing {MATRIX}")
-
-items = json.loads(MATRIX.read_text())
-seen = {item["id"]: item for item in items}
-
-for ident in CODE_FIXABLE:
-    if ident not in seen:
-        fail(f"missing audit item {ident}")
-    if seen[ident]["status"] not in ACCEPTABLE:
-        fail(f"code-fixable item {ident} is not closed enough: {seen[ident]['status']}")
 
 for rel in REQUIRED_FILES:
     if not (ROOT / rel).exists():
@@ -57,4 +41,4 @@ digi = (ROOT / "include/arpsid/engines/digi_sampler_engine.h").read_text(errors=
 if "singleSlotProj.activeSlotCount = static_cast<std::uint8_t>(std::min<int>(" not in digi:
     fail("DigiSampler triggerSlotAt active range contract missing")
 
-print("OK: audit closure matrix is internally consistent for the current package")
+print("OK: audit-fix regression guards and source contracts are present")

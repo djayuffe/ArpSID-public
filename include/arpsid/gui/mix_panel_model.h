@@ -2,7 +2,7 @@
 // Copyright (C) 2024-2026 Ulf Bertilsson
 // mix_panel_model.h — MIX tab data model + FX-chain architecture (v547).
 //
-// TAB_ARCHITECTURE.md §5 demands:
+// docs/TAB_ARCHITECTURE.md §5 demands:
 // - Per-channel: vol/pan/EQ/transient/compress/saturate/bitcrush
 // - Send-to-delay + send-to-convolution-reverb buses
 // - Master limiter (shared with output-stage limiter)

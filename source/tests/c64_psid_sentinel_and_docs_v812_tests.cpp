@@ -35,9 +35,9 @@ static std::string between(const std::string& s, const std::string& a, const std
 int main() {
     const std::string model = readText("include/arpsid/core/sid_runtime_model.h");
     const std::string kernel = readText("source/au3/ArpSIDDSPKernel.hpp");
-    const std::string ownership = readText("OWNERSHIP_MAP.md");
-    const std::string journal = readText("REALTIME_ROLLBACK_JOURNAL.md");
-    const std::string exactness = readText("C64_EXACTNESS_BOUNDARIES.md");
+    const std::string ownership = readText("docs/REALTIME_OWNERSHIP.md");
+    const std::string journal = readText("docs/REALTIME_ROLLBACK_JOURNAL.md");
+    const std::string exactness = readText("docs/C64_EXACTNESS_BOUNDARIES.md");
 
     require(model.find("C64Psid = 3 is a TELEMETRY SENTINEL ONLY") != std::string::npos,
             "C64Psid enum is documented as telemetry sentinel only");

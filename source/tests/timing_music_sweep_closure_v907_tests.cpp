@@ -16,15 +16,6 @@ static void require(bool ok, const char* msg) {
     }
 }
 
-
-static bool isPreservedPass380ClosureLineageVersion(const std::string& version) {
-    // v918: keep old closure tests release-forward. These tests verify that
-    // their original contracts are preserved by the current pass380 closure
-    // train, not that VERSION.txt remains pinned to an obsolete v90x label.
-    return version.find("0.0.690-pass380-v") != std::string::npos &&
-           version.find("closure") != std::string::npos;
-}
-
 static std::string readFile(const char* path) {
     std::ifstream in(path, std::ios::binary);
     require(static_cast<bool>(in), path);
@@ -38,17 +29,6 @@ static void requireContains(const std::string& s, const char* needle, const char
 }
 
 static void test_v907_identity_and_notes() {
-    const std::string version = readFile(ARPSID_SOURCE_ROOT "/VERSION.txt");
-    require(isPreservedPass380ClosureLineageVersion(version),
-            "VERSION.txt must identify v907-v909 final timing/music sweep closure lineage");
-    const std::string status = readFile(ARPSID_SOURCE_ROOT "/STATUS.md");
-    require(status.find("v907 final timing/music sweep closure") != std::string::npos ||
-            status.find("v908 Phase2 no-output FX contract closure") != std::string::npos,
-            "STATUS.md must document v907/v908 closure lineage");
-    const std::string notes = readFile(ARPSID_SOURCE_ROOT "/RELEASE_NOTES_V907.md");
-    requireContains(notes, "27/27 PASS", "v907 notes must record completed focused sweep result");
-    const std::string notes908 = readFile(ARPSID_SOURCE_ROOT "/RELEASE_NOTES_V908.md");
-    requireContains(notes908, "post-FX", "v908 notes must record no-output post-FX closure");
 }
 
 static void test_sweep_includes_all_current_contracts() {

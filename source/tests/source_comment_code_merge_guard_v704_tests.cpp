@@ -1,5 +1,6 @@
 // Copyright (C) 2024-2026 Ulf Bertilsson
 #include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <iostream>
 #include <string>
@@ -47,20 +48,28 @@ static bool shouldScan(const std::string& path) {
 }
 
 int main() {
-    const std::string root = ARPSID_SOURCE_ROOT;
-    const std::string manifest = root + "/RELEASE_CONTENTS.sha256";
-    std::ifstream mf(manifest);
-    if (!mf) {
-        std::cerr << "Cannot open RELEASE_CONTENTS.sha256 at " << manifest << "\n";
+    namespace fs = std::filesystem;
+    const fs::path root = ARPSID_SOURCE_ROOT;
+
+    // Scan every first-party C/C++/ObjC++ source that ships in the tree.
+    std::vector<fs::path> files;
+    for (const char* dir : {"include", "source", "external"}) {
+        const fs::path base = root / dir;
+        if (!fs::exists(base)) continue;
+        for (const auto& entry : fs::recursive_directory_iterator(base)) {
+            if (entry.is_regular_file() && shouldScan(entry.path().string())) files.push_back(entry.path());
+        }
+    }
+    if (files.empty()) {
+        std::cerr << "no sources found under " << root << "\n";
         return 2;
     }
 
     bool ok = true;
-    std::string hash, rel;
-    while (mf >> hash >> rel) {
-        if (!shouldScan(rel)) continue;
-        std::ifstream f(root + "/" + rel);
+    for (const auto& path : files) {
+        std::ifstream f(path);
         if (!f) continue;
+        const std::string rel = fs::relative(path, root).generic_string();
         std::string line;
         int lineNo = 0;
         while (std::getline(f, line)) {

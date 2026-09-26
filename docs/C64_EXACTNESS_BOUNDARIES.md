@@ -1,4 +1,4 @@
-# C64 / PSID / RSID exactness boundaries — pass380
+# C64 / PSID / RSID exactness boundaries
 
 ## Strict RSID
 

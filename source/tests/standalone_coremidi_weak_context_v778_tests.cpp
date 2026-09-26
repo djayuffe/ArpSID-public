@@ -43,7 +43,6 @@ int main() {
     const std::string src = readFile("source/au3/ArpSIDHostAppDelegate.mm");
     const std::string code = stripComments(src);
     const std::string cmake = readFile("CMakeLists.txt");
-    const std::string audit = readFile("AUDIT-FIXES-0.0.686.md");
 
     requireContains(code, "@interface ArpSIDHostMIDIContext_v778", "standalone MIDI weak context class exists");
     requireContains(code, "@property (atomic, weak) ArpSIDHostAppDelegate* delegate", "MIDI context holds zeroing weak delegate");
@@ -66,8 +65,6 @@ int main() {
             "MIDI read proc must not cast raw refCon directly to delegate");
 
     requireContains(cmake, "StandaloneCoreMIDIWeakContextV778Tests", "v778 guard registered in CMake");
-    requireContains(audit, "Fix-order #32", "audit records fix-order #32");
-    requireContains(audit, "CoreMIDI", "audit documents CoreMIDI context lifetime fix");
 
     std::cout << "StandaloneCoreMIDIWeakContextV778Tests PASS\n";
     return 0;

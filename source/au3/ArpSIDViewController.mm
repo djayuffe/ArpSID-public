@@ -5897,7 +5897,7 @@ static inline float ArpSIDDisplayLfoWave(int shapeIndex, float t) {
     // practical silence midpoint 0x08. Host-rate duration is only metadata.
     // Rendering is GUI-thread CoreAnimation/Metal-composited only: no audio-thread
     // work, no DSP mutation, no sample-bank write. See
-    // TECHNICAL_D418_CANONICAL_4BIT_NIBBLE_SPEC.md.
+    // docs/D418_NIBBLE_SPEC.md.
     const BOOL hasPendingTake_v264 = pending && !pendingMono.empty();
     const BOOL hasStoredClip_v264 = ArpSID::GUI::digiUserSampleClipIsWellFormed(clip) &&
                                     ArpSID::GUI::digiUserSampleClipIsPresent(clip);
@@ -15694,7 +15694,7 @@ static void arpsidSetPanelTypes(NSSavePanel* panel, NSArray<NSString*>* exts) {
 }
 
 // ─── v544 SETTINGS PANEL ─────────────────────────────────────────────────────
-// TAB_ARCHITECTURE.md §8 — exposes the 7 SettingsPanelModel groups:
+// docs/TAB_ARCHITECTURE.md §8 — exposes the 7 SettingsPanelModel groups:
 // 1. Audio engine selector (BitPerfect / SingleSid3Voice / DualSid6Voice)
 // 2. Host tempo sync source (None / HostTempo / MidiClock / Internal)
 // 3. MIDI mapping preset (GM / MSSIAH / C64Keyboard / Custom)
@@ -15971,7 +15971,7 @@ static void arpsidSetPanelTypes(NSSavePanel* panel, NSArray<NSString*>* exts) {
     [self _applyTheme_v552_];  // v553: panel rebuild also relocalizes all string keys
 }
 // ─── v581 C64 STATE inspector panel ──────────────────────────────────────────
-// TAB_ARCHITECTURE.md §7 — read-only CPU/SID/CIA/memory inspector. This page
+// docs/TAB_ARCHITECTURE.md §7 — read-only CPU/SID/CIA/memory inspector. This page
 // keeps its own labels/scopes instead of borrowing the legacy C64 cockpit iVars,
 // so both C64-facing tabs can be built and refreshed independently.
 -(NSView*)_c64StatePanel_v544_:(NSRect)r {

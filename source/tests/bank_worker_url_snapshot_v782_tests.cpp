@@ -47,7 +47,6 @@ static void forbidPanelURLInAsyncBody(const std::string& section, const char* na
 int main() {
     const std::string code=stripComments(readFile("source/au3/ArpSIDViewController.mm"));
     const std::string cmake=readFile("CMakeLists.txt");
-    const std::string audit=readFile("AUDIT-FIXES-0.0.686.md");
 
     const std::string importJson=sectionFrom(code, "-(void)_bankImportJSON:(id)sender", "-(void)_bankLoadBank:(id)sender");
     requireContains(importJson, "NSURL* bankURL = [op.URL copy];", "JSON bank import snapshots URL before worker dispatch");
@@ -75,7 +74,6 @@ int main() {
     forbidPanelURLInAsyncBody(drumImport, "DrSID kit import has worker dispatch");
 
     requireContains(cmake, "BankWorkerURLSnapshotV782Tests", "v782 guard registered");
-    requireContains(audit, "Fix-order #36", "audit records fix-order #36");
     std::cout << "BankWorkerURLSnapshotV782Tests PASS\n";
     return 0;
 }

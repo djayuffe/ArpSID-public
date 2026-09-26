@@ -1,6 +1,6 @@
-# ArpSID ownership map — pass380
+# ArpSID realtime ownership map
 
-This file documents the practical ownership split used by the pass380 RT-safety
+This file documents the practical ownership split used by the RT-safety
 patches. It is a release-maintenance guide, not a user manual.
 
 ## Render / audio thread owned

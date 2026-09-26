@@ -50,7 +50,6 @@ static std::string sectionFrom(const std::string& hay, const std::string& start,
 int main() {
     const std::string code = stripComments(readFile("source/au3/ArpSIDViewController.mm"));
     const std::string cmake = readFile("CMakeLists.txt");
-    const std::string audit = readFile("AUDIT-FIXES-0.0.686.md");
 
     requireContains(code, "ArpSIDSaveBankDocumentToURL_v781(", "pure bank save helper exists");
     requireContains(code, "ArpSIDLoadBankDocumentFromURL_v781(", "pure bank load helper exists");
@@ -78,8 +77,6 @@ int main() {
                     "DrSID user-kit import worker uses pure load helper");
 
     requireContains(cmake, "BankDocumentWorkerPureHelpersV781Tests", "v781 guard registered in CMake");
-    requireContains(audit, "Fix-order #35", "audit records fix-order #35");
-    requireContains(audit, "bank document worker", "audit documents bank worker pure-helper fix");
 
     std::cout << "BankDocumentWorkerPureHelpersV781Tests PASS\n";
     return 0;

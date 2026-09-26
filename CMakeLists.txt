@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(ArpSID VERSION 0.0.690 LANGUAGES CXX)
+project(ArpSID VERSION 0.9.0 LANGUAGES CXX)
 include(cmake/ArpSIDSourceTreeGuard.cmake)
 
 option(ARPSID_BUILD_ALL "Enable the stable ArpSID product set for the current platform" OFF)
@@ -516,14 +516,15 @@ if(ARPSID_BUILD_VST3)
 endif()
 
 # ─── Shared AU version integer (used in both AUv2 and AUv3 plists) ───────────
-# Compute once at top-level scope: PROJECT_VERSION 0.0.1 -> 1
+# Compute once at top-level scope using Apple's AudioComponent encoding
+# (major << 16 | minor << 8 | patch), e.g. PROJECT_VERSION 0.9.0 -> 2304.
 if(APPLE)
     string(REPLACE "." ";" _arpsid_ver_parts "${PROJECT_VERSION}")
     list(GET _arpsid_ver_parts 0 _arpsid_ver_major)
     list(GET _arpsid_ver_parts 1 _arpsid_ver_minor)
     list(GET _arpsid_ver_parts 2 _arpsid_ver_patch)
     math(EXPR ARPSID_AUV2_VERSION_INT
-        "${_arpsid_ver_major} * 10000 + ${_arpsid_ver_minor} * 100 + ${_arpsid_ver_patch}")
+        "${_arpsid_ver_major} * 65536 + ${_arpsid_ver_minor} * 256 + ${_arpsid_ver_patch}")
 endif()
 
 # ─── AUv2 plugin (macOS only) ─────────────────────────────────────────────────
@@ -2171,7 +2172,7 @@ target_link_libraries(arpsid_factory_patch_apply_roundtrip_v850_tests PRIVATE ar
   add_test(NAME GuiTabArchitectureV543Tests
            COMMAND arpsid_gui_tab_architecture_v543_tests)
 
-  # v544 — SETTINGS tab data model (per TAB_ARCHITECTURE.md §8). Pins POD
+  # v544 — SETTINGS tab data model (per docs/TAB_ARCHITECTURE.md §8). Pins POD
   # layout, enum domains, defaults, sanitization, round-trip persistence,
   # and the BitPerfectEngine topology-mode wire-up.
   add_executable(arpsid_settings_panel_model_v544_tests
@@ -2201,7 +2202,7 @@ target_link_libraries(arpsid_factory_patch_apply_roundtrip_v850_tests PRIVATE ar
   add_test(NAME V544TabWireCompletenessV546Tests
            COMMAND arpsid_v544_tab_wire_completeness_v546_tests)
 
-  # v547 — MIX tab data model + FX-chain architecture (TAB_ARCHITECTURE.md §5).
+  # v547 — MIX tab data model + FX-chain architecture (docs/TAB_ARCHITECTURE.md §5).
   # Pins MixChannel/MixSendBus/MixMaster/MixPanelModel layouts, defaults,
   # solo law, audible/mute interaction, FX-slot type configuration,
   # validator behavior.
@@ -4411,11 +4412,6 @@ target_compile_features(arpsid_auv2_ramp_anchor_drop_telemetry_v765_tests PRIVAT
 target_compile_definitions(arpsid_auv2_ramp_anchor_drop_telemetry_v765_tests PRIVATE ARPSID_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
 add_test(NAME Auv2RampAnchorDropTelemetryV765Tests COMMAND arpsid_auv2_ramp_anchor_drop_telemetry_v765_tests)
 
-# fix-order #19: post-#18 status must not claim completed telemetry work is deferred.
-add_executable(arpsid_post18_closure_status_consistency_v766_tests source/tests/post18_closure_status_consistency_v766_tests.cpp)
-target_compile_features(arpsid_post18_closure_status_consistency_v766_tests PRIVATE cxx_std_17)
-target_compile_definitions(arpsid_post18_closure_status_consistency_v766_tests PRIVATE ARPSID_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
-add_test(NAME Post18ClosureStatusConsistencyV766Tests COMMAND arpsid_post18_closure_status_consistency_v766_tests)
 
 add_executable(arpsid_c64_physical_only_policy_v738_tests source/tests/c64_physical_only_policy_v738_tests.cpp)
 target_compile_features(arpsid_c64_physical_only_policy_v738_tests PRIVATE cxx_std_17)
@@ -4615,13 +4611,6 @@ if(TARGET arpsid_release_closure_suite)
   add_dependencies(arpsid_release_closure_suite
                    arpsid_remaining_audit_closure_v747_tests)
 endif()
-add_executable(arpsid_source_only_closure_v767_tests source/tests/source_only_closure_v767_tests.cpp)
-target_compile_features(arpsid_source_only_closure_v767_tests PRIVATE cxx_std_17)
-target_compile_definitions(arpsid_source_only_closure_v767_tests PRIVATE ARPSID_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
-add_test(NAME SourceOnlyClosureV767Tests COMMAND arpsid_source_only_closure_v767_tests)
-if(TARGET arpsid_release_closure_suite)
-  add_dependencies(arpsid_release_closure_suite arpsid_source_only_closure_v767_tests)
-endif()
 
 add_executable(arpsid_root_build_script_release_v768_tests source/tests/root_build_script_release_v768_tests.cpp)
 target_compile_features(arpsid_root_build_script_release_v768_tests PRIVATE cxx_std_17)
@@ -4639,13 +4628,6 @@ if(TARGET arpsid_release_closure_suite)
   add_dependencies(arpsid_release_closure_suite arpsid_root_build_script_release_modes_v769_tests)
 endif()
 
-add_executable(arpsid_macos_install_status_handoff_v770_tests source/tests/macos_install_status_handoff_v770_tests.cpp)
-target_compile_features(arpsid_macos_install_status_handoff_v770_tests PRIVATE cxx_std_17)
-target_compile_definitions(arpsid_macos_install_status_handoff_v770_tests PRIVATE ARPSID_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
-add_test(NAME MacosInstallStatusHandoffV770Tests COMMAND arpsid_macos_install_status_handoff_v770_tests)
-if(TARGET arpsid_release_closure_suite)
-  add_dependencies(arpsid_release_closure_suite arpsid_macos_install_status_handoff_v770_tests)
-endif()
 
 add_executable(arpsid_root_build_script_auval_mode_v771_tests source/tests/root_build_script_auval_mode_v771_tests.cpp)
 target_compile_features(arpsid_root_build_script_auval_mode_v771_tests PRIVATE cxx_std_17)
@@ -4673,13 +4655,6 @@ if(TARGET arpsid_release_closure_suite)
   add_dependencies(arpsid_release_closure_suite arpsid_root_build_script_macos_closure_logging_v773_tests)
 endif()
 
-add_executable(arpsid_macos_build_green_status_v774_tests source/tests/macos_build_green_status_v774_tests.cpp)
-target_compile_features(arpsid_macos_build_green_status_v774_tests PRIVATE cxx_std_17)
-target_compile_definitions(arpsid_macos_build_green_status_v774_tests PRIVATE ARPSID_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
-add_test(NAME MacosBuildGreenStatusV774Tests COMMAND arpsid_macos_build_green_status_v774_tests)
-if(TARGET arpsid_release_closure_suite)
-  add_dependencies(arpsid_release_closure_suite arpsid_macos_build_green_status_v774_tests)
-endif()
 
 add_executable(arpsid_root_build_script_closure_log_command_v775_tests source/tests/root_build_script_closure_log_command_v775_tests.cpp)
 target_compile_features(arpsid_root_build_script_closure_log_command_v775_tests PRIVATE cxx_std_17)
@@ -4689,13 +4664,6 @@ if(TARGET arpsid_release_closure_suite)
   add_dependencies(arpsid_release_closure_suite arpsid_root_build_script_closure_log_command_v775_tests)
 endif()
 
-add_executable(arpsid_readme_current_version_note_v776_tests source/tests/readme_current_version_note_v776_tests.cpp)
-target_compile_features(arpsid_readme_current_version_note_v776_tests PRIVATE cxx_std_17)
-target_compile_definitions(arpsid_readme_current_version_note_v776_tests PRIVATE ARPSID_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
-add_test(NAME ReadmeCurrentVersionNoteV776Tests COMMAND arpsid_readme_current_version_note_v776_tests)
-if(TARGET arpsid_release_closure_suite)
-  add_dependencies(arpsid_release_closure_suite arpsid_readme_current_version_note_v776_tests)
-endif()
 
 add_executable(arpsid_digi_audioqueue_weak_context_v777_tests source/tests/digi_audioqueue_weak_context_v777_tests.cpp)
 target_compile_features(arpsid_digi_audioqueue_weak_context_v777_tests PRIVATE cxx_std_17)
@@ -4862,21 +4830,7 @@ if(TARGET arpsid_release_closure_suite)
   add_dependencies(arpsid_release_closure_suite AbsoluteP2ClosureV799Tests)
 endif()
 
-add_executable(StaleVersionGuardSweepV800Tests source/tests/stale_version_guard_sweep_v800_tests.cpp)
-target_compile_features(StaleVersionGuardSweepV800Tests PRIVATE cxx_std_17)
-target_compile_definitions(StaleVersionGuardSweepV800Tests PRIVATE ARPSID_SOURCE_ROOT="${CMAKE_SOURCE_DIR}")
-add_test(NAME StaleVersionGuardSweepV800Tests COMMAND StaleVersionGuardSweepV800Tests)
-if(TARGET arpsid_release_closure_suite)
-  add_dependencies(arpsid_release_closure_suite StaleVersionGuardSweepV800Tests)
-endif()
 
-add_executable(FinalSourceClosureV801Tests source/tests/final_source_closure_v801_tests.cpp)
-target_compile_features(FinalSourceClosureV801Tests PRIVATE cxx_std_17)
-target_compile_definitions(FinalSourceClosureV801Tests PRIVATE ARPSID_SOURCE_ROOT="${CMAKE_SOURCE_DIR}")
-add_test(NAME FinalSourceClosureV801Tests COMMAND FinalSourceClosureV801Tests)
-if(TARGET arpsid_release_closure_suite)
-  add_dependencies(arpsid_release_closure_suite FinalSourceClosureV801Tests)
-endif()
 
 add_executable(C64SidPlayerFiveFlavorPolicyV802Tests source/tests/c64_sid_player_five_flavor_policy_v802_tests.cpp)
 target_compile_features(C64SidPlayerFiveFlavorPolicyV802Tests PRIVATE cxx_std_17)
@@ -5132,21 +5086,7 @@ if(TARGET arpsid_release_closure_suite)
   add_dependencies(arpsid_release_closure_suite RealtimeSourceLintV817Tests)
 endif()
 
-add_executable(ReleaseCleanupClosureV818Tests source/tests/release_cleanup_closure_v818_tests.cpp)
-target_compile_features(ReleaseCleanupClosureV818Tests PRIVATE cxx_std_17)
-target_compile_definitions(ReleaseCleanupClosureV818Tests PRIVATE ARPSID_SOURCE_ROOT="${CMAKE_SOURCE_DIR}")
-add_test(NAME ReleaseCleanupClosureV818Tests COMMAND ReleaseCleanupClosureV818Tests)
-if(TARGET arpsid_release_closure_suite)
-  add_dependencies(arpsid_release_closure_suite ReleaseCleanupClosureV818Tests)
-endif()
 
-add_executable(ReleaseDeadFileClosureV819Tests source/tests/release_dead_file_closure_v819_tests.cpp)
-target_compile_features(ReleaseDeadFileClosureV819Tests PRIVATE cxx_std_17)
-target_compile_definitions(ReleaseDeadFileClosureV819Tests PRIVATE ARPSID_SOURCE_ROOT="${CMAKE_SOURCE_DIR}")
-add_test(NAME ReleaseDeadFileClosureV819Tests COMMAND ReleaseDeadFileClosureV819Tests)
-if(TARGET arpsid_release_closure_suite)
-  add_dependencies(arpsid_release_closure_suite ReleaseDeadFileClosureV819Tests)
-endif()
 
 add_executable(C64ProjectionMirrorQueueV879Tests source/tests/c64_projection_mirror_queue_v879_tests.cpp)
 target_compile_features(C64ProjectionMirrorQueueV879Tests PRIVATE cxx_std_17)
@@ -5763,6 +5703,6 @@ if(TARGET arpsid_release_closure_suite)
   add_dependencies(arpsid_release_closure_suite BuildGraphForensicPatchbankLibV970Tests)
 endif()
 
-add_test(NAME VersionCoherenceV970Tests
+add_test(NAME VersionCoherence
   COMMAND ${CMAKE_COMMAND} -E env python3
           ${CMAKE_CURRENT_SOURCE_DIR}/scripts/check_version_coherence.py)

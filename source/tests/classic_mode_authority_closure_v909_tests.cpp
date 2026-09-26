@@ -58,16 +58,6 @@ std::string readFile(const char* path) {
     return ss.str();
 }
 
-
-
-bool isPreservedPass380ClosureLineageVersion(const std::string& version) {
-    // v918: keep old closure tests release-forward. These tests verify that
-    // their original contracts are preserved by the current pass380 closure
-    // train, not that VERSION.txt remains pinned to an obsolete v90x label.
-    return version.find("0.0.690-pass380-v") != std::string::npos &&
-           version.find("closure") != std::string::npos;
-}
-
 void requireContains(const std::string& s, const char* needle, const char* msg) {
     require(s.find(needle) != std::string::npos, msg);
 }
@@ -175,7 +165,6 @@ void test_auto_gm_promotion_param_contract() {
     require(!isFactoryPatchAudioAuthorityParam(kParamAutoGmDrumPromotion),
             "factory patches must not override the user's promotion opt-in");
 }
-
 
 void test_synthmode_transport_reset_authority_source_contract() {
     using namespace ArpSID;
@@ -354,7 +343,6 @@ void test_synthmode_transport_reset_authority_source_contract() {
     requireContains(au2, "case ArpSID::ComponentFlavor::Instrument:\n            ArpSID::sidSetStateRootParamValue(root, (int)ArpSID::kParamSynthModeEnable, 1.0f);\n            ArpSID::sidSetStateRootParamValue(root, (int)ArpSID::kParamDrSidEnable, 0.0f);\n            ArpSID::sidSetStateRootParamValue(root, (int)ArpSID::kParamArpEnable, 0.0f);\n            ArpSID::sidSetStateRootParamValue(root, (int)ArpSID::kParamSeqEnable, 0.0f);",
                     "AUv2 Instrument state-root flavor must persist SEQ disabled with SynthMode authority");
 
-
     requireContains(kernel, "case ArpSID::ComponentFlavor::DrumMachine:\n                forceParam(kParamSynthModeEnable, 0.0f);\n                forceParam(kParamDrSidEnable, 1.0f);\n                forceParam(kParamArpEnable, 0.0f);\n                // v949: dedicated drum flavor owns DrSID/SID808 pattern",
                     "AU3 DrumMachine render flavor policy must preserve SEQ for drum sequencer while clearing ARP");
     requireContains(kernel, "case ArpSID::ComponentFlavor::Sid808:\n                forceParam(kParamSynthModeEnable, 0.0f);\n                forceParam(kParamDrSidEnable, 1.0f);\n                forceParam(kParamArpEnable, 0.0f);\n                // v949: preserve SeqEnable for the SID808 drum sequencer.",
@@ -438,7 +426,6 @@ void test_synthmode_transport_reset_authority_source_contract() {
                     "Phase2 telemetry must use shared effective SEQ helper");
     requireContains(phase2, "const bool seqEnabled = ArpSID::sidEffectiveSeqAuthorityFromLiveParams(paramValues);",
                     "Phase2 sequencer must use shared effective SEQ helper");
-
 
 }
 
@@ -597,17 +584,6 @@ void test_phase2_source_contracts() {
 }
 
 void test_v909_identity() {
-    const std::string version = readFile(ARPSID_SOURCE_ROOT "/VERSION.txt");
-    require(isPreservedPass380ClosureLineageVersion(version),
-            "VERSION.txt must identify the preserved pass380 closure lineage");
-    const std::string status = readFile(ARPSID_SOURCE_ROOT "/STATUS.md");
-    requireContains(status, "v909 Classic-mode authority closure",
-                    "STATUS.md must document the v909 closure");
-    const std::string notes = readFile(ARPSID_SOURCE_ROOT "/RELEASE_NOTES_V909.md");
-    requireContains(notes, "kParamAutoGmDrumPromotion",
-                    "v909 notes must document the promotion opt-in parameter");
-    requireContains(notes, "8580", "v909 notes must document the HMOS SID default");
-    requireContains(notes, "no-output", "v909 notes must document no-output telemetry capture");
     const std::string sweep = readFile(ARPSID_SOURCE_ROOT "/scripts/run_timing_music_contract_sweep.sh");
     requireContains(sweep, "ClassicModeAuthorityClosureV909Tests",
                     "timing/music sweep must run the v909 closure tests");

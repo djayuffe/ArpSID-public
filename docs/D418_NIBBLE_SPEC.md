@@ -1,7 +1,5 @@
 # ArpSID DIGI Canonical `$D418` 4-Bit Nibble Technical Specification
 
-Version: `0.0.634-pass274`
-
 Status: release contract for REC, import, preview, storage, AUTH playback, FAST playback, and debug telemetry.
 
 This document is intentionally detailed. It exists to prevent future regressions where DIGI audio is accidentally treated as ordinary PCM/waveform audio instead of the canonical Commodore 64 SID `$D418` low-nibble volume-DAC stream.
@@ -528,7 +526,6 @@ No custom FULL/fullscreen HUD button exists
 No render path calls full sample-bank strict validation
 NaN/Inf tests pass for DIGI engines
 AudioQueue invalid route/format stops instead of infinite re-enqueue
-RELEASE_CONTENTS.sha256 regenerated
 ```
 
 ---

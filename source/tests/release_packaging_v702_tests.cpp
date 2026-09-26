@@ -41,7 +41,6 @@ int main() {
     const std::string root = ARPSID_SOURCE_DIR;
     const std::string build = readText(root + "/build.sh");
     const std::string pack = readText(root + "/scripts/package_release.sh");
-    const std::string auv2 = readText(root + "/RELEASE_AUV2_INSTALL_VALIDATE.md");
     const std::string wrapper = readText(root + "/scripts/install_auv2_component.sh");
     const std::string cmake = readText(root + "/CMakeLists.txt");
 
@@ -81,10 +80,6 @@ int main() {
     contains(pack, "RELEASE_NAME", "package script supports explicit release root naming");
     contains(pack, "PACKAGE_OUT", "package script supports explicit output path");
     contains(pack, "PACKAGE_TMP_ROOT", "package staging supports writable temporary roots");
-    contains(auv2, "auval -strict -v aumu ArpS ASID", "release docs show canonical auval id");
-    contains(auv2, "scripts/macos/install_auv2_component.sh", "release docs show canonical installer path");
-    require(auv2.find("aufx ArpS UlfB") != std::string::npos,
-            "release docs explicitly warn about stale wrong auval id");
     contains(wrapper, "macos/install_auv2_component.sh", "root install wrapper delegates to canonical installer");
     contains(cmake, "ReleasePackagingV702Tests", "CMake registers packaging release guard");
     contains(cmake, "arpsid_release_packaging_v702_tests", "release suite builds packaging guard target");

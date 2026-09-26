@@ -37,32 +37,9 @@ static std::string sliceBetween(const std::string& s,
     return s.substr(b, e - b);
 }
 
-static std::string extractCurrentPass(const std::string& version) {
-    const std::string prefix = "0.0.690-pass";
-    const std::size_t passPos = version.find(prefix);
-    require(passPos != std::string::npos, "VERSION.txt must carry a 0.0.690-passNNN identity");
-    std::size_t digits = passPos + prefix.size();
-    std::size_t end = digits;
-    while (end < version.size() && version[end] >= '0' && version[end] <= '9') ++end;
-    require(end > digits, "VERSION.txt pass identity must include digits");
-    return version.substr(digits, end - digits);
-}
-
 int main() {
     const std::string auv2 = readFile("source/au2/ArpSIDAUv2Component.mm");
     const std::string gui = readFile("source/au3/ArpSIDViewController.mm");
-    const std::string readme = readFile("README.md");
-    const std::string version = readFile("VERSION.txt");
-    const std::string pass = extractCurrentPass(version);
-
-    require(version.find("0.0.690-pass" + pass) != std::string::npos,
-            "VERSION.txt must match current package version");
-    require(readme.rfind("# ArpSID 0.0.690 pass" + pass, 0) == 0,
-            "README must start with current release note");
-    require(readme.find("## 0.0.669-pass309") != std::string::npos,
-            "README pass309 entry must use corrected 0.0.669 version");
-    require(readme.find("## 0.0.668-pass309") == std::string::npos,
-            "README must not contain stale 0.0.668-pass309 metadata");
 
     require(gui.find("ArpSIDDrsidTabPanel.h//") == std::string::npos,
             "DrSID panel documentation must not contain comment-merge artifact h//");

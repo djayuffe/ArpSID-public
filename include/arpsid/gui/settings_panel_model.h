@@ -3,7 +3,7 @@
 // settings_panel_model.h — SETTINGS tab data model (v544).
 //
 // PURPOSE
-// ------// The SETTINGS tab's contract (TAB_ARCHITECTURE.md, §8) demands 7
+// ------// The SETTINGS tab's contract (docs/TAB_ARCHITECTURE.md, §8) demands 7
 // distinct preference groups:
 //
 // 1. Audio engine selector (BitPerfect / SingleSid3Voice / DualSid6Voice)

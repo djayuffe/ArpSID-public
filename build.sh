@@ -55,7 +55,7 @@ Options:
 Examples:
   ./build.sh
   ./build.sh --build-dir build-release --parallel 8
-  ./build.sh --test-filter 'Auv2Version|SourceOnlyClosure'
+  ./build.sh --test-filter 'Auv2Version|VersionCoherence'
   ./build.sh --install-auv2 --clear-au-cache
   ./build.sh --release-check
   ./build.sh --package-release

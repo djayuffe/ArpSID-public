@@ -38,7 +38,6 @@ static void requireAbsent(const std::string& s, const std::string& needle, const
 int main() {
     const std::string vc = readFile("source/au3/ArpSIDViewController.mm");
     const std::string cmake = readFile("CMakeLists.txt");
-    const std::string audit = readFile("AUDIT-FIXES-0.0.686.md");
 
     const std::string bankPatch = sliceBetween(vc, "-(void)_bankSavePatch:(id)sender", "-(void)_bankLoadPatch:(id)sender");
     requireContains(bankPatch, "NSURL* patchURL = [sp.URL copy];", "patch save snapshots save-panel URL");
@@ -82,8 +81,6 @@ int main() {
     requireAbsent(drumSave, "sp.URL.path", "DrSID kit save must not use panel URL path after snapshot");
 
     requireContains(cmake, "BankPanelCompletionURLSnapshotV785Tests", "v785 guard registered in CMake");
-    require(audit.find("fix-order #39") != std::string::npos || audit.find("Fix-order #39") != std::string::npos, "audit records fix-order #39");
-    requireContains(audit, "bank/preset panel completion URL snapshots", "audit describes panel URL snapshot hardening");
 
     std::cout << "BankPanelCompletionURLSnapshotV785Tests PASS\n";
     return 0;

@@ -16,15 +16,6 @@ static void require(bool ok, const char* msg) {
     }
 }
 
-
-static bool isPreservedPass380ClosureLineageVersion(const std::string& version) {
-    // v918: keep old closure tests release-forward. These tests verify that
-    // their original contracts are preserved by the current pass380 closure
-    // train, not that VERSION.txt remains pinned to an obsolete v90x label.
-    return version.find("0.0.690-pass380-v") != std::string::npos &&
-           version.find("closure") != std::string::npos;
-}
-
 static std::string readFile(const char* path) {
     std::ifstream in(path, std::ios::binary);
     require(static_cast<bool>(in), path);
@@ -38,20 +29,6 @@ static void requireContains(const std::string& s, const char* needle, const char
 }
 
 static void test_v906_release_identity() {
-    const std::string version = readFile(ARPSID_SOURCE_ROOT "/VERSION.txt");
-    require(isPreservedPass380ClosureLineageVersion(version),
-            "VERSION.txt must identify v906-v909 Phase2 timing/music closure lineage");
-    const std::string status = readFile(ARPSID_SOURCE_ROOT "/STATUS.md");
-    require(status.find("v906 Phase2/VST3 timing/music parity closure") != std::string::npos ||
-            status.find("v907 final timing/music sweep closure") != std::string::npos ||
-            status.find("v908 Phase2 no-output FX contract closure") != std::string::npos,
-            "STATUS.md must document v906-v908 Phase2 timing/music closure lineage");
-    const std::string notes = readFile(ARPSID_SOURCE_ROOT "/RELEASE_NOTES_V906.md");
-    requireContains(notes, "Phase2/VST3", "v906 notes must document Phase2/VST3 scope");
-    const std::string notes907 = readFile(ARPSID_SOURCE_ROOT "/RELEASE_NOTES_V907.md");
-    requireContains(notes907, "timing/music sweep", "v907 notes must document full sweep closure");
-    const std::string notes908 = readFile(ARPSID_SOURCE_ROOT "/RELEASE_NOTES_V908.md");
-    requireContains(notes908, "no-output", "v908 notes must document no-output FX advancement closure");
 }
 
 static void test_phase2_has_one_canonical_block_contract() {

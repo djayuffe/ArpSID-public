@@ -1,12 +1,11 @@
 // Copyright (C) 2024-2026 Ulf Bertilsson
 #pragma once
 
-// Canonical version — must match CMakeLists.txt project(VERSION ...) and VERSION.txt.
+// Canonical version — must match VERSION.txt and CMakeLists.txt project(VERSION ...).
 #define ARPSID_PLUGIN_VERSION_MAJOR 0
-#define ARPSID_PLUGIN_VERSION_MINOR 0
-#define ARPSID_PLUGIN_VERSION_PATCH 690
-#define ARPSID_PLUGIN_VERSION "0.0.690"
-#define ARPSID_BUILD_PASS 380
+#define ARPSID_PLUGIN_VERSION_MINOR 9
+#define ARPSID_PLUGIN_VERSION_PATCH 0
+#define ARPSID_PLUGIN_VERSION "0.9.0"
 
 #ifndef ARPSID_PLUGIN_VENDOR
 #define ARPSID_PLUGIN_VENDOR "Uber Sound Solutions"

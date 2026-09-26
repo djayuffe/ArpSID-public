@@ -16,15 +16,6 @@ static void require(bool ok, const char* msg) {
     }
 }
 
-
-static bool isPreservedPass380ClosureLineageVersion(const std::string& version) {
-    // v918: keep old closure tests release-forward. These tests verify that
-    // their original contracts are preserved by the current pass380 closure
-    // train, not that VERSION.txt remains pinned to an obsolete v90x label.
-    return version.find("0.0.690-pass380-v") != std::string::npos &&
-           version.find("closure") != std::string::npos;
-}
-
 static std::string readFile(const char* path) {
     std::ifstream in(path, std::ios::binary);
     require(static_cast<bool>(in), path);
@@ -82,15 +73,6 @@ static void test_release_contract_source_shape_v904() {
 #ifndef ARPSID_SOURCE_ROOT
 #define ARPSID_SOURCE_ROOT "."
 #endif
-    const std::string version = readFile(ARPSID_SOURCE_ROOT "/VERSION.txt");
-    require(isPreservedPass380ClosureLineageVersion(version),
-            "VERSION.txt must match v904-v909 closure package lineage");
-
-    const std::string status = readFile(ARPSID_SOURCE_ROOT "/STATUS.md");
-    require(status.find("v904") != std::string::npos || status.find("v905") != std::string::npos ||
-            status.find("v906") != std::string::npos || status.find("v907") != std::string::npos ||
-            status.find("v908") != std::string::npos,
-            "STATUS.md must mention v904-v908 closure lineage");
 
     const std::string pre = readFile(ARPSID_SOURCE_ROOT "/scripts/run_full_ctest_preflight.sh");
     require(pre.find("-DARPSID_BUILD_TESTS=ON") != std::string::npos,

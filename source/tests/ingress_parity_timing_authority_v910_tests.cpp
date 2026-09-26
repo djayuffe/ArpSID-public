@@ -65,16 +65,6 @@ std::string readFile(const char* path) {
     return ss.str();
 }
 
-
-
-bool isPreservedPass380ClosureLineageVersion(const std::string& version) {
-    // v918: keep old closure tests release-forward. These tests verify that
-    // their original contracts are preserved by the current pass380 closure
-    // train, not that VERSION.txt remains pinned to an obsolete v90x label.
-    return version.find("0.0.690-pass380-v") != std::string::npos &&
-           version.find("closure") != std::string::npos;
-}
-
 void requireContains(const std::string& s, const char* needle, const char* msg) {
     require(s.find(needle) != std::string::npos, msg);
 }
@@ -381,7 +371,6 @@ void test_source_contracts() {
     requireNotContains(phase2, "sidCyclesPerSampleFloor() const {",
                        "floor cycles-per-sample law must not return");
 
-
     // v911 remaining-issue closure guards from the v910 source audit.
     requireContains(kernel, "v911 accepted-only held mirror",
                     "ring NoteOn held mirror must happen only after queue acceptance");
@@ -403,7 +392,6 @@ void test_source_contracts() {
                     "merged host/async chunk events must be globally sorted before dispatch side effects");
     requireContains(kernel, "if (runtimeExecutionOwner_)\n                runtimeExecutionOwner_->applyProjectedNormalizedParameter(kParamMasterVolume, norm);",
                     "CC11 master-volume projection must guard runtimeExecutionOwner_");
-
 
     // v913 final closure: Phase2 must obey the same runtime-owner null-guard
     // law as AU3 for teardown/partial-init/test harness paths.
@@ -427,29 +415,8 @@ void test_source_contracts() {
 }
 
 void test_v910_identity() {
-    const std::string version = readFile(ARPSID_SOURCE_ROOT "/VERSION.txt");
-    require(isPreservedPass380ClosureLineageVersion(version),
-            "VERSION.txt must identify the preserved pass380 closure lineage");
-    const std::string status = readFile(ARPSID_SOURCE_ROOT "/STATUS.md");
-    require(status.find("v918 final source closure complete") != std::string::npos ||
-            status.find("v917 final closure completion") != std::string::npos ||
-            status.find("v916 final remaining-issues closure") != std::string::npos ||
-            status.find("v915 source cleanup closure") != std::string::npos,
-            "STATUS.md must document the preserved cleanup/remaining-issues closure");
-    const std::string notes918 = readFile(ARPSID_SOURCE_ROOT "/RELEASE_NOTES_V918.md");
-    requireContains(notes918, "zip payload root directory", "v918 notes must document package-root drift closure");
-    requireContains(notes918, "v916 source-tree name", "v918 notes must document obsolete root-name source");
-    const std::string notes915 = readFile(ARPSID_SOURCE_ROOT "/RELEASE_NOTES_V915.md");
-    requireContains(notes915, "stale disabled-gate comments", "v915 notes must document stale CMake cleanup");
-    requireContains(notes915, "Source-side closure: COMPLETE", "v915 notes must document TODO release-guard marker preservation");
     const std::string cmakeText = readFile(ARPSID_SOURCE_ROOT "/CMakeLists.txt");
     requireNotContains(cmakeText, "disabled stale/dead closure gate", "CMake must not ship stale disabled release-gate comments");
-    const std::string todoText = readFile(ARPSID_SOURCE_ROOT "/TODO.md");
-    requireContains(todoText, "v915 source cleanup closure", "TODO must open with current v915 closure ledger");
-    requireContains(todoText, "Source-side closure: COMPLETE", "TODO must preserve release-dead-file guard marker");
-    const std::string notes914 = readFile(ARPSID_SOURCE_ROOT "/RELEASE_NOTES_V914.md");
-    requireContains(notes914, "Program Change metadata", "v914 notes must document the dead MIDI metadata queue cleanup");
-    requireContains(notes914, "v827.py` through `v830.py", "v914 notes must document removed superseded bootstrap probes");
     require(!std::filesystem::exists(std::filesystem::path(ARPSID_SOURCE_ROOT) / "tools/audit_logic_auv2_bootstrap_v827.py"),
             "superseded v827 Logic AUv2 bootstrap audit probe must not ship");
     require(!std::filesystem::exists(std::filesystem::path(ARPSID_SOURCE_ROOT) / "tools/audit_logic_auv2_bootstrap_v828.py"),
@@ -458,12 +425,6 @@ void test_v910_identity() {
             "superseded v829 Logic AUv2 bootstrap audit probe must not ship");
     require(!std::filesystem::exists(std::filesystem::path(ARPSID_SOURCE_ROOT) / "tools/audit_logic_auv2_bootstrap_v830.py"),
             "superseded v830 Logic AUv2 bootstrap audit probe must not ship");
-    const std::string notes913 = readFile(ARPSID_SOURCE_ROOT "/RELEASE_NOTES_V913.md");
-    requireContains(notes913, "Phase2", "v913 notes must document Phase2 owner hardening");
-    const std::string notes = readFile(ARPSID_SOURCE_ROOT "/RELEASE_NOTES_V910.md");
-    requireContains(notes, "midiQueue_", "v910 notes must document the ring-parity fix");
-    requireContains(notes, "kMaxFramesPerBlock", "v910 notes must document chunk normalization");
-    requireContains(notes, "stopped", "v910 notes must document the live-play law");
     const std::string sweep = readFile(ARPSID_SOURCE_ROOT "/scripts/run_timing_music_contract_sweep.sh");
     requireContains(sweep, "IngressParityTimingAuthorityV910Tests",
                     "timing/music sweep must run the v910 closure tests");

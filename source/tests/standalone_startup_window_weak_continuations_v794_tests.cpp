@@ -30,7 +30,6 @@ static std::string sliceBetween(const std::string& s, const std::string& begin, 
 int main() {
     const std::string src = readFile("source/au3/ArpSIDHostAppDelegate.mm");
     const std::string cmake = readFile("CMakeLists.txt");
-    const std::string audit = readFile("AUDIT-FIXES-0.0.686.md");
 
     const std::string audioStartup = sliceBetween(src,
         "- (void)_instantiateAudioUnit", "- (void)_teardownAudio");
@@ -64,10 +63,6 @@ int main() {
 
     require(cmake.find("StandaloneStartupWindowWeakContinuationsV794Tests") != std::string::npos,
             "v794 guard registered in CMake");
-    require(audit.find("fix-order #48") != std::string::npos || audit.find("Fix-order #48") != std::string::npos,
-            "audit records fix-order #48");
-    require(audit.find("standalone startup/window weak continuations") != std::string::npos,
-            "audit documents standalone startup/window weak continuation hardening");
 
     std::cout << "StandaloneStartupWindowWeakContinuationsV794Tests PASS\n";
     return 0;

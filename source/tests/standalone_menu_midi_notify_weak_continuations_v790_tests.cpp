@@ -30,7 +30,6 @@ static std::string sliceBetween(const std::string& s, const std::string& begin, 
 int main() {
     const std::string src = readFile("source/au3/ArpSIDHostAppDelegate.mm");
     const std::string cmake = readFile("CMakeLists.txt");
-    const std::string audit = readFile("AUDIT-FIXES-0.0.686.md");
 
     const std::string notify = sliceBetween(src,
         "static void ArpSIDMIDINotifyProc", "- (void)_setupMIDI");
@@ -66,10 +65,6 @@ int main() {
 
     require(cmake.find("StandaloneMenuMIDINotifyWeakContinuationsV790Tests") != std::string::npos,
             "v790 guard registered in CMake");
-    require(audit.find("fix-order #44") != std::string::npos || audit.find("Fix-order #44") != std::string::npos,
-            "audit records fix-order #44");
-    require(audit.find("standalone CoreMIDI notify/menu weak continuations") != std::string::npos,
-            "audit documents the v790 continuation hardening");
 
     std::cout << "StandaloneMenuMIDINotifyWeakContinuationsV790Tests PASS\n";
     return 0;
