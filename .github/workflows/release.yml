@@ -1,0 +1,79 @@
+name: Release
+
+# Manually triggered: builds the release assets from the selected ref, creates
+# the v<VERSION.txt> tag and GitHub release, and uploads the assets.
+on:
+  workflow_dispatch:
+    inputs:
+      draft:
+        description: "Create the release as a draft"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    env:
+      VST3SDK_TAG: v3.8.1_build_84
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version
+        id: version
+        run: |
+          version="$(tr -d '[:space:]' < VERSION.txt)"
+          python3 scripts/check_version_coherence.py
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "tag=v${version}" >> "$GITHUB_OUTPUT"
+
+      - name: Install build tools
+        run: sudo apt-get update && sudo apt-get install -y ninja-build zip rsync
+
+      - name: Fetch Steinberg VST3 SDK
+        run: |
+          git clone --depth 1 --branch "${VST3SDK_TAG}" --recurse-submodules --shallow-submodules \
+            https://github.com/steinbergmedia/vst3sdk.git "${RUNNER_TEMP}/vst3sdk" \
+          || git clone --depth 1 --recurse-submodules --shallow-submodules \
+            https://github.com/steinbergmedia/vst3sdk.git "${RUNNER_TEMP}/vst3sdk"
+
+      - name: Build VST3 (runs the SDK validator)
+        run: |
+          cmake -S . -B build-vst3 -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DARPSID_BUILD_VST3=ON -Dvst3sdk_SOURCE_DIR="${RUNNER_TEMP}/vst3sdk"
+          cmake --build build-vst3 --target arpsid_vst3
+
+      - name: Package assets
+        run: |
+          v="${{ steps.version.outputs.version }}"
+          mkdir -p dist
+          (cd build-vst3/VST3/Release && zip -qr "${GITHUB_WORKSPACE}/dist/ArpSID-${v}-vst3-linux-x86_64.zip" arpsid_vst3.vst3)
+          rm -rf build-vst3
+          RELEASE_NAME="ArpSID-${v}-source" PACKAGE_OUT="${GITHUB_WORKSPACE}/dist/ArpSID-${v}-source.zip" \
+            scripts/package_release.sh "${GITHUB_WORKSPACE}"
+          (cd dist && sha256sum *.zip > SHA256SUMS.txt && cat SHA256SUMS.txt)
+
+      - name: Extract release notes from CHANGELOG.md
+        run: |
+          v="${{ steps.version.outputs.version }}"
+          awk -v v="$v" '
+            $0 ~ "^## \\[" v "\\]" {on=1; next}
+            on && /^## \[/ {exit}
+            on {print}
+          ' CHANGELOG.md > release-notes.md
+          test -s release-notes.md
+
+      - name: Create tag and release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${{ steps.version.outputs.tag }}"
+          draft=""
+          if [ "${{ inputs.draft }}" = "true" ]; then draft="--draft"; fi
+          gh release create "$tag" dist/* \
+            --target "${GITHUB_SHA}" \
+            --title "ArpSID ${{ steps.version.outputs.version }}" \
+            --notes-file release-notes.md \
+            $draft
