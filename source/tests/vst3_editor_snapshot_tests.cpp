@@ -122,7 +122,10 @@ std::string safeName(const char* n) {
 
 int main(int argc, char** argv) {
     const std::string outDir = argc > 1 ? argv[1] : ".";
+    std::setvbuf(stdout, nullptr, _IONBF, 0); // progress survives a crash
 #if defined(_WIN32)
+    // Direct2D / WIC offscreen drawing needs COM (a host provides it).
+    CoInitializeEx(nullptr, COINIT_APARTMENTTHREADED);
     VSTGUI::init(GetModuleHandleW(nullptr));
 #else
     VSTGUI::init(nullptr);
@@ -139,9 +142,11 @@ int main(int argc, char** argv) {
         }
         renderAudio(host, 40);
 
+        std::puts("  engine running");
         SnapshotBackend backend(host);
         auto view = makeOwned<Editor::EditorView>(backend);
         view->buildAllPages();
+        std::puts("  editor built");
         const auto& tabs = GUI::EditorLayout::tabs();
         check(view->tabCount() == static_cast<int>(tabs.size()), "editor exposes every production tab");
         check(view->parameterControlCount() >= 150, "editor holds controls for the parameter set");
@@ -179,6 +184,9 @@ int main(int argc, char** argv) {
               "editor edit reaches the kernel");
     }
     VSTGUI::exit();
+#if defined(_WIN32)
+    CoUninitialize();
+#endif
     if (failures) {
         std::fprintf(stderr, "vst3_editor_snapshot: %d failure(s)\n", failures);
         return 1;

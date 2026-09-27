@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(ArpSID VERSION 0.9.4 LANGUAGES CXX)
+project(ArpSID VERSION 0.9.5 LANGUAGES CXX)
 include(cmake/ArpSIDSourceTreeGuard.cmake)
 
 option(ARPSID_BUILD_ALL "Enable the stable ArpSID product set for the current platform" OFF)
@@ -660,6 +660,9 @@ if(ARPSID_BUILD_VST3)
             ${vst3sdk_SOURCE_DIR}/vstgui4 ${vst3sdk_SOURCE_DIR})
         target_link_libraries(arpsid_vst3_editor_snapshot PRIVATE arpsid_core arpsid_forensic_patchbank vstgui)
         target_compile_definitions(arpsid_vst3_editor_snapshot PRIVATE VSTGUI_ENABLE_DEPRECATED_METHODS=0)
+        if(WIN32)
+            target_link_libraries(arpsid_vst3_editor_snapshot PRIVATE ole32)
+        endif()
         set(_arpsid_snapshot_dir "${CMAKE_BINARY_DIR}/editor-snapshots")
         add_custom_target(arpsid_vst3_editor_check
             COMMAND "${CMAKE_COMMAND}" -E make_directory "${_arpsid_snapshot_dir}"

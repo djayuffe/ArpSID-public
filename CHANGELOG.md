@@ -5,6 +5,53 @@ All notable changes to ArpSID are documented here. The project uses
 version is `VERSION.txt`, mirrored by `project(VERSION)` in `CMakeLists.txt`
 and `include/arpsid/version.h`.
 
+## [0.9.5] — 2026-09-27
+
+### Changed (VST3)
+
+- **Same engine as the AU and Standalone.** The VST3 processor now runs the
+  shared `ArpSIDDSPKernel` instead of the smaller Phase2 engine, so the MIX
+  (per-channel FX chains, sends, master), KIT, DIGI sampler, SETTINGS and C64
+  tune player layers all work in VST3. Parameter changes and notes are
+  sample-accurate, and the host transport drives the sequencer, arpeggiator
+  and C64 player. The processor class ID is unchanged, so existing projects
+  open with the new engine.
+- **State format v5** stores the patch plus the settings, mix, kit, DIGI
+  model, sample bank, DIGI runtime and output-mode chunks. Projects saved by
+  0.9.4 and earlier (state v1 to v4) still load. A patch that was picked but
+  not yet rendered is what the host saves.
+- **macOS:** every tab of the native editor now works in VST3 (MIX, KIT,
+  DIGI, SETTINGS, SIDCORE, C64 player, pure SID capture, bank import and
+  export). Before, those tabs had no engine behind them.
+
+### Added (VST3, Windows and Linux)
+
+- **Full ArpSID editor.** A VSTGUI editor replaces the host's generic
+  parameter list. It has the same 17 tabs as the macOS editor, and every user
+  parameter is on its tab. It includes:
+  - live oscilloscope, filter response, LFO, VCO, SID register, sequencer,
+    drum, forensic, HI-FI, modulation and SIDCORE displays;
+  - the BANK browser (180 factory patches, user bank, and `.arpsid` /
+    `.arpsidbank` load and save);
+  - the SETTINGS, MIX, KIT and DIGI editors (including WAV import for DIGI
+    pads);
+  - the C64 tune player;
+  - an on-screen keyboard and output meters.
+
+  The editor follows host automation and preset changes, and supports HiDPI
+  scaling.
+- `arpsid_vst3_editor_check` renders every editor tab offscreen with the real
+  engine running, writes one PNG per tab and checks the parameter binding.
+  CI runs it on Linux and Windows and keeps the Linux PNGs as an artifact.
+
+### Linux
+
+- The VST3 build brings in VSTGUI directly (no GTK or standalone
+  dependencies). It needs only the X11/xcb, xkbcommon, cairo, pango,
+  fontconfig and Wayland development packages listed in the README.
+- The warning gate now also covers the editor and the kernel on MSVC and
+  Linux VST3 builds.
+
 ## [0.9.4] — 2026-09-26
 
 ### Fixed (VST3)

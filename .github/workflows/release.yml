@@ -5,8 +5,8 @@ name: Release
 #   ArpSID-<v>-auv3-macos-universal.zip        AUv3 (Logic-compatible ArpSID.app)
 #   ArpSID-<v>-auv2-macos-universal.zip        AUv2 (5 flavors)
 #   ArpSID-<v>-vst3-macos-universal.zip        VST3, macOS (rich editor)
-#   ArpSID-<v>-vst3-windows-{x64,arm64}.zip    VST3, Windows (generic host UI)
-#   ArpSID-<v>-vst3-linux-{x86_64,aarch64}.zip VST3, Linux (generic host UI)
+#   ArpSID-<v>-vst3-windows-{x64,arm64}.zip    VST3, Windows (full editor)
+#   ArpSID-<v>-vst3-linux-{x86_64,aarch64}.zip VST3, Linux (full editor)
 #   ArpSID-<v>-source.zip                      ROM-free source (scripts/package_release.sh)
 #   SHA256SUMS.txt
 # All macOS bundles are ad-hoc signed (not notarized).
@@ -149,8 +149,9 @@ jobs:
 
           **Linux.** Copy `arpsid_vst3.vst3` to `~/.vst3/` (or `/usr/lib/vst3/` for all users).
 
-          On Windows and Linux the VST3 uses the host's generic parameter editor; the
-          rich ArpSID editor is macOS-only. The C64 tune player needs your own
+          The VST3 runs the same engine as the AU and Standalone and has the full
+          ArpSID editor on every platform (on Linux it needs the usual desktop
+          libraries: X11/xcb, xkbcommon, cairo, pango, fontconfig). The C64 tune player needs your own
           KERNAL/BASIC/CHARGEN ROM dumps; none are bundled.
 
           Every asset in this release was built by CI after the full test suite, the

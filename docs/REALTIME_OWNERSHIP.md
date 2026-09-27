@@ -21,8 +21,8 @@ must not call semantic-vector growth, canonicalization, filesystem, logging,
 Objective-C, locks, or heap-owning helper paths.
 
 Parameter-type repair and semantic state-root canonicalization therefore happen
-on the non-RT producer. After the prepared root is swapped on render, AU3 and
-Phase2 may reconcile persistent adapter-local policy from their staged fixed-size
+on the non-RT producer. After the prepared root is swapped on render, the AU3 and
+VST3 wrappers may reconcile persistent adapter-local policy from their staged fixed-size
 parameter image; that reconciliation must not mutate/canonicalize the root again.
 
 ## Non-RT producer side owned

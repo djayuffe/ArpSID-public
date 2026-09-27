@@ -1,4 +1,4 @@
-# ArpSID 0.9.4
+# ArpSID 0.9.5
 
 **A Commodore 64 SID synthesizer and C64 tune player as an audio plug-in for macOS.**
 
@@ -35,16 +35,15 @@ Captured from the ArpSID standalone host (AUv3 presentation), running the shippe
 |---|---|---|
 | **AUv2** (`aumu`, manufacturer `ASID`) | macOS (universal) | Five component flavors: `ArpS` (ArpSID), `ArIn` (ArpSID Instrument), `DrSD` (DrSID drum machine), `S808` (SID-808), `C64P` (C64 tune player). |
 | **AUv3** | macOS (universal) | App extension inside the Logic-compatible `ArpSID.app`. |
-| **VST3** | macOS (universal), Windows x64 + arm64, Linux x86_64 + aarch64 | Phase2 processor/controller (Steinberg VST3 SDK). The rich editor is macOS-only; other platforms use the host's generic parameter UI. |
+| **VST3** | macOS (universal), Windows x64 + arm64, Linux x86_64 + aarch64 | Runs the same engine as the AU and Standalone (MIX, KIT, DIGI, SETTINGS, C64 player). Full ArpSID editor on every platform: the native editor on macOS, a VSTGUI editor with the same 17 tabs on Windows and Linux. |
 | **Standalone** | macOS (universal) | `ArpSID Standalone.app` host with keyboard, transport and preset browser. |
 
 Every [release](https://github.com/djayuffe/ArpSID-public/releases) ships all
 of these as separate downloads, built and validated by CI.
 
-Wrappers share the canonical core but declare capabilities explicitly: AU owns the
-KIT/DIGI/MIX overlay layers; Phase2/VST owns the canonical core, fractional rendering,
-exact post-FX and no-output continuation. "Parity" means shared contracts where
-capabilities overlap — not forced feature identity.
+All formats run one engine, `ArpSIDDSPKernel` (canonical core plus the
+KIT/DIGI/MIX layers); the AU, AUv3, Standalone and VST3 wrappers only adapt
+host events, state and the editor to it.
 
 ## Sound engines
 
@@ -169,15 +168,21 @@ ctest --test-dir build-release --output-on-failure
 # AddressSanitizer + UBSan build of the test suite (GCC/Clang)
 ./build.sh --sanitize --build-dir build-asan --config RelWithDebInfo
 
-# VST3 (any platform; the rich editor is macOS-only, elsewhere hosts show
-# their generic parameter UI). Needs the Steinberg VST3 SDK:
+# VST3 (any platform, full editor everywhere). Needs the Steinberg VST3 SDK
+# and, on Linux, the VSTGUI editor toolkit packages (Debian/Ubuntu):
+#   sudo apt-get install libx11-xcb-dev libxcb-util-dev libxcb-cursor-dev \
+#     libxcb-keysyms1-dev libxcb-xkb-dev libxkbcommon-dev libxkbcommon-x11-dev \
+#     libcairo2-dev libpango1.0-dev libfontconfig1-dev libfreetype-dev \
+#     libwayland-dev wayland-protocols
 git clone --depth 1 --branch v3.8.1_build_84 --recurse-submodules --shallow-submodules \
     https://github.com/steinbergmedia/vst3sdk.git ~/vst3sdk
 ./build.sh --no-tests --build-dir build-vst3 --vst3-sdk ~/vst3sdk --install-vst3
 ```
 
 `--vst3-sdk` builds `arpsid_vst3` (the build runs the Steinberg validator) and
-the headless host integration test (`arpsid_vst3_host_check`); `--install-vst3`
+the headless host integration test (`arpsid_vst3_host_check`). On Linux and
+Windows, `arpsid_vst3_editor_check` renders every editor tab offscreen to
+`build-vst3/editor-snapshots/*.png` and checks the parameter binding. `--install-vst3`
 copies the bundle to `~/.vst3` on Linux (`arpsid_vst3_install_user`,
 override with `-DARPSID_USER_VST3_DIR=...`) or the user VST3 folder on macOS.
 The equivalent raw CMake steps:
@@ -222,8 +227,8 @@ requests:
 |---|---|
 | `linux` | Repository guards, full build and full CTest suite with GCC and with Clang. |
 | `linux-sanitizers` | Full CTest suite under AddressSanitizer + UndefinedBehaviorSanitizer. |
-| `linux-vst3` | VST3 for x86_64 and aarch64 + Steinberg SDK validator + VST3 host integration test + install layout. |
-| `windows-vst3` | VST3 (MSVC) for x64 and arm64 + Steinberg SDK validator + VST3 host integration test. |
+| `linux-vst3` | VST3 for x86_64 and aarch64 + Steinberg SDK validator + VST3 host integration test + offscreen render of every editor tab + install layout. |
+| `windows-vst3` | VST3 (MSVC) for x64 and arm64 + Steinberg SDK validator + VST3 host integration test + offscreen editor render. |
 | `macos` | AUv2 (all five flavors) + VST3 build, code-signature check, strict `auval`, VST3 host integration test. Public repository only. |
 | `macos-apps` | Standalone app + AUv3 (Logic-compatible app): bundle/signature checks and a Standalone launch test. Public repository only. |
 
@@ -270,7 +275,7 @@ everything except the ROM files and runs the same guard before committing.
 | `include/arpsid/engines/` | BitPerfect, arpeggiator, DrSID, SID-808, DIGI sampler / `$D418`. |
 | `include/arpsid/gui/`, `include/arpsid/patchbank/` | GUI models; factory patch/kit banks. |
 | `source/au2/`, `source/au3/` | AUv2 component, AUv3, DSP kernel, view controller. |
-| `source/arpsid_processor_phase2.*`, `source/gui/` | VST3 processor/controller and GUI. |
+| `source/vst3/`, `source/arpsid_controller.cpp`, `source/gui/` | VST3 processor, kernel host, controller; Cocoa bridge and cross-platform VSTGUI editor (`source/gui/vstgui/`). |
 | `source/tests/`, `scripts/` | Test suite; build/validation/guard scripts. |
 
 ## Status and validation limits
