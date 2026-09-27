@@ -363,13 +363,6 @@ void test_source_contracts() {
                     "live instrument input is constitutionally never suppressed");
 
     // Phase2 legacy double/floor timing helpers must stay dead (audit #13).
-    const std::string phase2 = readFile(ARPSID_SOURCE_ROOT "/source/arpsid_processor_phase2.cpp");
-    requireNotContains(phase2, "void ArpSIDProcessorPhase2::pushSidWriteDelayed",
-                       "pushSidWriteDelayed must not return as a production timing path");
-    requireNotContains(phase2, "uint64_t ArpSIDProcessorPhase2::absoluteSidCycleAtSampleStart_",
-                       "absolute double/floor cycle mapping must not return");
-    requireNotContains(phase2, "sidCyclesPerSampleFloor() const {",
-                       "floor cycles-per-sample law must not return");
 
     // v911 remaining-issue closure guards from the v910 source audit.
     requireContains(kernel, "v911 accepted-only held mirror",
@@ -395,13 +388,6 @@ void test_source_contracts() {
 
     // v913 final closure: Phase2 must obey the same runtime-owner null-guard
     // law as AU3 for teardown/partial-init/test harness paths.
-    const std::string phase2Runtime = readFile(ARPSID_SOURCE_ROOT "/source/arpsid_processor_phase2.cpp");
-    requireContains(phase2Runtime, "if (runtimeExecutionOwner_) runtimeExecutionOwner_->syncTempoLinkedControllers(numSamples);",
-                    "Phase2 tempo-linked sync must guard runtimeExecutionOwner_");
-    requireContains(phase2Runtime, "if (runtimeExecutionOwner_) runtimeExecutionOwner_->applyProjectedNormalizedParameter(kParamMasterVolume, norm);",
-                    "Phase2 CC11 projection must guard runtimeExecutionOwner_");
-    requireContains(phase2Runtime, "if (runtimeExecutionOwner_) runtimeExecutionOwner_->applyProjectedNormalizedParameter(static_cast<uint32_t>(ev.id), ev.value);",
-                    "Phase2 timed param projection must guard runtimeExecutionOwner_");
 
     // AU3 exposes the promotion opt-in in the parameter tree.
     const std::string au3 = readFile(ARPSID_SOURCE_ROOT "/source/au3/ArpSIDAudioUnit.mm");

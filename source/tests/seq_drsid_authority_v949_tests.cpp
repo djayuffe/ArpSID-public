@@ -63,7 +63,6 @@ int main() {
     const std::string root = ARPSID_SOURCE_ROOT;
     const std::string model = readFile(root + "/include/arpsid/core/sid_runtime_model.h");
     const std::string kernel = readFile(root + "/source/au3/ArpSIDDSPKernel.hpp");
-    const std::string phase2 = readFile(root + "/source/arpsid_processor_phase2.cpp");
     const std::string services = readFile(root + "/include/arpsid/core/sid_runtime_parameter_services.h");
     const std::string vc = readFile(root + "/source/au3/ArpSIDViewController.mm");
 
@@ -73,9 +72,6 @@ int main() {
     requireContains(kernel,
         "const bool modeBlocksSeq = mode == ArpSID::SidRuntimeRenderMode::SidRegister;",
         "AU3 post-flush must only block SEQ in SynthMode/SID-register");
-    requireContains(phase2,
-        "const bool modeBlocksSeq = mode == ArpSID::SidRuntimeRenderMode::SidRegister;",
-        "Phase2 post-canonical cleanup must only block SEQ in SynthMode/SID-register");
     requireContains(services,
         "enabling DrSID/SID808 must not force SeqEnable off",
         "DrSID special-mode activation must preserve sequencer authority");

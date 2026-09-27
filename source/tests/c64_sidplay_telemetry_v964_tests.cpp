@@ -50,7 +50,7 @@ static std::string readFile(const char* relativePath) {
 
 int main() {
     const std::string hdr = readFile("source/common/arpsid_telemetry_snapshot.h");
-    const std::string adapter = readFile("source/au3/ArpSIDDSPKernelAdapter.mm");
+    const std::string adapter = readFile("source/au3/ArpSIDDSPKernelAdapter.mm") + readFile("source/au3/ArpSIDKernelTelemetryFill.h");
     const std::string vc = readFile("source/au3/ArpSIDViewController.mm");
 
     // ── 1+5. Adapter must publish every c64Psid* telemetry field ────────────

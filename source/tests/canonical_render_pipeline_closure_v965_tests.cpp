@@ -289,16 +289,12 @@ static void testProductionSourceContracts() {
             sidPipelineHas(kAuRenderPipelineCapabilities, SidRenderPipelineCapability::DigiOverlay) &&
             sidPipelineHas(kAuRenderPipelineCapabilities, SidRenderPipelineCapability::MixFx),
             "AU capability contract must declare its overlay/MIX layers");
-    require(!sidPipelineHas(kPhase2RenderPipelineCapabilities, SidRenderPipelineCapability::KitSequencerOverlay) &&
-            !sidPipelineHas(kPhase2RenderPipelineCapabilities, SidRenderPipelineCapability::DigiOverlay) &&
-            !sidPipelineHas(kPhase2RenderPipelineCapabilities, SidRenderPipelineCapability::MixFx),
-            "Phase2 must not claim overlay capabilities it does not instantiate");
-    require(sidPipelineHas(kPhase2RenderPipelineCapabilities, SidRenderPipelineCapability::ExactPostFxTimeline) &&
-            sidPipelineHas(kPhase2RenderPipelineCapabilities, SidRenderPipelineCapability::NoOutputContinuation),
-            "Phase2 capability contract must declare repaired core/post-FX behavior");
+    require(kVst3RenderPipelineCapabilities == kAuRenderPipelineCapabilities &&
+            sidPipelineHas(kVst3RenderPipelineCapabilities, SidRenderPipelineCapability::KitSequencerOverlay) &&
+            sidPipelineHas(kVst3RenderPipelineCapabilities, SidRenderPipelineCapability::DigiOverlay) &&
+            sidPipelineHas(kVst3RenderPipelineCapabilities, SidRenderPipelineCapability::MixFx),
+            "VST3 runs the shared kernel and must expose the full AU pipeline");
     const std::string au = readText("source/au3/ArpSIDDSPKernel.hpp");
-    const std::string phase2 = readText("source/arpsid_processor_phase2.cpp");
-    const std::string phase2h = readText("source/arpsid_processor_phase2.h");
     const std::string exec = readText("include/arpsid/core/sid_runtime_execution.h");
 
     const std::string telemetry = between(au, "Telemetry readTelemetry(bool includeScopes)",
@@ -316,20 +312,11 @@ static void testProductionSourceContracts() {
     require(au.find("applyAuReverbLimiterTimeline_") != std::string::npos &&
             au.find("applyAuHiFiTimeline_") != std::string::npos,
             "AU post-FX must consume canonical automation timeline");
-    require(phase2.find("numSamples > maxBlockSize") == std::string::npos,
-            "Phase2 must not drop every host block larger than declared maxBlockSize");
-    require(phase2.find("numSamples > processingCapacity_") != std::string::npos &&
-            phase2h.find("kPhase2EmergencyBlockCapacity") != std::string::npos,
-            "Phase2 must use bounded off-RT emergency capacity");
     require(exec.find("runtime.applyVariantChange(canonicalVariantProfileFromEvent") == std::string::npos,
             "VariantChange dispatch must not mutate canonical runtime twice");
     const std::string auVariant = between(au, "void kernelApplyVariantProfile", "void kernelApplyProgramChange");
     require(auVariant.find("runtimeModel_.applyVariantChange") == std::string::npos,
             "AU variant projection sink must not mutate canonical runtime twice");
-    const std::string phaseVariant = between(phase2, "void ArpSIDProcessorPhase2::kernelApplyVariantProfile",
-                                             "void ArpSIDProcessorPhase2::kernelApplyProgramChange");
-    require(phaseVariant.find("runtimeModel_.applyVariantChange") == std::string::npos,
-            "Phase2 variant projection sink must not mutate canonical runtime twice");
 }
 
 int main() {

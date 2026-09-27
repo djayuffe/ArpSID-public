@@ -17,7 +17,7 @@
 #include "pluginterfaces/vst/ivsteditcontroller.h"
 #include "pluginterfaces/vst/vsttypes.h"
 
-#include "arpsid_processor_phase2.h"
+#include "vst3/arpsid_vst3_processor.h"
 #include "arpsid/version.h"
 #include "arpsid_controller.cpp"   // single-TU build; #include is intentional
 
@@ -45,7 +45,7 @@ BEGIN_FACTORY_DEF(
         ARPSID_PLUGIN_CATEGORY,
         ARPSID_PLUGIN_VERSION,
         kVstVersionString,
-        ArpSID::ArpSIDProcessorPhase2::createInstance
+        ArpSID::ArpSIDVst3Processor::createInstance
     )
 
     DEF_CLASS2(

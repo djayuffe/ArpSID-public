@@ -15,7 +15,7 @@ int main() {
     const std::string root = ARPSID_SOURCE_DIR;
     const std::string au = readFile(root + "/source/au3/ArpSIDAudioUnit.mm");
     const std::string k = readFile(root + "/source/au3/ArpSIDDSPKernel.hpp");
-    const std::string ad = readFile(root + "/source/au3/ArpSIDDSPKernelAdapter.mm");
+    const std::string ad = readFile(root + "/source/au3/ArpSIDDSPKernelAdapter.mm") + readFile(root + "/source/au3/ArpSIDKernelTelemetryFill.h");
     require(au.find("std::vector<bool> seenSlots(defs.size(), false)") != std::string::npos,
             "AUAudioUnit factory preset seen slots are dynamic");
     require(au.find("for (NSInteger slot = 120; slot <= 149; ++slot)") != std::string::npos,

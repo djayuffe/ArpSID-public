@@ -105,7 +105,6 @@ void testSourceGuards() {
     const std::string hostSurface = readSourceFile("include/arpsid/core/sid_runtime_host_surface.h");
     const std::string auKernel = readSourceFile("source/au3/ArpSIDDSPKernel.hpp");
     const std::string voicePolicy = readSourceFile("include/arpsid/core/sid_runtime_voice_policy.h");
-    const std::string phase2 = readSourceFile("source/arpsid_processor_phase2.cpp");
 
     require(contains(hostSurface, "makeSyntheticAnonymousNoteId"),
             "host surface must own synthetic anonymous note-id helper");
@@ -117,10 +116,6 @@ void testSourceGuards() {
             "VoiceAllocator must expose orphan reconciliation with held-ledger cleanup");
     require(contains(auKernel, "reconcileSynthModeUnheldVoices_();"),
             "AU render block must run SynthMode orphan reconciliation");
-    require(contains(phase2, "mirrorVstMidiHeldIngress_"),
-            "VST/Phase2 MIDI path must maintain held mirror before reconciling");
-    require(contains(phase2, "reconcileSynthModeUnheldVoices_();"),
-            "VST/Phase2 render block must run SynthMode orphan reconciliation");
 }
 
 } // namespace

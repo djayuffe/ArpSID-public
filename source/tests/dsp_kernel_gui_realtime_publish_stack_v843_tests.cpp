@@ -21,7 +21,7 @@ static void require(bool ok, const char* msg) {
 
 int main() {
     const std::string kernel = readFile("source/au3/ArpSIDDSPKernel.hpp");
-    const std::string adapter = readFile("source/au3/ArpSIDDSPKernelAdapter.mm");
+    const std::string adapter = readFile("source/au3/ArpSIDDSPKernelAdapter.mm") + readFile("source/au3/ArpSIDKernelTelemetryFill.h");
     const std::string audioUnit = readFile("source/au3/ArpSIDAudioUnit.mm");
     const std::string viewController = readFile("source/au3/ArpSIDViewController.mm");
     const std::string digiBank = readFile("include/arpsid/gui/digi_sample_bank_v596.h");
@@ -60,13 +60,13 @@ int main() {
     require(adapter.find("readTelemetry:out includeScopes:includeScopes includeC64Snapshot:YES")
                 != std::string::npos,
             "adapter legacy telemetry calls must delegate to the explicit C64 snapshot selector");
-    require(adapter.find("if (includeC64Snapshot) {\n        _kernel->noteC64TelemetryRequest();")
+    require(adapter.find("if (includeC64Snapshot) {\n        k.noteC64TelemetryRequest();")
                 != std::string::npos,
             "adapter light telemetry polls must not always demand heavy C64 snapshots");
-    require(adapter.find("const auto t = _kernel->readTelemetry(includeScopes);")
+    require(adapter.find("const auto t = k.readTelemetry(includeScopes);")
                 != std::string::npos,
             "adapter light telemetry polls must skip kernel-level scope copies");
-    require(adapter.find("includeC64Snapshot && _kernel->readC64Telemetry(c64Snapshot)")
+    require(adapter.find("includeC64Snapshot && k.readC64Telemetry(c64Snapshot)")
                 != std::string::npos,
             "adapter must skip C64 chip snapshot reads for non-C64 light polls");
     require(audioUnit.find("ArpSID::GUI::DigiSampleBankBlob bank{}") == std::string::npos,

@@ -5,10 +5,10 @@
 
 namespace ArpSID {
 
-// Explicit host-pipeline contract. AU owns the user-facing KIT/DIGI/MIX layer;
-// Phase2/VST3 currently exposes the canonical SID engines plus canonical post-FX.
-// Keeping this compile-time contract prevents wrappers from claiming behavioral
-// parity for layers they do not instantiate or persist.
+// Explicit host-pipeline contract. Every wrapper (AUv2, AUv3, Standalone and
+// VST3) runs the shared ArpSIDDSPKernel, so all of them instantiate and persist
+// the full pipeline including the KIT/DIGI/MIX layer. Keeping this
+// compile-time contract prevents a wrapper from claiming layers it lacks.
 enum class SidRenderPipelineCapability : std::uint32_t {
     CanonicalTimedEvents = 1u << 0,
     FractionalSidRender  = 1u << 1,
@@ -39,15 +39,13 @@ inline constexpr SidRenderPipelineCapabilities kAuRenderPipelineCapabilities =
     sidPipelineBit(SidRenderPipelineCapability::DigiOverlay) |
     sidPipelineBit(SidRenderPipelineCapability::MixFx);
 
-inline constexpr SidRenderPipelineCapabilities kPhase2RenderPipelineCapabilities =
-    sidPipelineBit(SidRenderPipelineCapability::CanonicalTimedEvents) |
-    sidPipelineBit(SidRenderPipelineCapability::FractionalSidRender) |
-    sidPipelineBit(SidRenderPipelineCapability::ExactPostFxTimeline) |
-    sidPipelineBit(SidRenderPipelineCapability::NoOutputContinuation);
+// VST3 hosts the same kernel (source/vst3/arpsid_vst3_kernel_host.h).
+inline constexpr SidRenderPipelineCapabilities kVst3RenderPipelineCapabilities =
+    kAuRenderPipelineCapabilities;
 
 static_assert(sidPipelineHas(kAuRenderPipelineCapabilities,
                              SidRenderPipelineCapability::KitSequencerOverlay));
-static_assert(!sidPipelineHas(kPhase2RenderPipelineCapabilities,
-                              SidRenderPipelineCapability::KitSequencerOverlay));
+static_assert(kVst3RenderPipelineCapabilities == kAuRenderPipelineCapabilities,
+              "VST3 and AU share one kernel and one pipeline");
 
 } // namespace ArpSID

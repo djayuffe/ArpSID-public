@@ -27,7 +27,6 @@ int main() {
     const auto au2 = readFile(root + "/source/au2/ArpSIDAUv2Component.mm");
     const auto au3 = readFile(root + "/source/au3/ArpSIDAudioUnit.mm");
     const auto fileBank = readFile(root + "/source/au3/ArpSIDFileBankBridge.mm");
-    const auto phase2 = readFile(root + "/source/arpsid_processor_phase2.cpp");
     requireContains(kernel, "preResetDrSidSeqAuthority", "AU3 reset captures pre-reset DrSID sequencer authority");
     requireContains(kernel, "DrSID structural authority clears ARP, but preserves SEQ", "AU3 structural DrSID branch preserves SEQ");
     requireContains(kernel,
@@ -44,8 +43,6 @@ int main() {
     requireContains(au3, "SID808 flavor preserves SeqEnable as drum-pattern transport", "AU3 SID808 preserves SeqEnable");
     requireContains(fileBank, "const float existingSeq", "file-bank drum persistence captures SeqEnable");
     requireContains(fileBank, "Preserve SeqEnable instead of forcing the DrSID/SID808 transport off", "file-bank drum persistence preserves SeqEnable");
-    requireContains(phase2, "mode == ArpSID::SidRuntimeRenderMode::DrSid", "Phase2 SEQ disable handles DrSID");
-    requireContains(phase2, "runtimeReleaseDrSidNote(note);", "Phase2 SEQ disable releases DrSID");
     std::cout << "SeqDrSidResetPreservationV950Tests PASS\n";
     return 0;
 }

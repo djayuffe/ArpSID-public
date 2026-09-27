@@ -35,14 +35,12 @@ cmake --build "${BUILD}" --target \
   ProjectionMirrorFinalClosureV903Tests \
   ProjectionMirrorFinalClosureV904Tests \
   ProjectionMirrorFinalClosureV905Tests \
-  Phase2TimingMusicClosureV906Tests \
   TimingMusicSweepClosureV907Tests \
-  Phase2NoOutputFxClosureV908Tests \
   ClassicModeAuthorityClosureV909Tests \
   IngressParityTimingAuthorityV910Tests \
   -- -j"${ARPSID_TIMING_SWEEP_JOBS:-2}"
 
 ctest --test-dir "${BUILD}" \
-  -R 'ReleaseGateRegression|SidProjectionAppliedWriteObserverV874Tests|C64Projection|SidRuntime.*(SampleOnly|SameSample|Unresolved|MixedUnresolved)|SidWriteQueueRebase|ProjectionMirrorFinalClosureV90[2345678]|Phase2TimingMusicClosureV906Tests|TimingMusicSweepClosureV907Tests|Phase2NoOutputFxClosureV908Tests|ClassicModeAuthorityClosureV909Tests|IngressParityTimingAuthorityV910Tests' \
+  -R 'ReleaseGateRegression|SidProjectionAppliedWriteObserverV874Tests|C64Projection|SidRuntime.*(SampleOnly|SameSample|Unresolved|MixedUnresolved)|SidWriteQueueRebase|ProjectionMirrorFinalClosureV90[2345678]|TimingMusicSweepClosureV907Tests|ClassicModeAuthorityClosureV909Tests|IngressParityTimingAuthorityV910Tests' \
   --output-on-failure \
   --no-tests=error

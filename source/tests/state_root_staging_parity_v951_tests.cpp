@@ -47,7 +47,6 @@ int main() {
 #endif
     const std::string root = ARPSID_SOURCE_ROOT;
     const std::string kernel = readFile(root + "/source/au3/ArpSIDDSPKernel.hpp");
-    const std::string phase2 = readFile(root + "/source/arpsid_processor_phase2.cpp");
 
     requireContains(kernel,
         "v951: state-root apply must use the same param-specific sanitize law",
@@ -63,21 +62,6 @@ int main() {
         "const float clean = std::clamp(std::isfinite(v) ? v : kParamInfos[(size_t)i].defaultNorm, 0.0f, 1.0f);",
         "AU3 root apply must not use generic clamp staging");
 
-    requireContains(phase2,
-        "v951: Phase2 state-root apply uses the shared param-specific sanitize",
-        "Phase2 state-root apply must document the v951 staging parity law");
-    requireContains(phase2,
-        "const float clean = ArpSID::sanitizeNormalizedParamValue(\n"
-        "            i,\n"
-        "            v,\n"
-        "            ArpSID::defaultNormalizedParamValue(i));\n"
-        "        paramValues[(size_t)i] = clean;\n"
-        "        lastAppliedParamValues[(size_t)i] = clean;\n"
-        "        (void)runtimeModel_.applyAutomationPoint(static_cast<uint32_t>(i), clean);",
-        "Phase2 root apply must sync paramValues, lastAppliedParamValues, and runtimeModel with clean value");
-    requireAbsent(phase2,
-        "paramValues[(size_t)i] = std::clamp(v, 0.0f, 1.0f);",
-        "Phase2 root apply must not use generic clamp staging");
 
     const float nan = std::numeric_limits<float>::quiet_NaN();
     const float def = ArpSID::defaultNormalizedParamValue(ArpSID::kParamMasterVolume);

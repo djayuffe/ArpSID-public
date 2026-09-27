@@ -23,7 +23,6 @@ int main() {
     const std::filesystem::path testFile = std::filesystem::path(__FILE__);
     const std::filesystem::path root = testFile.parent_path().parent_path().parent_path();
     const auto kernel = readText(root / "source/au3/ArpSIDDSPKernel.hpp");
-    const auto phase2 = readText(root / "source/arpsid_processor_phase2.h");
     const auto platform = readText(root / "include/arpsid/core/c64_platform.h");
     const auto bus = readText(root / "include/arpsid/core/c64_bus.h");
     const auto bridge = readText(root / "include/arpsid/core/c64_sid_projection_bridge.h");
@@ -36,7 +35,6 @@ int main() {
     };
 
     require(!kernel.empty(), "failed to read ArpSIDDSPKernel.hpp");
-    require(!phase2.empty(), "failed to read arpsid_processor_phase2.h");
     require(!platform.empty(), "failed to read c64_platform.h");
     require(!bus.empty(), "failed to read c64_bus.h");
     require(!bridge.empty(), "failed to read c64_sid_projection_bridge.h");
@@ -61,8 +59,6 @@ int main() {
             "observer path needs a projection-tagged scheduler");
     require(contains(bridge, "scheduleProjectionMirrorCpuWrite(address, value, phi2Offset)"),
             "host-timed observer writes must stay queued, including sample-zero writes");
-    require(contains(phase2, "void runtimeMirrorAppliedProjectionWrite(uint8_t, uint8_t, uint32_t, uint16_t) noexcept {}"),
-            "Phase2 target must satisfy canonical applied-write observer contract");
 
     if (failures != 0) return 1;
     std::cout << "C64ProjectionMirrorAuthorityV876SourceTests PASS\n";

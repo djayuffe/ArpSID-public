@@ -96,7 +96,6 @@ void test_source_contract_no_stale_mode_switch_or_cleanup() {
     const std::string root = ARPSID_SOURCE_ROOT;
     const std::string vc = readFile((root + "/source/au3/ArpSIDViewController.mm").c_str());
     const std::string kernel = readFile((root + "/source/au3/ArpSIDDSPKernel.hpp").c_str());
-    const std::string phase2 = readFile((root + "/source/arpsid_processor_phase2.cpp").c_str());
     const std::string model = readFile((root + "/include/arpsid/core/sid_runtime_model.h").c_str());
 
     requireContains(vc, "const float arp = 0.f;\n    const float seq = modeIsDrSid",
@@ -109,10 +108,6 @@ void test_source_contract_no_stale_mode_switch_or_cleanup() {
                     "AU3 sequencer must use effective SEQ helper");
     requireContains(kernel, "seqEngine_.resetPhase();\n        prevSeqEnabled_ = false;",
                     "AU3 mode transition must reset sequencer phase and enabled latch");
-    requireContains(phase2, "const bool seqEnabled = ArpSID::sidEffectiveSeqAuthorityFromLiveParams(paramValues);",
-                    "Phase2 sequencer must use effective SEQ helper");
-    requireContains(phase2, "const bool arpMode = ArpSID::sidEffectiveArpAuthorityFromLiveParams(paramValues);",
-                    "Phase2 virtual gate must use the shared effective ARP helper");
     const std::string renderHost = readFile((root + "/include/arpsid/core/sid_runtime_render_host.h").c_str());
     requireContains(renderHost, "if (bank.bitPerfect) bank.bitPerfect->allNotesOff();",
                     "mode transition helper must silence latent BitPerfect voices");

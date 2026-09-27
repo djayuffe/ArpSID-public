@@ -35,7 +35,7 @@ static void requireContains(const std::string& s, const char* needle) {
 int main() {
     const std::string kernel = readFile("source/au3/ArpSIDDSPKernel.hpp");
     const std::string adapterH = readFile("source/au3/ArpSIDDSPKernelAdapter.h");
-    const std::string adapterMM = readFile("source/au3/ArpSIDDSPKernelAdapter.mm");
+    const std::string adapterMM = readFile("source/au3/ArpSIDDSPKernelAdapter.mm") + readFile("source/au3/ArpSIDKernelTelemetryFill.h");
     const std::string telemetry = readFile("source/common/arpsid_telemetry_snapshot.h");
     const std::string gui = readFile("source/au3/ArpSIDViewController.mm");
 

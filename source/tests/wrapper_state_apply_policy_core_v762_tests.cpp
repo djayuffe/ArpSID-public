@@ -50,12 +50,9 @@ void testCanonicalMapping() {
 
 void testWrappersDoNotOwnPolicyTable() {
     const std::string au = readText("source/au3/ArpSIDDSPKernel.hpp");
-    const std::string vst = readText("source/arpsid_processor_phase2.h");
 
     require(au.find("#include \"arpsid/core/sid_runtime_state_apply_policy.h\"") != std::string::npos,
             "AU wrapper must include the canonical state-apply policy header");
-    require(vst.find("#include \"arpsid/core/sid_runtime_state_apply_policy.h\"") != std::string::npos,
-            "VST wrapper must include the canonical state-apply policy header");
 
     require(au.find("enum class StateApplyReason") == std::string::npos,
             "AU wrapper must not own a StateApplyReason enum table");

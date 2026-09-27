@@ -297,7 +297,7 @@ void testScheduledBridgeTelemetry() {
 void testSourceWiring() {
     const std::string kernel = readFile("source/au3/ArpSIDDSPKernel.hpp");
     const std::string snapshot = readFile("source/common/arpsid_telemetry_snapshot.h");
-    const std::string adapter = readFile("source/au3/ArpSIDDSPKernelAdapter.mm");
+    const std::string adapter = readFile("source/au3/ArpSIDDSPKernelAdapter.mm") + readFile("source/au3/ArpSIDKernelTelemetryFill.h");
     const std::string view = readFile("source/au3/ArpSIDViewController.mm");
 
     requireContains(kernel, "sid808OutputTelemetry()", "kernel must read SID808 bridge telemetry");

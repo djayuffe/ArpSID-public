@@ -10,7 +10,9 @@
 #include "parameter_ids.h"
 #include "arpsid/core/sid_runtime_host_ops.h"
 #include "arpsid/patchbank/forensic_patch_bank.h"
-#include "arpsid_telemetry_iface.h"
+#include "vst3/arpsid_vst3_kernel_host.h"
+#include "au3/ArpSIDDSPKernel.hpp"
+#include "arpsid/gui/digi_record_limits.h"
 #include "public.sdk/source/vst/vsteditcontroller.h"
 
 #include <algorithm>
@@ -26,15 +28,6 @@ using Steinberg::Vst::EditController;
 using Steinberg::Vst::ParamID;
 using Steinberg::Vst::ParamValue;
 
-namespace ArpSID {
-static std::atomic<IArpSIDTelemetryProvider*> gActiveTelemetryProvider { nullptr };
-void arpsidSetActiveTelemetryProvider(IArpSIDTelemetryProvider* provider) noexcept {
-    gActiveTelemetryProvider.store(provider, std::memory_order_release);
-}
-IArpSIDTelemetryProvider* arpsidGetActiveTelemetryProvider() noexcept {
-    return gActiveTelemetryProvider.load(std::memory_order_acquire);
-}
-}
 
 @interface ArpSIDVSTPreset : NSObject
 @property(nonatomic) NSInteger number;
@@ -83,12 +76,17 @@ IArpSIDTelemetryProvider* arpsidGetActiveTelemetryProvider() noexcept {
 - (void)broadcastParameter:(int)pid value:(float)value;
 @end
 
+// The VST3 counterpart of ArpSIDDSPKernelAdapter: the same selectors the
+// ArpSIDViewController uses under AU, implemented on the processor's
+// Vst3KernelHost (same engine, same GUI models, same persistence).
 @interface ArpSIDVSTDebugAdapter : NSObject
 @property(nonatomic, weak) ArpSIDVSTBridge* bridge;
 - (void)readTelemetry:(ArpSIDTelemetry*)out;
 - (void)readTelemetry:(ArpSIDTelemetry*)out includeScopes:(BOOL)includeScopes;
+- (void)readTelemetry:(ArpSIDTelemetry*)out includeScopes:(BOOL)includeScopes includeC64Snapshot:(BOOL)includeC64Snapshot;
 - (int)readOscilloscope:(float*)buf maxSamples:(int)maxSamples;
 - (void)readVCOScope:(float*)vco0 vco1:(float*)vco1 vco2:(float*)vco2;
+- (ArpSID::ArpSIDDSPKernel*)kernelPtr;
 @end
 
 @interface ArpSIDVSTBridge : NSObject
@@ -105,6 +103,8 @@ IArpSIDTelemetryProvider* arpsidGetActiveTelemetryProvider() noexcept {
 - (void)setCurrentPreset:(ArpSIDVSTPreset*)preset;
 - (void)pollParameterObservers;
 - (void)writeSIDRegister:(uint8_t)regIndex value:(uint8_t)value;
+- (ArpSID::Vst3KernelHost*)kernelHost;
+- (void)markStateDirty;
 @end
 
 @implementation ArpSIDVSTParameter
@@ -166,70 +166,202 @@ IArpSIDTelemetryProvider* arpsidGetActiveTelemetryProvider() noexcept {
 @end
 
 @implementation ArpSIDVSTDebugAdapter
-- (void)readTelemetry:(ArpSIDTelemetry*)out includeScopes:(BOOL)includeScopes {
+- (ArpSID::Vst3KernelHost*)_host { return [self.bridge kernelHost]; }
+- (ArpSID::ArpSIDDSPKernel*)kernelPtr {
+    ArpSID::Vst3KernelHost* h = [self _host];
+    return h ? &h->kernel() : nullptr;
+}
+- (void)readTelemetry:(ArpSIDTelemetry*)out includeScopes:(BOOL)includeScopes includeC64Snapshot:(BOOL)includeC64Snapshot {
     if (!out) return;
-    memset(out, 0, sizeof(*out));
-    out->lastMidiNote = -1;
-    out->hostTempo = 120.0;
-    auto* provider = ArpSID::arpsidGetActiveTelemetryProvider();
-    if (provider && provider->arpGetLatestFullTelemetry(*out, includeScopes ? true : false)) {
-        [self.bridge pollParameterObservers];
-        return;
+    ArpSID::Vst3KernelHost* h = [self _host];
+    if (h) {
+        h->pollNonRealtime();
+        h->readTelemetry(*out, includeScopes ? true : false, includeC64Snapshot ? true : false);
+    } else {
+        memset(out, 0, sizeof(*out));
+        out->lastMidiNote = -1;
+        out->hostTempo = 120.0;
     }
-    [self readTelemetry:out];
+    [self.bridge pollParameterObservers];
+}
+- (void)readTelemetry:(ArpSIDTelemetry*)out includeScopes:(BOOL)includeScopes {
+    [self readTelemetry:out includeScopes:includeScopes includeC64Snapshot:YES];
 }
 - (void)readTelemetry:(ArpSIDTelemetry*)out {
-    if (!out) return;
-    memset(out, 0, sizeof(*out));
-    auto* provider = ArpSID::arpsidGetActiveTelemetryProvider();
-    if (!provider) return;
-    if (provider->arpGetLatestFullTelemetry(*out, true)) {
-        [self.bridge pollParameterObservers];
-        return;
-    }
-    ArpSID::MeterSnapshot snap{};
-    if (!provider->arpGetLatestSnapshot(snap)) provider->arpGetTelemetryShadowSnapshot(snap);
-    out->peakL = std::clamp(std::isfinite(snap.peakL) ? snap.peakL : 0.0f, 0.0f, 1.0f);
-    out->peakR = std::clamp(std::isfinite(snap.peakR) ? snap.peakR : 0.0f, 0.0f, 1.0f);
-    out->rmsL = std::clamp(std::isfinite(snap.rmsL) ? snap.rmsL : 0.0f, 0.0f, 1.0f);
-    out->rmsR = std::clamp(std::isfinite(snap.rmsR) ? snap.rmsR : 0.0f, 0.0f, 1.0f);
-    out->activeVoices = snap.activeVoices;
-    out->arpStep = snap.arpStep;
-    out->lastMidiNote = (int)snap.lastMidiNote;
-    out->hostTempo = 120.0;
-    out->hostBeat = 0.0;
-    out->hostPlaying = snap.arpPlaying;
-    for (size_t i = 0; i < snap.sidRegs.size() && i < 30; ++i) out->sidRegs[i] = snap.sidRegs[i];
-    [self.bridge pollParameterObservers];
+    [self readTelemetry:out includeScopes:YES includeC64Snapshot:YES];
 }
 - (int)readOscilloscope:(float*)buf maxSamples:(int)maxSamples {
     if (!buf || maxSamples <= 0) return 0;
-    memset(buf, 0, (size_t)maxSamples * sizeof(float));
-    auto* provider = ArpSID::arpsidGetActiveTelemetryProvider();
-    ArpSIDTelemetry tel{};
-    int copied = 0;
-    if (provider && provider->arpGetLatestFullTelemetry(tel, true)) {
-        copied = std::min(maxSamples, (int)std::min<uint32_t>(tel.mainOscScopeCount, 512u));
-        for (int i = 0; i < copied; ++i)
-            buf[i] = std::clamp(std::isfinite(tel.mainOscScope[i]) ? tel.mainOscScope[i] : 0.0f, -1.0f, 1.0f);
-    }
-    [self.bridge pollParameterObservers];
-    return copied;
+    ArpSID::ArpSIDDSPKernel* k = [self kernelPtr];
+    if (!k) { memset(buf, 0, (size_t)maxSamples * sizeof(float)); return 0; }
+    const int n = k->readOscilloscope(buf, maxSamples);
+    for (int i = 0; i < n; ++i) buf[i] = std::isfinite(buf[i]) ? std::clamp(buf[i], -1.25f, 1.25f) : 0.0f;
+    return n;
 }
 - (void)readVCOScope:(float*)vco0 vco1:(float*)vco1 vco2:(float*)vco2 {
-    if (vco0) memset(vco0, 0, 256 * sizeof(float));
-    if (vco1) memset(vco1, 0, 256 * sizeof(float));
-    if (vco2) memset(vco2, 0, 256 * sizeof(float));
-    auto* provider = ArpSID::arpsidGetActiveTelemetryProvider();
-    ArpSIDTelemetry tel{};
-    if (provider && provider->arpGetLatestFullTelemetry(tel, true)) {
-        for (int i = 0; i < 256; ++i) {
-            if (vco0) vco0[i] = std::clamp(std::isfinite(tel.vcoScope[0][i]) ? tel.vcoScope[0][i] : 0.0f, -1.0f, 1.0f);
-            if (vco1) vco1[i] = std::clamp(std::isfinite(tel.vcoScope[1][i]) ? tel.vcoScope[1][i] : 0.0f, -1.0f, 1.0f);
-            if (vco2) vco2[i] = std::clamp(std::isfinite(tel.vcoScope[2][i]) ? tel.vcoScope[2][i] : 0.0f, -1.0f, 1.0f);
+    static const int kScope = 256;
+    float* dst[3] = { vco0, vco1, vco2 };
+    ArpSID::ArpSIDDSPKernel* k = [self kernelPtr];
+    if (!k) {
+        for (float* d : dst) if (d) memset(d, 0, kScope * sizeof(float));
+        return;
+    }
+    k->notePresentationScopeRequest();
+    static thread_local float oscBuf[3][kScope];
+    uint8_t activeMask = 0;
+    uint32_t writePos = 0;
+    k->getPresentationOscScopeSnapshot(oscBuf, activeMask, writePos);
+    const uint32_t wp = writePos & 255u;
+    for (int v = 0; v < 3; ++v) {
+        if (!dst[v]) continue;
+        for (int i = 0; i < kScope; ++i) {
+            const float x = oscBuf[v][(wp + (uint32_t)i) & 255u];
+            dst[v][i] = std::isfinite(x) ? std::clamp(x, -1.25f, 1.25f) : 0.0f;
         }
     }
-    [self.bridge pollParameterObservers];
+}
+- (void)readDiagnosticCounters:(ArpSID::GUI::ArpSIDDiagnosticCounterSnapshot*)out {
+    if (!out) return;
+    *out = ArpSID::GUI::ArpSIDDiagnosticCounterSnapshot{};
+    if (ArpSID::ArpSIDDSPKernel* k = [self kernelPtr]) k->collectDiagnosticCounters(*out);
+}
+- (void)setSidCorePanelModel:(ArpSID::GUI::SidCorePanelModel*)model {
+    if (ArpSID::ArpSIDDSPKernel* k = [self kernelPtr]) k->setSidCorePanelModel(model);
+}
+- (void)getSettingsModel:(ArpSID::GUI::SettingsPanelModel*)out {
+    if (!out) return;
+    ArpSID::Vst3KernelHost* h = [self _host];
+    *out = h ? h->settings() : ArpSID::GUI::makeDefaultSettings();
+}
+- (void)setSettingsModel:(const ArpSID::GUI::SettingsPanelModel*)m {
+    ArpSID::Vst3KernelHost* h = [self _host];
+    if (!m || !h) return;
+    h->setSettings(*m);
+    [self.bridge markStateDirty];
+}
+- (void)getKitStateBlob:(ArpSID::GUI::KitStateBlob*)out {
+    if (!out) return;
+    ArpSID::Vst3KernelHost* h = [self _host];
+    *out = h ? h->kit() : ArpSID::GUI::makeDefaultKitStateBlob();
+}
+- (void)setKitStateBlob:(const ArpSID::GUI::KitStateBlob*)b {
+    ArpSID::Vst3KernelHost* h = [self _host];
+    if (!b || !h) return;
+    h->setKit(*b);
+    [self.bridge markStateDirty];
+}
+- (void)getMixModel:(ArpSID::GUI::MixPanelModel*)out {
+    if (!out) return;
+    ArpSID::Vst3KernelHost* h = [self _host];
+    *out = h ? h->mix() : ArpSID::GUI::makeDefaultMixModel();
+}
+- (void)setMixModel:(const ArpSID::GUI::MixPanelModel*)m {
+    ArpSID::Vst3KernelHost* h = [self _host];
+    if (!m || !h) return;
+    h->setMix(*m);
+    [self.bridge markStateDirty];
+}
+- (void)getDigiModel:(ArpSID::GUI::DigiPanelModel*)model sampleBank:(ArpSID::GUI::DigiSampleBankBlob*)bank {
+    if (!model || !bank) return;
+    ArpSID::Vst3KernelHost* h = [self _host];
+    if (h) {
+        h->digi(*model, *bank);
+    } else {
+        *model = ArpSID::GUI::makeDefaultDigiPanelModel();
+        ArpSID::GUI::resetDigiSampleBankBlob(*bank);
+    }
+}
+- (void)setDigiModel:(const ArpSID::GUI::DigiPanelModel*)model sampleBank:(const ArpSID::GUI::DigiSampleBankBlob*)bank {
+    ArpSID::Vst3KernelHost* h = [self _host];
+    if (!model || !bank || !h) return;
+    h->setDigi(*model, *bank);
+    [self.bridge markStateDirty];
+}
+- (BOOL)setDigiUserSampleForSlot:(NSInteger)slot
+                         samples:(const float*)samples
+                      frameCount:(NSUInteger)frameCount
+                      sampleRate:(double)sampleRate
+                            name:(NSString*)name {
+    ArpSID::Vst3KernelHost* h = [self _host];
+    if (!h) return NO;
+    const uint32_t frames = (uint32_t)std::min<NSUInteger>(frameCount, (NSUInteger)UINT32_MAX);
+    const BOOL ok = h->setDigiUserSample((int)slot, samples, frames, sampleRate, name ? name.UTF8String : nullptr) ? YES : NO;
+    if (ok) [self.bridge markStateDirty];
+    return ok;
+}
+- (void)setDigiD418RuntimeMode:(uint8_t)mode rateHz:(uint32_t)rateHz {
+    if (ArpSID::Vst3KernelHost* h = [self _host]) { h->setDigiD418RuntimeMode(mode, rateHz); [self.bridge markStateDirty]; }
+}
+- (void)getDigiD418RuntimeMode:(uint8_t*)mode rateHz:(uint32_t*)rateHz {
+    uint8_t m = 0; uint32_t r = 0;
+    if (ArpSID::Vst3KernelHost* h = [self _host]) h->digiD418RuntimeMode(m, r);
+    if (mode) *mode = m;
+    if (rateHz) *rateHz = r;
+}
+- (void)clearDigiD418RuntimeTelemetry {
+    if (ArpSID::Vst3KernelHost* h = [self _host]) h->clearDigiD418Telemetry();
+}
+- (void)triggerDigiPadSlot:(uint8_t)slot velocity:(uint8_t)velocity {
+    if (ArpSID::Vst3KernelHost* h = [self _host]) h->triggerDigiPad(slot, velocity);
+}
+- (BOOL)drainQueuedDrumBridgeSlotLoadNonRealtime {
+    ArpSID::ArpSIDDSPKernel* k = [self kernelPtr];
+    return (k && k->drainQueuedDrumBridgeSlotLoadNonRealtime()) ? YES : NO;
+}
+- (void)setDigiMidiPadRootNote:(uint8_t)rootNote channelFilter:(uint8_t)channelFilter {
+    if (ArpSID::Vst3KernelHost* h = [self _host]) { h->setDigiMidiPadMapping(rootNote, channelFilter); [self.bridge markStateDirty]; }
+}
+- (void)getDigiMidiPadRootNote:(uint8_t*)rootNote channelFilter:(uint8_t*)channelFilter {
+    uint8_t r = 36, c = 16;
+    if (ArpSID::Vst3KernelHost* h = [self _host]) h->digiMidiPadMapping(r, c);
+    if (rootNote) *rootNote = r;
+    if (channelFilter) *channelFilter = c;
+}
+- (void)setPureSid1Q1OutputMode:(BOOL)enabled {
+    if (ArpSID::Vst3KernelHost* h = [self _host]) { h->setPureSid1Q1OutputMode(enabled ? true : false); [self.bridge markStateDirty]; }
+}
+- (BOOL)pureSid1Q1OutputMode {
+    ArpSID::Vst3KernelHost* h = [self _host];
+    return (h && h->pureSid1Q1OutputMode()) ? YES : NO;
+}
+- (BOOL)startPureSid1Q1RecordCapture:(NSUInteger)maxFrames {
+    ArpSID::ArpSIDDSPKernel* k = [self kernelPtr];
+    if (!k) return NO;
+    return k->startPureSid1Q1RecordCapture((uint32_t)std::min<NSUInteger>(maxFrames, ArpSID::GUI::kDigiRecordCaptureMaxFrames)) ? YES : NO;
+}
+- (BOOL)copyAndStopPureSid1Q1RecordCapture:(float*)dst
+                                  maxFrames:(NSUInteger)maxFrames
+                                 frameCount:(NSUInteger*)frameCount
+                                 sampleRate:(double*)sampleRate
+                              droppedFrames:(NSUInteger*)droppedFrames {
+    ArpSID::ArpSIDDSPKernel* k = [self kernelPtr];
+    if (!k) return NO;
+    uint32_t frames = 0u, drops = 0u;
+    double sr = 44100.0;
+    const bool ok = k->copyAndStopPureSid1Q1RecordCapture(
+        dst, (uint32_t)std::min<NSUInteger>(maxFrames, ArpSID::GUI::kDigiRecordCaptureMaxFrames), &frames, &sr, &drops);
+    if (frameCount) *frameCount = (NSUInteger)frames;
+    if (sampleRate) *sampleRate = sr;
+    if (droppedFrames) *droppedFrames = (NSUInteger)drops;
+    return ok ? YES : NO;
+}
+- (BOOL)pureSid1Q1RecordCaptureStatusFrames:(NSUInteger*)frameCount
+                                  sampleRate:(double*)sampleRate
+                               droppedFrames:(NSUInteger*)droppedFrames
+                                        peak:(float*)peak
+                                         rms:(float*)rms {
+    ArpSID::ArpSIDDSPKernel* k = [self kernelPtr];
+    if (!k) return NO;
+    uint32_t frames = 0u, drops = 0u;
+    double sr = 44100.0;
+    float p = 0.0f, r = 0.0f;
+    k->pureSid1Q1RecordCaptureStatus(&frames, &sr, &drops, &p, &r);
+    if (frameCount) *frameCount = (NSUInteger)frames;
+    if (sampleRate) *sampleRate = sr;
+    if (droppedFrames) *droppedFrames = (NSUInteger)drops;
+    if (peak) *peak = p;
+    if (rms) *rms = r;
+    return YES;
 }
 @end
 
@@ -312,6 +444,35 @@ IArpSIDTelemetryProvider* arpsidGetActiveTelemetryProvider() noexcept {
     if (!preset) return;
     _currentPreset = preset;
     [self setParameterValue:ArpSID::canonicalNormalizedBankSlotValue((int)preset.number) forID:ArpSID::kParamBankSlot];
+}
+- (ArpSID::Vst3KernelHost*)kernelHost {
+    return _controller ? ArpSID::arpsidControllerKernelHost(_controller) : nullptr;
+}
+- (void)markStateDirty {
+    if (_controller) ArpSID::arpsidControllerMarkStateDirty(_controller);
+}
+// AU-parity entry points the view controller probes with respondsToSelector:.
+- (id)kernelAdapter { return [self kernelHost] ? _debugAdapter : nil; }
+- (NSInteger)componentFlavor { return 0; }
+- (void)performC64ControlHubCommand:(NSInteger)command {
+    if (ArpSID::Vst3KernelHost* h = [self kernelHost]) h->c64ControlHubCommand((int)command);
+}
+- (BOOL)loadSidFileData:(NSData*)data { return [self loadSidFileData:data subtune:0u]; }
+- (BOOL)loadSidFileData:(NSData*)data subtune:(uint16_t)subtune {
+    ArpSID::Vst3KernelHost* h = [self kernelHost];
+    if (!h || !data.length) return NO;
+    return h->loadSidFile(data.bytes, (size_t)data.length, subtune) ? YES : NO;
+}
+- (void)unloadSidFile {
+    if (ArpSID::Vst3KernelHost* h = [self kernelHost]) h->unloadSidFile();
+}
+- (void)resetC64SidPlayerForEject {
+    if (ArpSID::Vst3KernelHost* h = [self kernelHost]) h->kernel().resetC64SidPlayerForEject();
+}
+- (BOOL)applyUserFactoryPresetNumber:(NSInteger)slot {
+    if (slot < 0 || slot > ArpSID::kCanonicalFactoryPatchSlotMax) return NO;
+    [self setParameterValue:ArpSID::canonicalNormalizedBankSlotValue((int)slot) forID:ArpSID::kParamBankSlot];
+    return YES;
 }
 - (void)pollParameterObservers {
     [self _refreshCurrentPresetFromProgram];

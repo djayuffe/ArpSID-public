@@ -29,15 +29,11 @@ std::string readFile(const char* path) {
 void requireContains(const std::string& s, const char* needle, const char* msg) {
     require(s.find(needle) != std::string::npos, msg);
 }
-void requireAbsent(const std::string& s, const char* needle, const char* msg) {
-    require(s.find(needle) == std::string::npos, msg);
-}
 }
 
 int main() {
     const std::string root = ARPSID_SOURCE_ROOT;
     const std::string renderHost = readFile((root + "/include/arpsid/core/sid_runtime_render_host.h").c_str());
-    const std::string phase2 = readFile((root + "/source/arpsid_processor_phase2.cpp").c_str());
     const std::string au3 = readFile((root + "/source/au3/ArpSIDDSPKernel.hpp").c_str());
     const std::string factory = readFile((root + "/source/factory_patch_params.h").c_str());
 
@@ -50,12 +46,6 @@ int main() {
     requireContains(renderHost, "target.runtimeModel().setSeqStep(0);",
                     "shared transition helper must reset SEQ step");
 
-    requireContains(phase2, "v942: Phase2 mode transitions must not destroy DrSID/SID808 kit state.",
-                    "Phase2 local transition must preserve DrSID/SID808 kit state");
-    requireContains(phase2, "ArpSID::runtimeRenderHostAllNotesOff(*this);\n    sidWriteQueue_().clear();",
-                    "Phase2 transition must silence performance authorities without backend reset");
-    requireAbsent(phase2, "resetRenderModeOutputNormalizer_();\n    ArpSID::runtimeRenderHostResetEngines(*this);\n    sidWriteQueue_().clear();",
-                  "Phase2 mode transition must not use full engine reset");
 
     requireContains(au3, "const bool effectiveSeqAfterTransition =\n            ArpSID::sidEffectiveSeqAuthorityFromLiveParams(renderParams_);",
                     "AU3 mode transition must compute effective SEQ before transport re-arm");

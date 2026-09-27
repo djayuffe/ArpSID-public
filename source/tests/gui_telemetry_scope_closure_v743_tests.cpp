@@ -66,7 +66,7 @@ int main() {
 
     const std::string vc = slurp("source/au3/ArpSIDViewController.mm");
     const std::string kernel = slurp("source/au3/ArpSIDDSPKernel.hpp");
-    const std::string adapter = slurp("source/au3/ArpSIDDSPKernelAdapter.mm");
+    const std::string adapter = slurp("source/au3/ArpSIDDSPKernelAdapter.mm") + slurp("source/au3/ArpSIDKernelTelemetryFill.h");
     const std::string telemetryHeader = slurp("source/common/arpsid_telemetry_snapshot.h");
     const std::string vstBridge = slurp("source/gui/arpsid_vst_cocoa_bridge.mm");
     const std::string vstEditor = slurp("source/gui/arpsid_vstgui_editor.h");
@@ -134,8 +134,8 @@ int main() {
             vc.find("OPENBUS READS  SID") != std::string::npos &&
             vc.find("obs S/C/P") != std::string::npos,
             "GUI visualizes PHI2 CPU and expanded open-bus diagnostics");
-    require(vstBridge.find("arpGetLatestFullTelemetry") != std::string::npos,
-            "VST Cocoa bridge consumes canonical full telemetry");
+    require(vstBridge.find("h->readTelemetry(*out,") != std::string::npos,
+            "VST Cocoa bridge consumes the shared kernel telemetry projection");
 
     std::cout << "GuiTelemetryScopeClosureV743Tests PASS\n";
     return 0;

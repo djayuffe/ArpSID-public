@@ -26,7 +26,7 @@ typedef struct {
 enum {
     kArpSIDProjectionMirrorBackendUnavailable       = 0, // no mirror sink exists
     kArpSIDProjectionMirrorBackendAU3Kernel         = 1, // AU3 kernel C64 telemetry mirror
-    kArpSIDProjectionMirrorBackendUnavailablePhase2 = 2, // VST3/Phase2: mirror intentionally not owned
+    kArpSIDProjectionMirrorBackendUnavailablePhase2 = 2, // retired Phase2 VST3 wrapper; value reserved
 };
 
 typedef struct {
@@ -390,8 +390,8 @@ typedef struct {
 
     // v909 telemetry-truth closure (appended to keep layout compatibility):
     // - projectionMirrorAvailable/projectionMirrorBackend: whether applied SID
-    //   projection writes reach a C64/SID telemetry mirror sink. VST3/Phase2
-    //   publishes an explicit "unavailable" instead of silently no-oping.
+    //   projection writes reach a C64/SID telemetry mirror sink (every wrapper
+    //   now runs the kernel, which owns the mirror).
     // - noOutputBusActive: this block rendered into scratch because the host
     //   provided no valid output bus; the engine/FX state still advanced.
     // - telemetryRepresentsHostOutput: meters/scope were captured from the

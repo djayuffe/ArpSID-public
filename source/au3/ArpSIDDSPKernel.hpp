@@ -5693,8 +5693,7 @@ public:
         }
     }
     void runtimePolicyApplyForensicConfig() noexcept {
-        // Rebuild forensic config from params and push to all backends, matching
-        // the VST3 path (ArpSIDProcessorPhase2::applyForensicConfig_).
+        // Rebuild forensic config from params and push to all backends.
         if (runtimeExecutionOwner_) runtimeExecutionOwner_->projectStateToBackends(false);
     }
 

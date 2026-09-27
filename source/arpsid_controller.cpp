@@ -6,8 +6,8 @@
 // • Register all kNumParams parameters with the VST3 host.
 // • Implement IEditController2 / IMidiMapping for MIDI CC → parameter bridging.
 // • Implement IProgramListData / IUnitInfo for the canonical 180-slot factory preset bank.
-// • Provide IArpSIDTelemetryProvider query routing so the GUI can read meters.
-// • Connect to the processor's shared-component (IComponent) for live communication.
+// • Receive the processor's Vst3KernelHost (same process only) so the editor
+//   reads telemetry and edits the non-parameter GUI models like the AU editor.
 //
 // NOTE: This file is #included as a single translation unit by factory.cpp.
 // Do NOT add it to the CMake PLUGIN_SOURCES list as a separate .cpp.
@@ -25,7 +25,7 @@
 #include "base/source/fstreamer.h"
 
 #include "parameter_ids.h"
-#include "arpsid_telemetry_iface.h"
+#include "vst3/arpsid_vst3_kernel_host.h"
 #include "arpsid/patchbank/forensic_patch_bank.h"
 #include "arpsid_preset_bank.h"
 #include "arpsid/core/sid_parameter_presentation.h"
@@ -37,6 +37,12 @@
 #include "factory_patch_params.h"
 #include "pluginterfaces/vst/ivstmessage.h"
 #include "base/source/fobject.h"
+
+#if defined(_WIN32)
+#include <process.h>
+#else
+#include <unistd.h>
+#endif
 
 #include <array>
 #include <string>
@@ -85,6 +91,7 @@ public:
     }
 
     tresult PLUGIN_API terminate() override {
+        kernelHost_ = nullptr;
         editorView_ = nullptr;
         livePushFn_ = nullptr;
         livePushUser_ = nullptr;
@@ -140,25 +147,70 @@ public:
     // Processor state -> controller parameters (project load, undo, duplicate).
     tresult PLUGIN_API setComponentState(IBStream* state) override {
         if (!state) return kResultFalse;
-        IBStreamer s(state, kLittleEndian);
-        uint32 version = 0;
-        if (!s.readInt32u(version)) return kResultFalse;
         int64 end = 0;
         if (state->seek(0, IBStream::kIBSeekEnd, &end) != kResultOk) return kResultFalse;
         if (end <= (int64)sizeof(uint32) || end > (int64)(64 * 1024 * 1024)) return kResultFalse;
-        state->seek(sizeof(uint32), IBStream::kIBSeekSet, nullptr);
-        std::vector<uint8_t> blob((size_t)(end - (int64)sizeof(uint32)));
+        state->seek(0, IBStream::kIBSeekSet, nullptr);
+        std::vector<uint8_t> bytes((size_t)end);
         int32 nRead = 0;
-        if (state->read(blob.data(), (int32)blob.size(), &nRead) != kResultOk || nRead <= 0)
+        if (state->read(bytes.data(), (int32)bytes.size(), &nRead) != kResultOk || nRead <= 0)
             return kResultFalse;
-        const uint32_t magic = (version >= 4u) ? kSidBinaryStateMagic : kSidBinaryPatchStateMagic;
         SidStateRootV1 root{};
-        if (!decodeStateToRoot(blob.data(), (size_t)nRead, root, magic)) return kResultFalse;
-        sanitizePersistentStateRootForSerialization(root);
-        if (!root.valid()) return kResultFalse;
+        if (!Vst3KernelHost::decodeStateRoot(bytes.data(), (size_t)nRead, root)) return kResultFalse;
         mirrorStateRootToParameters_(root, /*notifyHost*/ false);
         return kResultOk;
     }
+
+    // ── Processor link ──────────────────────────────────────────────────────
+    tresult PLUGIN_API connect(IConnectionPoint* other) override {
+        const tresult result = EditController::connect(other);
+        if (result == kResultOk) {
+            if (IPtr<IMessage> msg = owned(allocateMessage())) {
+                msg->setMessageID(kVstMsgRequestKernelHost);
+                sendMessage(msg);
+            }
+        }
+        return result;
+    }
+
+    tresult PLUGIN_API disconnect(IConnectionPoint* other) override {
+        kernelHost_ = nullptr;
+        return EditController::disconnect(other);
+    }
+
+    tresult PLUGIN_API notify(IMessage* message) override {
+        if (message && message->getMessageID() &&
+            FIDStringsEqual(message->getMessageID(), kVstMsgKernelHost)) {
+            int64 ptr = 0, pid = 0;
+            IAttributeList* attrs = message->getAttributes();
+            if (attrs && attrs->getInt(kVstMsgAttrHostPtr, ptr) == kResultOk &&
+                attrs->getInt(kVstMsgAttrPid, pid) == kResultOk && pid == currentProcessId_() && ptr != 0)
+                kernelHost_ = reinterpret_cast<Vst3KernelHost*>(static_cast<std::uintptr_t>(ptr));
+            return kResultOk;
+        }
+        return EditController::notify(message);
+    }
+
+    // The processor's kernel host when it runs in this process, else nullptr
+    // (the editor then falls back to parameter-only operation).
+    Vst3KernelHost* kernelHost() const noexcept { return kernelHost_; }
+
+    // Editor model edits change the saved state without a parameter change.
+    void markStateDirty() {
+        if (!componentHandler) return;
+        FUnknownPtr<IComponentHandler2> handler2(componentHandler);
+        if (handler2) handler2->setDirty(true);
+    }
+
+    // Editor preset pick: same path as a host program selection.
+    void selectFactoryPatch(int slot) {
+        const ParamValue norm = (ParamValue)canonicalNormalizedBankSlotValue(std::clamp(slot, 0, kCanonicalFactoryPatchSlotMax));
+        beginEdit((ParamID)kParamBankSlot);
+        setParamNormalized((ParamID)kParamBankSlot, norm);
+        performEdit((ParamID)kParamBankSlot, norm);
+        endEdit((ParamID)kParamBankSlot);
+    }
+    int loadedFactorySlot() const noexcept { return loadedFactorySlot_; }
 
     // Editor on-screen keyboard -> processor (see arpsid_vst_messages.h).
     void sendUiMidi(uint8_t status, uint8_t data1, uint8_t data2) {
@@ -413,8 +465,17 @@ private:
             componentHandler->restartComponent(kParamValuesChanged);
     }
 
+    static int64 currentProcessId_() noexcept {
+#if defined(_WIN32)
+        return (int64)_getpid();
+#else
+        return (int64)getpid();
+#endif
+    }
+
     bool mirroringState_ = false;
     int loadedFactorySlot_ = -1;
+    Vst3KernelHost* kernelHost_ = nullptr;
 
     void pushLiveParam_(Steinberg::Vst::ParamID id, Steinberg::Vst::ParamValue value) noexcept {
         if (livePushFn_)
@@ -426,5 +487,15 @@ private:
     Steinberg::IPtr<Steinberg::IPlugView> editorView_;
     std::vector<UnitInfo> units_;
 };
+
+Vst3KernelHost* arpsidControllerKernelHost(void* editController) noexcept {
+    auto* c = static_cast<ArpSIDControllerPhase3*>(static_cast<EditController*>(editController));
+    return c ? c->kernelHost() : nullptr;
+}
+
+void arpsidControllerMarkStateDirty(void* editController) noexcept {
+    if (auto* c = static_cast<ArpSIDControllerPhase3*>(static_cast<EditController*>(editController)))
+        c->markStateDirty();
+}
 
 } // namespace ArpSID

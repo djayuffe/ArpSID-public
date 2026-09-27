@@ -43,13 +43,10 @@ void testRuntimeSurfaceNames() {
 }
 
 void testNoCompatibilityBypassCallers() {
-    const std::string proc = readText("source/arpsid_processor_phase2.cpp");
     const std::string reset = readText("include/arpsid/core/sid_runtime_reset_policy.h");
     const std::string forensic = readText("source/tests/sid_forensic_acceptance.cpp");
     const std::string closure = readText("source/tests/closure_regression_tests.cpp");
 
-    require(proc.find(".dynamicState()") == std::string::npos,
-            "legacy processor must not use generic mutable dynamicState()");
     require(forensic.find(".dynamicState()") == std::string::npos,
             "tests that mutate dynamic state must use the explicit internal spelling");
     require(reset.find("pendingEvents().reset()") == std::string::npos,

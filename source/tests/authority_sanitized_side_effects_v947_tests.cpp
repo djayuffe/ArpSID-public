@@ -43,7 +43,6 @@ static void requireAbsent(const std::string& hay, const std::string& needle, con
 
 int main() {
     const std::string au3 = readFile("source/au3/ArpSIDDSPKernel.hpp");
-    const std::string phase2 = readFile("source/arpsid_processor_phase2.cpp");
     const std::string services = readFile("include/arpsid/core/sid_runtime_parameter_services.h");
 
     requireContains(au3,
@@ -59,24 +58,6 @@ int main() {
         "runtimeApplyProjectedBackendParameter(*this, target, value)) {\n            (void)ArpSID::runtimeApplyProjectedAdapterPolicyParameter(*this, target, value)",
         "AU3 must not pass the raw value into backend/policy after staging");
 
-    requireContains(phase2,
-        "const float clean = ArpSID::sanitizeNormalizedParamValue(",
-        "Phase2 projected parameter body must compute a sanitized clean value before skip/backend");
-    requireContains(phase2,
-        "std::fabs(lastAppliedParamValues[(size_t)id] - clean) < 1e-6f",
-        "Phase2 duplicate guard must compare sanitized clean values");
-    requireContains(phase2,
-        "const float stagedClean = paramValues[(size_t)id];",
-        "Phase2 backend side effects must use the staged canonical value");
-    requireContains(phase2,
-        "runtimeApplyProjectedBackendParameter(*this, target, stagedClean)",
-        "Phase2 backend side effects must receive stagedClean");
-    requireContains(phase2,
-        "runtimeApplyProjectedAdapterPolicyParameter(*this, target, stagedClean)",
-        "Phase2 policy side effects must receive stagedClean");
-    requireAbsent(phase2,
-        "lastAppliedParamValues[(size_t)id] = value;\n\n    runtimeStageNormalizedParameterOnly(target, value);\n\n    const bool backendHandled = ArpSID::runtimeApplyProjectedBackendParameter(*this, target, value);",
-        "Phase2 must not keep raw-value duplicate/backend law");
 
     requireContains(services,
         "const float clean = sanitizeNormalizedParamValue(",

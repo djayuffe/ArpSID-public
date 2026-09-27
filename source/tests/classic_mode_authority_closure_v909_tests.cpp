@@ -268,9 +268,6 @@ void test_synthmode_transport_reset_authority_source_contract() {
             sharedKernel.find("if (runtime.isArpEnabled()) {\n        surface.arpNoteOff"),
             "canonical NoteOff path must release SynthMode before Arp fallback");
 
-    const std::string phase2 = readFile(ARPSID_SOURCE_ROOT "/source/arpsid_processor_phase2.cpp");
-    requireContains(phase2, "const bool arpMode = ArpSID::sidEffectiveArpAuthorityFromLiveParams(paramValues);",
-                    "Phase2/VST virtual-gate arp authority must use shared effective ARP helper");
     requireContains(kernel, "return ArpSID::sidEffectiveArpAuthorityFromLiveParams(renderParams_);",
                     "AU3 runtimeIsArpEnabled must delegate to shared effective ARP authority helper");
     const std::string runtimeModel = readFile(ARPSID_SOURCE_ROOT "/include/arpsid/core/sid_runtime_model.h");
@@ -288,14 +285,8 @@ void test_synthmode_transport_reset_authority_source_contract() {
                     "AU3 BitPerfect cleanup must use shared effective SEQ authority helper");
     requireContains(kernel, "const bool directPoly =\n                directPolyMode == ArpSID::SidRuntimeRenderMode::BitPerfect &&\n                bpe->voiceModeIndex() == 0 &&\n                !effectiveDirectPolyArp &&\n                !effectiveDirectPolySeq;",
                     "AU3 BitPerfect direct-poly cleanup must not be poisoned by stale ARP/SEQ outside BitPerfect authority");
-    requireContains(phase2, "const bool directSynth =\n        resolveTopLevelRenderMode_() == ArpSID::SidRuntimeRenderMode::SidRegister;",
-                    "Phase2 SynthMode orphan cleanup must not be disabled by stale raw ArpEnable/SeqEnable");
     requireContains(kernel, "runtimeStageNormalizedParameterOnly(static_cast<uint32_t>(kParamArpEnable), 0.0f);\n                runtimeStageNormalizedParameterOnly(static_cast<uint32_t>(kParamSeqEnable), 0.0f);\n                runtimeModel_.setArpActiveFlag(false);",
                     "AU3 entering SynthMode must clear stale ARP/SEQ authority immediately");
-    requireContains(phase2, "runtimeStageNormalizedParameterOnly(static_cast<uint32_t>(kParamArpEnable), 0.0f);\n        runtimeStageNormalizedParameterOnly(static_cast<uint32_t>(kParamSeqEnable), 0.0f);",
-                    "Phase2 entering SynthMode must clear stale ARP/SEQ authority immediately through canonical staging");
-    requireContains(phase2, "runtimeModel_.setArpActiveFlag(ArpSID::sidEffectiveArpAuthorityFromLiveParams(paramValues));",
-                    "Phase2 runtimeModel arp-active telemetry must use shared effective ARP helper");
     const std::string backendProjection = readFile(ARPSID_SOURCE_ROOT "/include/arpsid/core/sid_runtime_backend_projection.h");
     requireContains(backendProjection, "const bool effectiveArpAuthority = sidEffectiveArpAuthorityFromLiveParams(params);",
                     "backend projection must use shared effective ARP authority helper");
@@ -324,14 +315,6 @@ void test_synthmode_transport_reset_authority_source_contract() {
                     "AU3 telemetry snapshot must read the published effective-ARP atomic");
     requireContains(kernel, "if(arp_() && runtimeIsArpEnabled())\n            telemetryArpStep_.store(arp_()->getCurrentStep(), std::memory_order_relaxed);\n        else\n            telemetryArpStep_.store(0, std::memory_order_relaxed);",
                     "AU3 telemetry ARP step must clear when ARP is not effective authority");
-    requireContains(phase2, "const bool fullEffectiveArpAuthority = arpeggiator_() &&\n            ArpSID::sidEffectiveArpAuthorityFromLiveParams(paramValues);",
-                    "Phase2 full telemetry must use shared effective ARP helper");
-    require(phase2.find("} else if (liveCh >= 0 && synthMode) {\n            // v929: Phase2/VST virtual-gate uses the same render-mode authority") <
-            phase2.find("} else if (arpMode) {\n            if (arpeggiator_()) arpeggiator_()->noteOn"),
-            "Phase2/VST virtual-gate NoteOn must route SynthMode before Arp fallback");
-    require(phase2.find("if (liveCh >= 0 && synthMode) {\n            synthModeNoteOff") <
-            phase2.find("} else if (arpMode) {\n            if (arpeggiator_()) arpeggiator_()->noteOff"),
-            "Phase2/VST virtual-gate NoteOff must release SynthMode before Arp fallback");
     const std::string au3 = readFile(ARPSID_SOURCE_ROOT "/source/au3/ArpSIDAudioUnit.mm");
     requireContains(au3, "case ArpSID::ComponentFlavor::Instrument:\n            ArpSID::sidSetStateRootParamValue(root, (int)ArpSID::kParamSynthModeEnable, 1.0f);",
                     "AU3 Instrument state-root flavor must persist SynthModeEnable on");
@@ -422,10 +405,6 @@ void test_synthmode_transport_reset_authority_source_contract() {
                     "AU3 telemetry SEQ authority must be published from the shared effective SEQ helper");
     requireContains(kernel, "t.seqEnabled = telemetrySeqEnabled_.load(std::memory_order_relaxed) != 0;",
                     "AU3 telemetry snapshot must read the published effective-SEQ atomic");
-    requireContains(phase2, "full.seqEnabled = ArpSID::sidEffectiveSeqAuthorityFromLiveParams(paramValues);",
-                    "Phase2 telemetry must use shared effective SEQ helper");
-    requireContains(phase2, "const bool seqEnabled = ArpSID::sidEffectiveSeqAuthorityFromLiveParams(paramValues);",
-                    "Phase2 sequencer must use shared effective SEQ helper");
 
 }
 
@@ -540,32 +519,8 @@ void test_nooutput_postfx_state_ages_behaviorally() {
 }
 
 void test_phase2_source_contracts() {
-    const std::string cpp = readFile(ARPSID_SOURCE_ROOT "/source/arpsid_processor_phase2.cpp");
-    // No-output telemetry capture: the scratch branch must capture meters and
-    // publish scope pointers, not report silence.
-    requireContains(cpp,
-                    "applyOutputFX_(tmpOutL.data(), tmpOutR.data(), numSamples);\n"
-                    "        captureTelemetryMeters(tmpOutL.data(), tmpOutR.data());\n"
-                    "        telemetryOutL = tmpOutL.data();\n"
-                    "        telemetryOutR = tmpOutR.data();",
-                    "Phase2 no-output branch must capture telemetry meters/scope from the scratch render");
-    requireContains(cpp, "noOutputBusActive = true;",
-                    "Phase2 no-output branch must mark no-output provenance");
-    requireContains(cpp, "full.noOutputBusActive = noOutputBusActive;",
-                    "Phase2 telemetry must publish no-output provenance");
-    requireContains(cpp, "full.telemetryRepresentsHostOutput = !noOutputBusActive;",
-                    "Phase2 telemetry must state whether meters represent host output");
-    // Projection mirror truth: Phase2 publishes explicit unavailability.
-    requireContains(cpp, "full.projectionMirrorAvailable = false;",
-                    "Phase2 must publish projectionMirrorAvailable=false");
-    requireContains(cpp, "full.projectionMirrorBackend = kArpSIDProjectionMirrorBackendUnavailablePhase2;",
-                    "Phase2 must publish the UnavailablePhase2 mirror backend");
-    // Promotion gating at the VST3 ingress.
-    requireContains(cpp, "ArpSID::sidCanonicalGMDrumAutoPromotionAllowed(",
-                    "Phase2 NoteOn ingress must gate GM promotion through the shared flavor law");
-    requireContains(cpp, "paramValues[(size_t)kParamAutoGmDrumPromotion] > 0.5f",
-                    "Phase2 GM promotion must consult the explicit opt-in parameter");
-
+    // GM drum promotion gating and projection-mirror truth in the shared kernel
+    // (every wrapper, VST3 included, runs this kernel).
     const std::string kernel = readFile(ARPSID_SOURCE_ROOT "/source/au3/ArpSIDDSPKernel.hpp");
     requireContains(kernel, "ArpSID::sidCanonicalGMDrumAutoPromotionAllowed(",
                     "AU3 kernel must gate GM promotion through the shared flavor law");
@@ -576,7 +531,8 @@ void test_phase2_source_contracts() {
     requireContains(au2, "sidCanonicalGMDrumAutoPromotionAllowed(",
                     "AUv2 wrapper must gate GM promotion through the shared flavor law");
 
-    const std::string adapter = readFile(ARPSID_SOURCE_ROOT "/source/au3/ArpSIDDSPKernelAdapter.mm");
+    const std::string adapter = readFile(ARPSID_SOURCE_ROOT "/source/au3/ArpSIDDSPKernelAdapter.mm") +
+                                readFile(ARPSID_SOURCE_ROOT "/source/au3/ArpSIDKernelTelemetryFill.h");
     requireContains(adapter, "out->projectionMirrorAvailable = true;",
                     "AU3 adapter must publish its real mirror sink as available");
     requireContains(adapter, "out->projectionMirrorBackend = kArpSIDProjectionMirrorBackendAU3Kernel;",

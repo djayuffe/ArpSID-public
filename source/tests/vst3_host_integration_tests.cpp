@@ -11,12 +11,17 @@
 //   * The MIDI input bus has 16 channels.
 //   * IProcessContextRequirements requests tempo/transport/musical time.
 //   * On-screen keyboard notes (UiMidi message) produce audio.
+//   * The processor runs the shared kernel: state carries the GUI models
+//     (SETTINGS/MIX/KIT/DIGI), legacy Phase2 (v4) project state still loads,
+//     host note events and sample-accurate automation reach the engine.
 //
 // usage: arpsid_vst3_host_tests <path/to/arpsid_vst3.vst3>
 
 #include "public.sdk/source/vst/hosting/module.h"
 #include "public.sdk/source/vst/hosting/hostclasses.h"
 #include "public.sdk/source/common/memorystream.h"
+#include "public.sdk/source/vst/hosting/eventlist.h"
+#include "public.sdk/source/vst/hosting/parameterchanges.h"
 #include "pluginterfaces/vst/ivstaudioprocessor.h"
 #include "pluginterfaces/vst/ivstcomponent.h"
 #include "pluginterfaces/vst/ivsteditcontroller.h"
@@ -26,6 +31,8 @@
 
 #include "parameter_ids.h"
 #include "arpsid_vst_messages.h"
+#include "au3/ArpSIDStateSerializer.h"
+#include "factory_patch_params.h"
 
 #include <cmath>
 #include <cstdio>
@@ -62,7 +69,8 @@ public:
     uint32 PLUGIN_API release() override { return 1; }
 };
 
-double renderRms(IAudioProcessor* proc, int blocks, int frames) {
+double renderRms(IAudioProcessor* proc, int blocks, int frames,
+                 IEventList* firstEvents = nullptr, IParameterChanges* firstParams = nullptr) {
     std::vector<float> l((size_t)frames), r((size_t)frames);
     float* chans[2] = {l.data(), r.data()};
     AudioBusBuffers out{};
@@ -82,6 +90,10 @@ double renderRms(IAudioProcessor* proc, int blocks, int frames) {
         data.numOutputs = 1;
         data.outputs = &out;
         data.processContext = &ctx;
+        if (b == 0) {
+            data.inputEvents = firstEvents;
+            data.inputParameterChanges = firstParams;
+        }
         proc->process(data);
         for (int i = 0; i < frames; ++i) {
             sum += (double)l[(size_t)i] * l[(size_t)i] + (double)r[(size_t)i] * r[(size_t)i];
@@ -248,8 +260,114 @@ int main(int argc, char** argv) {
         (void)renderRms(proc, 4, 512);
         std::printf("keyboard note: rms before %.6f, while held %.6f\n", silent, playing);
         CHECK(playing > 1e-4 && playing > silent * 4.0, "UiMidi note-on produces audio");
+
+        // Host note events (IEventList) and sample-accurate automation.
+        EventList notes;
+        Event on{};
+        on.type = Event::kNoteOnEvent;
+        on.sampleOffset = 100;
+        on.noteOn.channel = 0;
+        on.noteOn.pitch = 64;
+        on.noteOn.velocity = 0.9f;
+        on.noteOn.noteId = 7;
+        notes.addEvent(on);
+        const double hostNote = renderRms(proc, 16, 512, &notes);
+        std::printf("host note: rms %.6f\n", hostNote);
+        CHECK(hostNote > 1e-4, "host note-on event produces audio");
+
+        ParameterChanges mute;
+        int32 queueIndex = 0;
+        if (IParamValueQueue* q = mute.addParameterData((ParamID)ArpSID::kParamMasterVolume, queueIndex)) {
+            int32 pointIndex = 0;
+            q->addPoint(0, 0.0, pointIndex);
+        }
+        (void)renderRms(proc, 4, 512, nullptr, &mute);
+        const double muted = renderRms(proc, 8, 512);
+        std::printf("master volume 0: rms %.6f\n", muted);
+        CHECK(muted < hostNote * 0.05, "automation of Master Volume reaches the engine");
+
+        Event off{};
+        off.type = Event::kNoteOffEvent;
+        off.noteOff.pitch = 64;
+        off.noteOff.noteId = 7;
+        EventList offs;
+        offs.addEvent(off);
+        (void)renderRms(proc, 2, 512, &offs);
         proc->setProcessing(false);
         component->setActive(false);
+    }
+
+    // ── Kernel state format: canonical root + every GUI model ──────────────
+    {
+        MemoryStream st;
+        CHECK(component->getState(&st) == kResultOk, "getState (v5)");
+        int64 size = 0;
+        st.seek(0, IBStream::kIBSeekEnd, &size);
+        std::vector<uint8_t> bytes((size_t)size);
+        st.seek(0, IBStream::kIBSeekSet, nullptr);
+        int32 got = 0;
+        st.read(bytes.data(), (int32)bytes.size(), &got);
+        auto u32 = [&](size_t at) {
+            return (uint32_t)bytes[at] | ((uint32_t)bytes[at + 1] << 8) | ((uint32_t)bytes[at + 2] << 16) |
+                   ((uint32_t)bytes[at + 3] << 24);
+        };
+        CHECK(bytes.size() > 8 && u32(0) == 5u, "state version 5");
+        std::vector<std::string> tags;
+        for (size_t pos = 4; pos + 8 <= bytes.size();) {
+            const uint32_t tag = u32(pos), len = u32(pos + 4);
+            tags.push_back(std::string{(char)(tag >> 24), (char)(tag >> 16), (char)(tag >> 8), (char)tag});
+            pos += 8 + len;
+        }
+        for (const char* want : {"ROOT", "SETS", "MIX ", "KIT ", "DIGM", "DIGB"}) {
+            bool have = false;
+            for (const auto& t : tags) have |= (t == want);
+            CHECK(have, want);
+        }
+        // A second instance accepts it and reports the same patch.
+        IPtr<IComponent> other;
+        for (const auto& ci : factory.classInfos())
+            if (ci.category() == kVstAudioEffectClass) { other = factory.createInstance<IComponent>(ci.ID()); break; }
+        if (other) {
+            other->initialize(host);
+            st.seek(0, IBStream::kIBSeekSet, nullptr);
+            CHECK(other->setState(&st) == kResultOk, "second instance setState (v5)");
+            other->terminate();
+        }
+    }
+
+    // ── Legacy Phase2 project state (v4: version + root blob) ──────────────
+    {
+        const int legacySlot = 5;
+        ArpSID::SidStateRootV1 root = ArpSID::makeFactoryPatchStateRootForSlot(legacySlot);
+        std::vector<uint8_t> blob(ArpSID::encodedSidStateRootBinarySize(root));
+        const size_t len = ArpSID::encodeStateRoot(root, ArpSID::kSidBinaryStateMagic, blob.data(), blob.size());
+        CHECK(len > 0, "encode legacy root");
+        MemoryStream legacy;
+        const uint32_t v4 = 4u;
+        int32 w = 0;
+        legacy.write(const_cast<uint32_t*>(&v4), 4, &w);
+        legacy.write(blob.data(), (int32)len, &w);
+        legacy.seek(0, IBStream::kIBSeekSet, nullptr);
+        CHECK(component->setState(&legacy) == kResultOk, "processor accepts legacy v4 state");
+        legacy.seek(0, IBStream::kIBSeekSet, nullptr);
+        IPtr<IEditController> c = makeController();
+        CHECK(c && c->setComponentState(&legacy) == kResultOk, "controller accepts legacy v4 state");
+        if (c) {
+            CHECK(std::fabs(c->getParamNormalized((ParamID)ArpSID::kParamBankSlot) -
+                            ArpSID::canonicalNormalizedBankSlotValue(legacySlot)) < 1e-6,
+                  "legacy state restores its factory slot");
+            c->terminate();
+        }
+        MemoryStream after;
+        CHECK(component->getState(&after) == kResultOk, "getState after legacy load");
+        IPtr<IEditController> c2 = makeController();
+        after.seek(0, IBStream::kIBSeekSet, nullptr);
+        if (c2 && c2->setComponentState(&after) == kResultOk) {
+            CHECK(std::fabs(c2->getParamNormalized((ParamID)ArpSID::kParamBankSlot) -
+                            ArpSID::canonicalNormalizedBankSlotValue(legacySlot)) < 1e-6,
+                  "legacy state survives re-save in the v5 format");
+            c2->terminate();
+        }
     }
 
     procCp->disconnect(ctrlCp);

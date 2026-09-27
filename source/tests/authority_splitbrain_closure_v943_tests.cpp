@@ -68,7 +68,6 @@ void test_effective_helpers_reject_hidden_secondary_authorities() {
 void test_source_contract_for_param_model_backend_single_authority() {
     const std::string root = ARPSID_SOURCE_ROOT;
     const std::string kernel = readFile((root + "/source/au3/ArpSIDDSPKernel.hpp").c_str());
-    const std::string phase2 = readFile((root + "/source/arpsid_processor_phase2.cpp").c_str());
     const std::string paramServices = readFile((root + "/include/arpsid/core/sid_runtime_parameter_services.h").c_str());
 
     requireContains(kernel,
@@ -93,12 +92,6 @@ void test_source_contract_for_param_model_backend_single_authority() {
                     "raw SeqEnable cannot arm a dormant sequencer under SynthMode",
                     "AU3 SeqEnable policy must reject hidden SEQ under SynthMode but allow DrSID/SID808");
 
-    requireContains(phase2,
-                    "runtimeModel_.applyAutomationPoint(target, clean)",
-                    "Phase2 direct staging must update runtimeModel state-root");
-    requireContains(phase2,
-                    "raw SeqEnable cannot arm dormant VST sequencer state under",
-                    "Phase2 SeqEnable policy must reject hidden SEQ under SynthMode and allow DrSID/SID808 via helper");
 
     requireContains(paramServices,
                     "raw ArpEnable is not allowed to mutate/arm the ARP",

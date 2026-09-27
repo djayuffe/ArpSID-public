@@ -3,15 +3,18 @@
 
 namespace ArpSID {
 
+class Vst3KernelHost;
+
 // Returns an opaque handle when a native Cocoa editor was attached successfully.
 // Returns nullptr when the platform is unsupported or attach failed.
 void* arpsidOpenRichCocoaEditor(void* parentNSView, void* editController) noexcept;
 void  arpsidCloseRichCocoaEditor(void* handle) noexcept;
 void  arpsidResizeRichCocoaEditor(void* handle, double width, double height) noexcept;
 
-// Telemetry registry shared between the VST3 processor and the rich Cocoa editor.
-struct IArpSIDTelemetryProvider;
-void  arpsidSetActiveTelemetryProvider(IArpSIDTelemetryProvider* provider) noexcept;
-IArpSIDTelemetryProvider* arpsidGetActiveTelemetryProvider() noexcept;
+// Implemented by the edit controller (arpsid_controller.cpp): the processor's
+// kernel host when it runs in this process (else nullptr), and the "state
+// changed without a parameter change" notification for model edits.
+Vst3KernelHost* arpsidControllerKernelHost(void* editController) noexcept;
+void arpsidControllerMarkStateDirty(void* editController) noexcept;
 
 } // namespace ArpSID

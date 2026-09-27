@@ -62,7 +62,6 @@ void test_shared_effective_authority_contract() {
 void test_source_contract_for_param_specific_staging_and_policy_cleanup() {
     const std::string root = ARPSID_SOURCE_ROOT;
     const std::string kernel = readFile((root + "/source/au3/ArpSIDDSPKernel.hpp").c_str());
-    const std::string phase2 = readFile((root + "/source/arpsid_processor_phase2.cpp").c_str());
     const std::string classic = readFile((root + "/source/tests/classic_mode_authority_closure_v909_tests.cpp").c_str());
 
     requireContains(kernel,
@@ -75,22 +74,7 @@ void test_source_contract_for_param_specific_staging_and_policy_cleanup() {
                   "const float clamped = ArpSID::canonicalClampedNormalizedValue(value);\n        params_[idx].store(clamped",
                   "AU3 staging must not use generic clamp-only writes");
 
-    requireContains(phase2,
-                    "runtimeStageNormalizedParameterOnly(static_cast<uint32_t>(kParamArpEnable), 0.0f);\n        runtimeStageNormalizedParameterOnly(static_cast<uint32_t>(kParamSeqEnable), 0.0f);",
-                    "Phase2 SynthMode policy must clear ARP/SEQ through canonical staging");
-    requireContains(phase2,
-                    "arp->allNotesOff();\n            arp->setEnabled(false);",
-                    "Phase2 SynthMode policy must concretely disable ARP backend state");
-    requireContains(phase2,
-                    "runtimePolicyHandleSeqEnable(0.0f);",
-                    "Phase2 SynthMode policy must apply SEQ backend/policy cleanup");
-    requireAbsent(phase2,
-                  "paramValues[(size_t)kParamArpEnable] = 0.0f;\n        paramValues[(size_t)kParamSeqEnable] = 0.0f;",
-                  "Phase2 SynthMode policy must not bypass canonical staging");
 
-    requireContains(classic,
-                    "through canonical staging",
-                    "legacy closure guard must protect canonical Phase2 clearing, not direct paramValues writes");
 }
 }
 

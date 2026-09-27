@@ -10,8 +10,8 @@ static bool contains(const std::string& s, const std::string& needle) {
 int main() {
     std::ifstream d("include/arpsid/core/sid_host_cycle_dispatcher.h");
     if (!d) d.open("../include/arpsid/core/sid_host_cycle_dispatcher.h");
-    std::ifstream v("source/arpsid_processor_phase2.cpp");
-    if (!v) v.open("../source/arpsid_processor_phase2.cpp");
+    std::ifstream v("source/vst3/arpsid_vst3_processor.cpp");
+    if (!v) v.open("../source/vst3/arpsid_vst3_processor.cpp");
     if (!d || !v) {
         std::cerr << "cannot open source files\n";
         return 1;
@@ -31,13 +31,11 @@ int main() {
             "dispatcher no longer switches render law solely on event metadata");
     require(!contains(disp, "if (hasResolvedCycleTiming) {"),
             "old metadata-selected cycle render branch is gone");
-    require(contains(vst, "Host context is already ingested exactly once through the canonical"),
-            "VST transport double-ingest block replaced by canonical-only path");
-    require(!contains(vst, "const ProcessContext& ctx = *data.processContext;"),
-            "VST path no longer re-reads ProcessContext after canonical ingestion");
-    require(!contains(vst, "runtimeModel_.setHostTempoBpm(static_cast<float>(hostTempo));"),
-            "VST path no longer sets host tempo from a second authority");
-    require(!contains(vst, "runtimeModel_.setHostProjectTimePPQ(hostProjectTimePPQ);"),
-            "VST path no longer sets host PPQ from a second authority");
+    // VST3 reads ProcessContext once into the kernel's TransportState; the
+    // kernel is the only tempo/position authority.
+    require(contains(vst, "readTransport_(data.processContext, sampleRate_, frames, transport);"),
+            "VST path ingests ProcessContext exactly once into the canonical transport");
+    require(!contains(vst, "setHostTempo") && !contains(vst, "setHostProjectTimePPQ"),
+            "VST path never sets host tempo/PPQ through a second authority");
     return 0;
 }

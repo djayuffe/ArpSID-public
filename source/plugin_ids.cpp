@@ -11,8 +11,7 @@
 // Copyright (C) 2024-2026 Ulf Bertilsson
 // SPDX-License-Identifier: MIT
 
-#include "pluginterfaces/base/funknown.h"
-#include "arpsid_processor_phase2.h"
+#include "plugin_ids.h"
 
 namespace ArpSID {
 

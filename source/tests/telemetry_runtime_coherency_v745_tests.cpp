@@ -5,7 +5,7 @@
 #include "arpsid/engines/sid_register_engine.h"
 #include "arpsid/gui/telemetry_scope_demand.h"
 #include "arpsid/gui/telemetry_runtime_authority.h"
-#include "arpsid_telemetry_iface.h"
+#include "common/arpsid_telemetry_snapshot.h"
 
 #include <atomic>
 #include <cmath>
@@ -103,23 +103,6 @@ void testPsidRuntimeAuthority() {
             "UI SID model remains fallback when file model is unspecified");
 }
 
-void testFullTelemetryRing() {
-    ArpSID::FullTelemetryRing ring;
-    ArpSIDTelemetry published{};
-    published.telemetryFrameId = 42u;
-    published.scopeFrameId = 42u;
-    published.vcoScope[2][255] = 0.75f;
-    published.c64SidWritePulseScope[17] = 1.0f;
-    ring.publish(published);
-    ArpSIDTelemetry read{};
-    require(ring.loadLatest(read), "full telemetry ring must publish");
-    require(read.telemetryFrameId == 42u && read.scopeFrameId == 42u,
-            "full telemetry frame IDs must remain coherent");
-    require(read.vcoScope[2][255] == 0.75f &&
-            read.c64SidWritePulseScope[17] == 1.0f,
-            "full telemetry payload must retain scopes");
-}
-
 void testC64HeavySnapshotNoTear() {
     ArpSID::C64::C64TelemetryGate gate;
     std::atomic<bool> done{false};
@@ -209,7 +192,6 @@ int main() {
     testChronologicalRotation();
     testScopeDemandRuntime();
     testPsidRuntimeAuthority();
-    testFullTelemetryRing();
     testC64HeavySnapshotNoTear();
     testEngineScopeReaders();
     std::cout << "Telemetry runtime coherency v745: PASS\n";

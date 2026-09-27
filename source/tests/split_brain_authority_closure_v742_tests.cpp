@@ -135,12 +135,6 @@ int main() {
     require(bridge.find("bridgeDiagnosticDrsidEngine") == std::string::npos,
             "diagnostic duplicate-DrSID accessor is removed");
 
-    const std::string processor =
-        readFile("source/arpsid_processor_phase2.h");
-    require(processor.find("enum class RenderMode") == std::string::npos,
-            "VST processor has no second render-mode enum");
-    require(processor.find("activeRenderMode_") == std::string::npos,
-            "VST processor has no stale render-mode cache");
 
     const std::string kernel =
         readFile("source/au3/ArpSIDDSPKernel.hpp");

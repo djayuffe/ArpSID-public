@@ -484,7 +484,8 @@ if(ARPSID_BUILD_VST3)
 
     if(COMMAND smtg_add_vst3plugin)
         smtg_add_vst3plugin(arpsid_vst3
-            source/arpsid_processor_phase2.cpp
+            source/vst3/arpsid_vst3_processor.cpp
+            source/vst3/arpsid_vst3_kernel_host.cpp
             source/factory.cpp
             source/plugin_ids.cpp
             source/forensic_patch_bank.cpp
@@ -586,7 +587,7 @@ if(ARPSID_BUILD_VST3)
     target_include_directories(arpsid_vst3_host_tests PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${CMAKE_CURRENT_SOURCE_DIR}/source)
-    target_link_libraries(arpsid_vst3_host_tests PRIVATE sdk_hosting)
+    target_link_libraries(arpsid_vst3_host_tests PRIVATE sdk_hosting arpsid_forensic_patchbank)
     if(APPLE)
         target_link_libraries(arpsid_vst3_host_tests PRIVATE "-framework Cocoa")
     elseif(UNIX)
@@ -2507,7 +2508,7 @@ target_link_libraries(arpsid_factory_patch_apply_roundtrip_v850_tests PRIVATE ar
            COMMAND arpsid_tab_architecture_promotion_v566_tests)
 
   # v573 — Output limiter state-restore contract tests.
-  # Fixes resetRenderModeOutputNormalizer_() in arpsid_processor_phase2.cpp:
+  # Fixes resetRenderModeOutputNormalizer_() in the retired Phase2 VST3 processor:
   # limiterEnabled, limiterThreshold, limiterAttackMs, limiterReleaseMs (and the
   # SimpleLimiter object time constants) were not re-projected from paramValues[]
   # on setState() / preset restore.  reverbMix was already recovered on line 1676;
@@ -3010,7 +3011,7 @@ target_link_libraries(arpsid_factory_patch_apply_roundtrip_v850_tests PRIVATE ar
            COMMAND arpsid_forensic_single_authority_v609_tests)
 
   # v572 — Sequencer step note range consistency contract tests.
-  # Fixes processSequencer() in arpsid_processor_phase2.cpp (AUv2 path):
+  # Fixes processSequencer() in the retired Phase2 VST3 processor:
   # old: noteNorm × 48 + 36 → range [36, 84] (4-octave C2-C6 window).
   # new: noteNorm × 127 → range [0, 127], matching DSPKernel (AUv3) and UI.
   # At default param 0.5: old gave MIDI 60 (Middle C); new gives MIDI 64 (E4)
@@ -3031,7 +3032,7 @@ target_link_libraries(arpsid_factory_patch_apply_roundtrip_v850_tests PRIVATE ar
            COMMAND arpsid_seq_note_range_v572_tests)
 
   # v571 — Sequencer swing tempo-preservation contract tests.
-  # Fixes processSequencer() stepDuration lambda in arpsid_processor_phase2.cpp:
+  # Fixes processSequencer() stepDuration lambda in the retired Phase2 VST3 processor:
   # even step used seqSwing * 0.5 * 0.5 (= *0.25), so pair sum was 2 + 0.25s
   # (up to 12.5% tempo drift at full swing). Fixed to symmetric seqSwing * 0.5.
   # Pins: pair sum=2.0 at swing=0/0.5/1.0, old formula drift documented,
@@ -5531,28 +5532,12 @@ if(TARGET arpsid_release_closure_suite)
   add_dependencies(arpsid_release_closure_suite ProjectionMirrorFinalClosureV905Tests)
 endif()
 
-add_executable(Phase2TimingMusicClosureV906Tests source/tests/phase2_timing_music_closure_v906_tests.cpp)
-target_compile_features(Phase2TimingMusicClosureV906Tests PRIVATE cxx_std_17)
-target_compile_definitions(Phase2TimingMusicClosureV906Tests PRIVATE ARPSID_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
-add_test(NAME Phase2TimingMusicClosureV906Tests COMMAND Phase2TimingMusicClosureV906Tests)
-if(TARGET arpsid_release_closure_suite)
-  add_dependencies(arpsid_release_closure_suite Phase2TimingMusicClosureV906Tests)
-endif()
-
 add_executable(TimingMusicSweepClosureV907Tests source/tests/timing_music_sweep_closure_v907_tests.cpp)
 target_compile_features(TimingMusicSweepClosureV907Tests PRIVATE cxx_std_17)
 target_compile_definitions(TimingMusicSweepClosureV907Tests PRIVATE ARPSID_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
 add_test(NAME TimingMusicSweepClosureV907Tests COMMAND TimingMusicSweepClosureV907Tests)
 if(TARGET arpsid_release_closure_suite)
   add_dependencies(arpsid_release_closure_suite TimingMusicSweepClosureV907Tests)
-endif()
-
-add_executable(Phase2NoOutputFxClosureV908Tests source/tests/phase2_nooutput_fx_closure_v908_tests.cpp)
-target_compile_features(Phase2NoOutputFxClosureV908Tests PRIVATE cxx_std_17)
-target_compile_definitions(Phase2NoOutputFxClosureV908Tests PRIVATE ARPSID_SOURCE_ROOT="${CMAKE_CURRENT_SOURCE_DIR}")
-add_test(NAME Phase2NoOutputFxClosureV908Tests COMMAND Phase2NoOutputFxClosureV908Tests)
-if(TARGET arpsid_release_closure_suite)
-  add_dependencies(arpsid_release_closure_suite Phase2NoOutputFxClosureV908Tests)
 endif()
 
 add_executable(IngressParityTimingAuthorityV910Tests
