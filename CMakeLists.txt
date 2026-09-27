@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(ArpSID VERSION 0.9.5 LANGUAGES CXX)
+project(ArpSID VERSION 0.9.6 LANGUAGES CXX)
 include(cmake/ArpSIDSourceTreeGuard.cmake)
 
 option(ARPSID_BUILD_ALL "Enable the stable ArpSID product set for the current platform" OFF)

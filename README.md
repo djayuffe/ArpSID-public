@@ -1,4 +1,4 @@
-# ArpSID 0.9.5
+# ArpSID 0.9.6
 
 **A Commodore 64 SID synthesizer and C64 tune player as an audio plug-in for macOS.**
 

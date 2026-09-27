@@ -5,7 +5,7 @@ All notable changes to ArpSID are documented here. The project uses
 version is `VERSION.txt`, mirrored by `project(VERSION)` in `CMakeLists.txt`
 and `include/arpsid/version.h`.
 
-## [Unreleased]
+## [0.9.6] — 2026-09-27
 
 ### Fixed (VST3 editor, Windows and Linux)
 
@@ -16,6 +16,12 @@ and `include/arpsid/version.h`.
 
 - README shows the Windows/Linux VST3 editor (MAIN, SID REG, MIX and BANK
   tabs), taken from the offscreen editor render.
+
+### Release
+
+- Releases carry only the packages and `SHA256SUMS.txt`. The first 0.9.5
+  upload also attached the CI editor snapshots; rebuilding an existing
+  release now removes assets outside that set.
 
 ## [0.9.5] — 2026-09-27
 
