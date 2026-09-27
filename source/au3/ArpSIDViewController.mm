@@ -2977,8 +2977,10 @@ static constexpr double kArpSIDGuiActivePollHz_v820 = 24.0;
 // three-decimal text for knobs that are not bound to a parameter.
 static NSString* ArpSIDKnobValueText(int paramId, float normalized) {
     char buf[64] = {};
-    if (ArpSID::SidParameterPresentation::formatNormalized(paramId, normalized, buf, sizeof buf) && buf[0])
-        return [NSString stringWithUTF8String:buf] ?: [NSString stringWithFormat:@"%.3f", normalized];
+    if (ArpSID::SidParameterPresentation::formatNormalized(paramId, normalized, buf, sizeof buf) && buf[0]) {
+        NSString* text = [NSString stringWithUTF8String:buf];
+        if (text) return text;
+    }
     return [NSString stringWithFormat:@"%.3f", normalized];
 }
 
@@ -3058,7 +3060,7 @@ static NSString* ArpSIDKnobValueText(int paramId, float normalized) {
     NSColor*labelC=_touched?colTitle():(_hovered?[hoverC colorWithAlphaComponent:.96f]:(accentC?[accentC colorWithAlphaComponent:.90f]:colLabel()));
     NSDictionary*la=@{NSForegroundColorAttributeName:labelC,NSFontAttributeName:monoF(8.5)};
     // Fit the caption to the knob: shrink to 6.5 pt, then shorten with "…".
-    NSString*ns=_pname?:@"";
+    NSString*ns=_pname?_pname:@"";
     const CGFloat maxW=MAX((CGFloat)8.f,b.size.width-4.f);
     NSSize sz=[ns sizeWithAttributes:la];
     for(CGFloat fs=8.f;sz.width>maxW&&fs>=6.5f;fs-=.5f){
@@ -8402,12 +8404,11 @@ static NSString* ArpSIDTabBarTooltipForFlavor(ArpSID::ComponentFlavor flavor) {
 // bootstrapped the bar with an obsolete 11-segment table and then relied on a
 // later chrome refresh to expand it to the real production ring; that
 // created transient duplicate labels and stale tooltips in embedded hosts.
-static CGFloat ArpSIDTabSegmentWidthForLabel_v269(NSString* label) {
-    const NSUInteger len = label.length;
-    if (len <= 7u) return 58.0;
-    if (len <= 10u) return 70.0;
-    if (len <= 13u) return 82.0;
-    return 94.0;
+// Deterministic segment width: the label's measured width in the tab font
+// plus padding for the segment bezel.
+static CGFloat ArpSIDTabSegmentWidthForLabel_v269(NSString* label, NSFont* font) {
+    NSDictionary* attrs = @{NSFontAttributeName: font};
+    return ceil([(label ? label : @"") sizeWithAttributes:attrs].width) + 14.0;
 }
 
 static void ArpSIDSetTabSegmentWidthIfChanged_v321(NSSegmentedControl* tabBar,
@@ -8437,17 +8438,29 @@ static void ArpSIDFitVisibleTabBarWidths_v320(NSSegmentedControl* tabBar) {
             fabs((double)c.tabFitLastAvailable_v823 - (double)available) <= 0.5) return;
         c.tabFitLastAvailable_v823 = available;
     }
-    CGFloat naturalTotal = 0.0f;
-    for (NSInteger seg = 0; seg < tabBar.segmentCount; ++seg) {
-        naturalTotal += ArpSIDTabSegmentWidthForLabel_v269([tabBar labelForSegment:seg]);
+    // Pick the largest font (11 down to 8 pt) at which every label fits, then
+    // give each segment its measured label width plus padding, scaled to fill
+    // the bar, so no tab name is clipped. Only runs when the bar width changes.
+    const NSInteger count = tabBar.segmentCount;
+    static const CGFloat kSizes[] = {11.0f, 10.0f, 9.0f, 8.0f};
+    NSFont* font = nil;
+    std::vector<CGFloat> widths((size_t)count, 0.0f);
+    CGFloat total = 0.0f;
+    for (CGFloat size : kSizes) {
+        font = [NSFont systemFontOfSize:size weight:NSFontWeightSemibold];
+        total = 0.0f;
+        for (NSInteger seg = 0; seg < count; ++seg) {
+            widths[(size_t)seg] = ArpSIDTabSegmentWidthForLabel_v269([tabBar labelForSegment:seg], font);
+            total += widths[(size_t)seg];
+        }
+        if (total <= available) break;
     }
-    if (!(naturalTotal > 0.0f)) return;
-    const CGFloat scale = std::min<CGFloat>(1.0f, available / naturalTotal);
-    for (NSInteger seg = 0; seg < tabBar.segmentCount; ++seg) {
-        const CGFloat natural = ArpSIDTabSegmentWidthForLabel_v269([tabBar labelForSegment:seg]);
-        const CGFloat desired = std::max<CGFloat>(36.0f, floor(natural * scale));
-        ArpSIDSetTabSegmentWidthIfChanged_v321(tabBar, seg, desired);
-    }
+    if (!(total > 0.0f)) return;
+    if (!tabBar.font || fabs((double)tabBar.font.pointSize - (double)font.pointSize) > 0.01)
+        tabBar.font = font;
+    const CGFloat scale = available / total; // > 1 spreads spare room, < 1 only at 8 pt
+    for (NSInteger seg = 0; seg < count; ++seg)
+        ArpSIDSetTabSegmentWidthIfChanged_v321(tabBar, seg, std::max<CGFloat>(28.0f, floor(widths[(size_t)seg] * scale)));
 }
 
 static void ArpSIDConfigureVisibleTabBar_v268(NSSegmentedControl* tabBar,
