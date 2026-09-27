@@ -106,6 +106,8 @@ public:
     // 5 load projection bootstrap, 6/7 VIC fast on/off, 8/9 CPU fast on/off.
     void c64ControlHubCommand(int command) noexcept;
     bool isSidFileLoaded() const noexcept;
+    bool c64VicFast() const noexcept;
+    bool c64CpuFast() const noexcept;
     void setPureSid1Q1OutputMode(bool on) noexcept;
     bool pureSid1Q1OutputMode() const noexcept;
 

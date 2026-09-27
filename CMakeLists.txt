@@ -439,9 +439,9 @@ if(ARPSID_BUILD_VST3)
         # - SMTG_CREATE_PLUGIN_LINK=OFF : suppresses the SDK's copy-to-VST-folder step
         #   which requires Xcode entitlements we haven't set up.
         # - SMTG_ENABLE_USE_OF_JACK=OFF : suppress JACK audio dependency check.
-        # - SMTG_ADD_VSTGUI=OFF    : do not pull the SDK's VSTGUI designer/uidescription layer
-        #   into the main graph. ArpSID's VST3 target wires its own editor sources and should
-        #   not depend on the SDK's optional vstgui_support/uidescription helper targets.
+        # - SMTG_ADD_VSTGUI / SMTG_ENABLE_VSTGUI_SUPPORT=OFF: the SDK's helper
+        #   forces VSTGUI's standalone library (GTK on Linux). The cross-platform
+        #   editor adds just the VSTGUI core library below instead.
         set(SMTG_BUILD_TESTING    OFF CACHE BOOL "" FORCE)
         set(SMTG_CREATE_PLUGIN_LINK OFF CACHE BOOL "" FORCE)
         set(SMTG_ENABLE_USE_OF_JACK OFF CACHE BOOL "" FORCE)
@@ -454,10 +454,37 @@ if(ARPSID_BUILD_VST3)
 
         add_subdirectory(${vst3sdk_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/vst3sdk EXCLUDE_FROM_ALL)
 
+        # Cross-platform editor toolkit (Linux, Windows): VSTGUI core only.
+        if(NOT APPLE)
+            enable_language(C)   # VSTGUI's Linux platform layer has C sources
+            set(VSTGUI_DISABLE_UNITTESTS 1)
+            set(VSTGUI_STANDALONE OFF)
+            set(VSTGUI_STANDALONE_EXAMPLES OFF)
+            set(VSTGUI_TOOLS OFF)
+            set(VSTGUI_UISCRIPTING OFF)
+            set(VSTGUI_ENABLE_WAYLAND_SUPPORT OFF)
+            # Must match the editor sources (class layouts / vtables).
+            set(VSTGUI_ENABLE_DEPRECATED_METHODS OFF CACHE BOOL "" FORCE)
+            set(VSTGUI_OPENGL_SUPPORT OFF CACHE BOOL "" FORCE)
+            add_subdirectory(${vst3sdk_SOURCE_DIR}/vstgui4/vstgui ${CMAKE_CURRENT_BINARY_DIR}/vstgui EXCLUDE_FROM_ALL)
+            set(_arpsid_vstgui_support_sources ${vst3sdk_SOURCE_DIR}/public.sdk/source/vst/vstguieditor.cpp)
+            if(UNIX)
+                list(APPEND _arpsid_vstgui_support_sources
+                     ${vst3sdk_SOURCE_DIR}/public.sdk/source/vst/vstgui_linux_runloop_support.cpp)
+            endif()
+            add_library(arpsid_vstgui_support STATIC ${_arpsid_vstgui_support_sources})
+            target_link_libraries(arpsid_vstgui_support PUBLIC base vstgui)
+            target_include_directories(arpsid_vstgui_support SYSTEM PUBLIC ${vst3sdk_SOURCE_DIR}/vstgui4 ${vst3sdk_SOURCE_DIR})
+            target_compile_definitions(arpsid_vstgui_support PUBLIC VSTGUI_ENABLE_DEPRECATED_METHODS=0)
+            # Both end up inside the plug-in shared module.
+            set_target_properties(vstgui arpsid_vstgui_support PROPERTIES POSITION_INDEPENDENT_CODE ON)
+        endif()
+
         # Third-party SDK sources are not ours to fix: silence their warnings so
         # the build log only shows ArpSID diagnostics (ArpSID targets keep
         # their full warning set).
-        foreach(_arpsid_sdk_target IN ITEMS pluginterfaces base sdk_common sdk sdk_hosting validator moduleinfotool)
+        foreach(_arpsid_sdk_target IN ITEMS pluginterfaces base sdk_common sdk sdk_hosting validator moduleinfotool
+                                            vstgui vstgui_uidescription arpsid_vstgui_support)
             if(TARGET ${_arpsid_sdk_target})
                 target_compile_options(${_arpsid_sdk_target} PRIVATE -w)
             endif()
@@ -468,9 +495,8 @@ if(ARPSID_BUILD_VST3)
         smtg_enable_vst3_sdk()
     endif()
 
-    # The rich editor is the native Cocoa GUI (Objective-C++), so it is macOS
-    # only. Elsewhere the plug-in builds headless: the editor reports no
-    # supported platform view and hosts show their generic parameter UI.
+    # macOS: the native Cocoa editor (Objective-C++), shared with the AU.
+    # Linux / Windows: the cross-platform VSTGUI editor with the same tabs.
     if(APPLE)
         set(_arpsid_vst3_gui_sources
             source/gui/arpsid_vst_cocoa_bridge.mm
@@ -478,8 +504,16 @@ if(ARPSID_BUILD_VST3)
             source/au3/ArpSIDDigiAudioQueueCapture.mm
             source/au3/ArpSIDFileBankBridge.mm)
     else()
+        # Cross-platform VSTGUI editor (same tabs, models and telemetry as the
+        # Cocoa editor).
+        set(ARPSID_VSTGUI_EDITOR_SOURCES
+            ${CMAKE_CURRENT_SOURCE_DIR}/source/gui/vstgui/arpsid_editor_widgets.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/source/gui/vstgui/arpsid_editor_view.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/source/gui/vstgui/arpsid_editor_pages.cpp)
         set(_arpsid_vst3_gui_sources
-            source/gui/arpsid_vst_headless_bridge.cpp)
+            source/gui/arpsid_vst_headless_bridge.cpp
+            source/gui/vstgui/arpsid_vstgui_plugview.cpp
+            ${ARPSID_VSTGUI_EDITOR_SOURCES})
     endif()
 
     if(COMMAND smtg_add_vst3plugin)
@@ -498,9 +532,15 @@ if(ARPSID_BUILD_VST3)
     endif()
 
     target_link_libraries(arpsid_vst3 PRIVATE arpsid_core sdk)
+    if(TARGET arpsid_vstgui_support)
+        target_link_libraries(arpsid_vst3 PRIVATE arpsid_vstgui_support)
+        target_compile_definitions(arpsid_vst3 PRIVATE ARPSID_VSTGUI_EDITOR=1)
+    endif()
     target_include_directories(arpsid_vst3 PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/include
         ${CMAKE_CURRENT_SOURCE_DIR}/source
+    )
+    target_include_directories(arpsid_vst3 SYSTEM PRIVATE
         ${vst3sdk_SOURCE_DIR}
         ${vst3sdk_SOURCE_DIR}/vstgui4
     )
@@ -603,6 +643,34 @@ if(ARPSID_BUILD_VST3)
     if(ARPSID_BUILD_TESTS)
         add_test(NAME Vst3HostIntegrationTests
             COMMAND arpsid_vst3_host_tests "${_arpsid_vst3_bundle}")
+    endif()
+
+    # Offscreen editor render: builds every tab with the real kernel and writes
+    # one PNG per tab (also a screenshot tool: pass an output directory).
+    if(TARGET arpsid_vstgui_support)
+        add_executable(arpsid_vst3_editor_snapshot EXCLUDE_FROM_ALL
+            source/tests/vst3_editor_snapshot_tests.cpp
+            source/vst3/arpsid_vst3_kernel_host.cpp
+            source/arpsid_file_bank.cpp
+            ${ARPSID_VSTGUI_EDITOR_SOURCES})
+        target_compile_features(arpsid_vst3_editor_snapshot PRIVATE cxx_std_17)
+        target_include_directories(arpsid_vst3_editor_snapshot PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/source)
+        target_include_directories(arpsid_vst3_editor_snapshot SYSTEM PRIVATE
+            ${vst3sdk_SOURCE_DIR}/vstgui4 ${vst3sdk_SOURCE_DIR})
+        target_link_libraries(arpsid_vst3_editor_snapshot PRIVATE arpsid_core arpsid_forensic_patchbank vstgui)
+        target_compile_definitions(arpsid_vst3_editor_snapshot PRIVATE VSTGUI_ENABLE_DEPRECATED_METHODS=0)
+        set(_arpsid_snapshot_dir "${CMAKE_BINARY_DIR}/editor-snapshots")
+        add_custom_target(arpsid_vst3_editor_check
+            COMMAND "${CMAKE_COMMAND}" -E make_directory "${_arpsid_snapshot_dir}"
+            COMMAND $<TARGET_FILE:arpsid_vst3_editor_snapshot> "${_arpsid_snapshot_dir}"
+            DEPENDS arpsid_vst3_editor_snapshot
+            USES_TERMINAL
+            VERBATIM)
+        if(ARPSID_BUILD_TESTS)
+            add_test(NAME Vst3EditorSnapshotTests
+                COMMAND arpsid_vst3_editor_snapshot "${_arpsid_snapshot_dir}")
+        endif()
     endif()
 
     # Linux/Windows install: `cmake --install` puts the bundle under
@@ -3743,6 +3811,12 @@ target_link_libraries(arpsid_kit_default_assignments_payload_v685_tests PRIVATE 
 target_compile_features(arpsid_kit_default_assignments_payload_v685_tests PRIVATE cxx_std_17)
 target_include_directories(arpsid_kit_default_assignments_payload_v685_tests PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR}/source)
 add_test(NAME KitDefaultAssignmentsPayloadV685Tests COMMAND arpsid_kit_default_assignments_payload_v685_tests)
+
+add_executable(arpsid_editor_layout_coverage_tests source/tests/editor_layout_coverage_tests.cpp)
+target_compile_features(arpsid_editor_layout_coverage_tests PRIVATE cxx_std_17)
+target_include_directories(arpsid_editor_layout_coverage_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/source)
+add_test(NAME EditorLayoutCoverageTests COMMAND arpsid_editor_layout_coverage_tests)
 
 add_executable(arpsid_vst3_factory_preset_count_v686_tests source/tests/vst3_factory_preset_count_v686_tests.cpp)
 target_compile_features(arpsid_vst3_factory_preset_count_v686_tests PRIVATE cxx_std_17)

@@ -1,6 +1,8 @@
 // Copyright (C) 2024-2026 Ulf Bertilsson
 #pragma once
 
+namespace Steinberg { class IPlugView; }
+
 namespace ArpSID {
 
 class Vst3KernelHost;
@@ -16,5 +18,11 @@ void  arpsidResizeRichCocoaEditor(void* handle, double width, double height) noe
 // changed without a parameter change" notification for model edits.
 Vst3KernelHost* arpsidControllerKernelHost(void* editController) noexcept;
 void arpsidControllerMarkStateDirty(void* editController) noexcept;
+void arpsidControllerSelectFactoryPatch(void* editController, int slot) noexcept;
+int  arpsidControllerLoadedFactorySlot(void* editController) noexcept;
+void arpsidControllerSendUiMidi(void* editController, unsigned char status, unsigned char data1,
+                                unsigned char data2) noexcept;
+// The cross-platform (VSTGUI) editor view; nullptr where it is not built.
+Steinberg::IPlugView* arpsidCreateCrossPlatformEditor(void* editController);
 
 } // namespace ArpSID

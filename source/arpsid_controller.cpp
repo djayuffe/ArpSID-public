@@ -107,7 +107,11 @@ public:
         if (!name)
             return nullptr;
         if (FIDStringsEqual(name, ViewType::kEditor)) {
+#if defined(ARPSID_VSTGUI_EDITOR)
+            IPlugView* view = arpsidCreateCrossPlatformEditor(this);
+#else
             auto* view = new ArpSIDVSTGUIEditor(this);
+#endif
             editorView_ = view;
 #if defined(ARPSID_VST_EDITOR_DIAGNOSTICS)
             std::fprintf(stderr, "[plugin/controller] createView -> %p\n", static_cast<void*>(view));
@@ -496,6 +500,22 @@ Vst3KernelHost* arpsidControllerKernelHost(void* editController) noexcept {
 void arpsidControllerMarkStateDirty(void* editController) noexcept {
     if (auto* c = static_cast<ArpSIDControllerPhase3*>(static_cast<EditController*>(editController)))
         c->markStateDirty();
+}
+
+void arpsidControllerSelectFactoryPatch(void* editController, int slot) noexcept {
+    if (auto* c = static_cast<ArpSIDControllerPhase3*>(static_cast<EditController*>(editController)))
+        c->selectFactoryPatch(slot);
+}
+
+int arpsidControllerLoadedFactorySlot(void* editController) noexcept {
+    auto* c = static_cast<ArpSIDControllerPhase3*>(static_cast<EditController*>(editController));
+    return c ? c->loadedFactorySlot() : 0;
+}
+
+void arpsidControllerSendUiMidi(void* editController, unsigned char status, unsigned char data1,
+                                unsigned char data2) noexcept {
+    if (auto* c = static_cast<ArpSIDControllerPhase3*>(static_cast<EditController*>(editController)))
+        c->sendUiMidi(status, data1, data2);
 }
 
 } // namespace ArpSID

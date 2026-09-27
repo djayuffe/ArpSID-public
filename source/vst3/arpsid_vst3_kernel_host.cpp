@@ -460,6 +460,10 @@ void Vst3KernelHost::c64ControlHubCommand(int command) noexcept {
 
 bool Vst3KernelHost::isSidFileLoaded() const noexcept { return kernel_->isPsidLoaded(); }
 
+bool Vst3KernelHost::c64VicFast() const noexcept { return kernel_->c64VicFast(); }
+
+bool Vst3KernelHost::c64CpuFast() const noexcept { return kernel_->c64CpuFast(); }
+
 void Vst3KernelHost::setPureSid1Q1OutputMode(bool on) noexcept { kernel_->setPureSid1Q1OutputMode(on); }
 
 bool Vst3KernelHost::pureSid1Q1OutputMode() const noexcept { return kernel_->pureSid1Q1OutputModeEnabled(); }

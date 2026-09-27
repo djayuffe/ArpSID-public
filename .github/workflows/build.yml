@@ -4,8 +4,10 @@ name: Build
 #
 #   linux       full CTest suite + repository guard scripts (GCC and Clang)
 #   linux-sanitizers full CTest suite under AddressSanitizer + UBSan
-#   linux-vst3  VST3, Linux x86_64 + aarch64, SDK validator, host integration test
-#   windows-vst3 VST3, Windows x64 + arm64 (MSVC), SDK validator, host integration test
+#   linux-vst3  VST3, Linux x86_64 + aarch64, SDK validator, host integration test,
+#               offscreen render of every editor tab (PNG artifact)
+#   windows-vst3 VST3, Windows x64 + arm64 (MSVC), SDK validator, host integration test,
+#               offscreen editor render
 #   macos       AUv2 (5 flavors) + VST3, codesign verify, strict auval, host integration test
 #   macos-apps  Standalone app + AUv3 (Logic-compatible app), launch smoke test
 #
@@ -127,7 +129,13 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with: { ref: "${{ inputs.ref }}" }
-      - run: sudo apt-get update && sudo apt-get install -y ninja-build zip
+      - name: Install build dependencies (incl. VSTGUI editor toolkit)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ninja-build zip \
+            libx11-xcb-dev libxcb-util-dev libxcb-cursor-dev libxcb-keysyms1-dev libxcb-xkb-dev \
+            libxkbcommon-dev libxkbcommon-x11-dev libcairo2-dev libpango1.0-dev \
+            libfontconfig1-dev libfreetype-dev libwayland-dev wayland-protocols
       - name: Fetch Steinberg VST3 SDK
         run: |
           git clone --depth 1 --branch "${VST3SDK_TAG}" --recurse-submodules --shallow-submodules \
@@ -137,10 +145,15 @@ jobs:
           set -o pipefail
           cmake -S . -B build-vst3 -G Ninja -DCMAKE_BUILD_TYPE=Release \
             -DARPSID_BUILD_VST3=ON -Dvst3sdk_SOURCE_DIR="${RUNNER_TEMP}/vst3sdk"
-          cmake --build build-vst3 --target arpsid_vst3 arpsid_vst3_host_tests 2>&1 | tee build-vst3.log
+          cmake --build build-vst3 --target arpsid_vst3 arpsid_vst3_host_tests arpsid_vst3_editor_snapshot 2>&1 | tee build-vst3.log
           scripts/ci/check_build_warnings.sh build-vst3.log "$GITHUB_WORKSPACE"
       - name: VST3 host integration test
         run: cmake --build build-vst3 --target arpsid_vst3_host_check
+      - name: Editor render (every tab, offscreen)
+        run: cmake --build build-vst3 --target arpsid_vst3_editor_check
+      - uses: actions/upload-artifact@v7
+        if: always() && matrix.arch == 'x86_64'
+        with: { name: editor-snapshots-linux, path: build-vst3/editor-snapshots, if-no-files-found: ignore }
       - name: Install layout
         run: |
           cmake --install build-vst3 --prefix "${RUNNER_TEMP}/stage"
@@ -178,11 +191,16 @@ jobs:
           set -o pipefail
           cmake -S . -B build-vst3 -A "${{ matrix.cmake_arch }}" \
             -DARPSID_BUILD_VST3=ON -Dvst3sdk_SOURCE_DIR="$(cygpath -m "${RUNNER_TEMP}/vst3sdk")"
-          cmake --build build-vst3 --config Release --target arpsid_vst3 arpsid_vst3_host_tests -- -m -nologo -v:minimal 2>&1 | tee build-vst3.log
+          cmake --build build-vst3 --config Release --target arpsid_vst3 arpsid_vst3_host_tests arpsid_vst3_editor_snapshot -- -m -nologo -v:minimal 2>&1 | tee build-vst3.log
           scripts/ci/check_build_warnings.sh build-vst3.log "$(cygpath -w "$GITHUB_WORKSPACE")"
           test -d build-vst3/VST3/Release/arpsid_vst3.vst3
       - name: VST3 host integration test
         run: cmake --build build-vst3 --config Release --target arpsid_vst3_host_check
+      - name: Editor render (every tab, offscreen)
+        run: cmake --build build-vst3 --config Release --target arpsid_vst3_editor_check
+      - uses: actions/upload-artifact@v7
+        if: always() && matrix.arch == 'x64'
+        with: { name: editor-snapshots-windows, path: build-vst3/editor-snapshots, if-no-files-found: ignore }
       - name: Package
         if: inputs.release
         run: |
