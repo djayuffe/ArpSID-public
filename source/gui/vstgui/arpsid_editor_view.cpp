@@ -49,6 +49,19 @@ ControlKind controlKindFor(int id) {
 // Short control caption: the parameter name without its section prefix.
 std::string shortLabel(int id) {
     std::string n = kParamInfos[static_cast<std::size_t>(id)].name ? kParamInfos[static_cast<std::size_t>(id)].name : "";
+    // SID registers: "$D400 FREQ1 LO" -> "D400 FREQ LO" (the section names the
+    // voice; the value already reads as $XX).
+    if (id >= static_cast<int>(kParamSidRegD400) && id <= static_cast<int>(kParamSidRegD41D) && n.size() > 1 &&
+        n[0] == '$') {
+        std::string out;
+        for (std::size_t i = 1; i < n.size(); ++i) {
+            const char c = n[i];
+            const bool voiceDigit = i > 6 && c >= '1' && c <= '3' && (i + 1 == n.size() || n[i + 1] == ' ');
+            if (!voiceDigit) out += c;
+        }
+        const auto paren = out.find(" (");
+        return paren == std::string::npos ? out : out.substr(0, paren);
+    }
     static const char* kPrefixes[] = {"VCO1 ", "VCO2 ", "VCO3 ", "LFO1 ", "LFO2 ", "LFO3 ", "LFO4 ", "LFO ",
                                       "Arp ", "Seq ", "Filter ", "HI-FI ", "Mod: ", "Limiter ", "Forensic ", "C64 "};
     for (const char* p : kPrefixes) {

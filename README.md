@@ -27,6 +27,25 @@ Captured from the ArpSID standalone host (AUv3 presentation), running the shippe
 
 *SID-register (`$D400`) monitor — per-voice VCO, filter and envelope register read-outs for direct SynthMode inspection.*
 
+### VST3 editor on Windows and Linux
+
+The Windows and Linux VST3 has the same 17 tabs, rendered with VSTGUI. These
+images come from `arpsid_vst3_editor_check`, which draws every tab offscreen
+with the engine running (a four-note chord held on the factory patch).
+Regenerate them with `cmake --build build-vst3 --target arpsid_vst3_editor_check`
+(PNGs in `build-vst3/editor-snapshots/`).
+
+![ArpSID VST3 editor — MAIN tab](docs/screenshots/vst3-editor-main.png)
+
+*MAIN — master, three VCOs, filter with live response curve, ADSR, output limiter and the live output scope.*
+
+| | |
+|---|---|
+| ![SID REG tab](docs/screenshots/vst3-editor-sid-reg.png) | ![MIX tab](docs/screenshots/vst3-editor-mix.png) |
+| *SID REG — every `$D400–$D41D` register as a control, next to the live register readout.* | *MIX — 16 channel strips, sends, master and the per-channel FX chain.* |
+| ![BANK tab](docs/screenshots/vst3-editor-bank.png) | |
+| *BANK — the 180 factory patches and the user bank, with `.arpsid` / `.arpsidbank` load and save.* | |
+
 ---
 
 ## Plug-in formats

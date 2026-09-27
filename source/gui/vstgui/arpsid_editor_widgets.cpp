@@ -13,6 +13,7 @@
 #include <cmath>
 #include <cstdio>
 #include <map>
+#include <string>
 
 namespace ArpSID::Editor {
 
@@ -40,6 +41,29 @@ CColor withAlpha(CColor c, uint8_t a) {
 }
 
 constexpr double kPi = 3.14159265358979323846;
+
+// Draws a label inside rect: shrinks the font (down to 7.5 pt) until the
+// text fits, and only then shortens it, so long parameter names stay readable.
+void drawFitted(CDrawContext* ctx, const std::string& text, const CRect& rect, CHoriTxtAlign align,
+                CCoord size, bool bold = false) {
+    const CCoord avail = rect.getWidth();
+    CCoord sz = size;
+    ctx->setFont(uiFont(sz, bold));
+    while (sz > 7.5 && ctx->getStringWidth(text.c_str()) > avail) {
+        sz -= 0.5;
+        ctx->setFont(uiFont(sz, bold));
+    }
+    std::string t = text;
+    while (t.size() > 1 && ctx->getStringWidth(t.c_str()) > avail) {
+        t.pop_back();
+        while (!t.empty() && t.back() == ' ') t.pop_back();
+        if (ctx->getStringWidth((t + ".").c_str()) <= avail) {
+            t += ".";
+            break;
+        }
+    }
+    ctx->drawString(t.c_str(), rect, align);
+}
 
 // Knob arc geometry (VSTGUI angles: degrees, 0 = 3 o'clock, clockwise).
 constexpr double kArcStart = 135.0;
@@ -122,9 +146,8 @@ void ParamKnob::draw(CDrawContext* ctx) {
     knob.offset(r.left + (r.getWidth() - dia) / 2.0, r.top + labelH);
 
     ctx->setDrawMode(kAntiAliasing | kNonIntegralMode);
-    ctx->setFont(uiFont(10.0));
     ctx->setFontColor(theme_.label);
-    ctx->drawString(label_.c_str(), CRect(r.left, r.top, r.right, r.top + labelH), kCenterText);
+    drawFitted(ctx, label_, CRect(r.left, r.top, r.right, r.top + labelH), kCenterText, 10.0);
 
     const float v = std::clamp(getValueNormalized(), 0.f, 1.f);
     ctx->setLineWidth(3.0);
@@ -237,9 +260,8 @@ void ParamToggle::draw(CDrawContext* ctx) {
     CRect led(box.left + 6, box.getCenter().y - 4, box.left + 14, box.getCenter().y + 4);
     ctx->setFillColor(on ? theme_.ledOn : theme_.ledOff);
     ctx->drawEllipse(led, kDrawFilled);
-    ctx->setFont(uiFont(10.0, on));
     ctx->setFontColor(on ? theme_.value : theme_.label);
-    ctx->drawString(label_.c_str(), CRect(led.right + 4, box.top, box.right - 3, box.bottom), kLeftText);
+    drawFitted(ctx, label_, CRect(led.right + 4, box.top, box.right - 3, box.bottom), kLeftText, 10.0, on);
     setDirty(false);
 }
 
@@ -275,9 +297,8 @@ void ParamMenu::setNormalized(float v) {
 }
 
 void ParamMenu::drawBackgroundRect(CDrawContext* ctx, const CRect&) {
-    ctx->setFont(uiFont(10.0));
     ctx->setFontColor(theme_.label);
-    ctx->drawString(label_.c_str(), CRect(0, 0, getWidth(), 14), kCenterText);
+    drawFitted(ctx, label_, CRect(0, 0, getWidth(), 14), kCenterText, 10.0);
 }
 
 // ── SectionPanel ────────────────────────────────────────────────────────────
@@ -907,9 +928,8 @@ void ByteKnob::draw(CDrawContext* ctx) {
     CRect knob(0, 0, dia, dia);
     knob.offset(r.left + (r.getWidth() - dia) / 2.0, r.top + labelH);
     ctx->setDrawMode(kAntiAliasing | kNonIntegralMode);
-    ctx->setFont(uiFont(9.5));
     ctx->setFontColor(theme_.label);
-    ctx->drawString(label_.c_str(), CRect(r.left - 4, r.top, r.right + 4, r.top + labelH), kCenterText);
+    drawFitted(ctx, label_, CRect(r.left - 4, r.top, r.right + 4, r.top + labelH), kCenterText, 9.5);
     CRect arc = knob;
     arc.inset(2.0, 2.0);
     ctx->setLineWidth(2.5);
@@ -983,9 +1003,8 @@ void ChoiceMenu::valueChanged(CControl* c) {
 }
 
 void ChoiceMenu::drawBackgroundRect(CDrawContext* ctx, const CRect&) {
-    ctx->setFont(uiFont(10.0));
     ctx->setFontColor(theme_.label);
-    ctx->drawString(label_.c_str(), CRect(0, 0, getWidth(), 14), kCenterText);
+    drawFitted(ctx, label_, CRect(0, 0, getWidth(), 14), kCenterText, 10.0);
 }
 
 } // namespace ArpSID::Editor

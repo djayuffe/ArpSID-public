@@ -5,6 +5,18 @@ All notable changes to ArpSID are documented here. The project uses
 version is `VERSION.txt`, mirrored by `project(VERSION)` in `CMakeLists.txt`
 and `include/arpsid/version.h`.
 
+## [Unreleased]
+
+### Fixed (VST3 editor, Windows and Linux)
+
+- Long parameter labels (SID register knobs, SYNTH MODE toggles) no longer
+  clip: labels shrink to fit and SID register knobs read `D400 FREQ LO`.
+
+### Documentation
+
+- README shows the Windows/Linux VST3 editor (MAIN, SID REG, MIX and BANK
+  tabs), taken from the offscreen editor render.
+
 ## [0.9.5] — 2026-09-27
 
 ### Changed (VST3)
