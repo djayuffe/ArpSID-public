@@ -9414,6 +9414,10 @@ static CVReturn ArpSIDVCDisplayLinkCallback(CVDisplayLinkRef __unused link,
     _ev.wantsLayer=YES;
     _ev.layer.backgroundColor = NSColor.blackColor.CGColor;
     _ev.autoresizingMask=NSViewWidthSizable|NSViewHeightSizable;
+    // The editor draws its own dark surfaces; standard controls (buttons,
+    // pop-ups, segmented controls) follow the editor theme, not the host's
+    // or the system's Light/Dark setting, so their text stays readable.
+    _ev.appearance=[NSAppearance appearanceNamed:NSAppearanceNameDarkAqua];
     self.view=_ev;
     ArpSIDSetPreferredContentSizeOnMainThread(self, NSMakeSize(kW,kH));
     if(!_knobs) _knobs=[NSMutableArray array];
@@ -15885,6 +15889,15 @@ static void arpsidSetPanelTypes(NSSavePanel* panel, NSArray<NSString*>* exts) {
 
 // ─── v551: Settings helpers ───────────────────────────────────────────────────
 
+// Standard AppKit controls take the editor theme: aqua for the Light theme,
+// dark aqua for Dark, C64 Classic and High Contrast.
+-(void)_applyControlAppearance_ {
+    NSView* root = self.view;
+    if (!root) return;
+    const bool light = _settingsModel_v544_.theme == ArpSID::GUI::Theme::Light;
+    root.appearance = [NSAppearance appearanceNamed:light ? NSAppearanceNameAqua : NSAppearanceNameDarkAqua];
+}
+
 // Push the current _settingsModel_v544_ to the adapter so it survives
 // project-state save/restore. Called from every action handler.
 -(void)_pushSettingsToAdapter_v551_ {
@@ -15899,6 +15912,7 @@ static void arpsidSetPanelTypes(NSSavePanel* panel, NSArray<NSString*>* exts) {
 // Apply _settingsModel_v544_ to the live control references so a
 // project-state restore is visible in the SETTINGS tab immediately.
 -(void)_applySettingsModelToSettingsPanel_v551_ {
+    [self _applyControlAppearance_];
     auto selectIdx = [](NSPopUpButton* pop, NSInteger idx) {
         if (!pop) return;
         if (idx >= 0 && idx < (NSInteger)pop.numberOfItems) [pop selectItemAtIndex:idx];
@@ -15950,6 +15964,7 @@ static void arpsidSetPanelTypes(NSSavePanel* panel, NSArray<NSString*>* exts) {
 -(void)_applyTheme_v552_ {
     NSView* root = self.view ? self.view : (_pSettingsV544 ? _pSettingsV544.superview : nil);
     if (!root) return;
+    [self _applyControlAppearance_];
 
     const NSRect cr = _panelContentRect_v552_;
     if (cr.size.width < 8.f || cr.size.height < 8.f) return;
