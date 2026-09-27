@@ -5981,3 +5981,18 @@ endif()
 add_test(NAME VersionCoherence
   COMMAND ${CMAKE_COMMAND} -E env python3
           ${CMAKE_CURRENT_SOURCE_DIR}/scripts/check_version_coherence.py)
+
+# Renders every tab of the Cocoa (AU) editor of the installed AUv2 to PNG
+# (docs/screenshots/au-editor-*.png); see scripts/update_au_screenshots.sh.
+if(APPLE AND ARPSID_BUILD_AUV2)
+    add_executable(arpsid_au_editor_snapshot EXCLUDE_FROM_ALL
+        source/tests/arpsid_au_editor_snapshot.mm)
+    target_compile_options(arpsid_au_editor_snapshot PRIVATE -fobjc-arc)
+    target_link_libraries(arpsid_au_editor_snapshot PRIVATE
+        "-framework AppKit"
+        "-framework AudioUnit"
+        "-framework AudioToolbox"
+        "-framework CoreAudio"
+        "-framework QuartzCore"
+        "-framework Foundation")
+endif()

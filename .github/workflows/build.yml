@@ -296,6 +296,21 @@ jobs:
           echo "auval: all flavors passed with no warnings"
           echo "AUV2_COMPONENT=$comp" >> "$GITHUB_ENV"
 
+      - name: AU editor render (every tab, installed AUv2)
+        # Captures the native Cocoa editor for the docs. GUI capture depends on
+        # the runner's window server, so it never fails the build.
+        continue-on-error: true
+        run: |
+          cmake --build build-auv2 --target arpsid_au_editor_snapshot
+          tool="$(find build-auv2 -type f -name arpsid_au_editor_snapshot -perm -u+x -print -quit)"
+          "$tool" "${RUNNER_TEMP}/au-editor" --flavors
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: au-editor-screenshots
+          path: ${{ runner.temp }}/au-editor
+          if-no-files-found: ignore
+
       - name: Build VST3 (runs the SDK validator)
         run: |
           set -o pipefail
