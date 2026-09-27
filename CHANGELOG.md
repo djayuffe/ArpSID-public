@@ -5,6 +5,64 @@ All notable changes to ArpSID are documented here. The project uses
 version is `VERSION.txt`, mirrored by `project(VERSION)` in `CMakeLists.txt`
 and `include/arpsid/version.h`.
 
+## [Unreleased]
+
+### Fixed (VST3 editor, Windows and Linux)
+
+- **Knob arcs on Linux.** VSTGUI's cairo backend treats `drawArc` angles as
+  radians although the API takes degrees, so every knob drew a full ring and
+  the value arc was invisible. Arcs are now stroked through a graphics path.
+- **SETTINGS menus.** The topology, theme, language and diagnostics menus did
+  not draw: their pop-up menu kept its initial zero size. Menus now follow
+  their container's size.
+- **Stepped values match the engine.** Waveform and filter mode decode with
+  `floor(v × 8)` and arp octaves with `int(v × 3)`; the editor rounded. A
+  host-automated value between grid points (e.g. waveform 0.42) showed a
+  different waveform than the one playing. One shared decode law now drives
+  menus, labels, the filter curve, LFO shapes and the SEQ grid, and a test
+  pins it to the engine formulas.
+- **DIGI `$D418` mode menu** was mislabelled. The kernel's modes are
+  `AUTH C64-BUS D418` (0) and `FAST PRIVATE D418` (1); the menu offered
+  "legacy float" (a debug-only path) as its first entry, so the default
+  authentic mode showed as "legacy float".
+- Theme changes restyle every menu, including those in the MIX, KIT, DIGI and
+  SETTINGS panels.
+- MIX, KIT and DIGI knobs stop dragging when the host cancels a mouse
+  gesture.
+
+### Improved (VST3 editor)
+
+- Page layout: rows of plain controls take their natural height and rows with
+  displays or panels share the rest, so knob rows are compact and scopes and
+  grids get the space.
+- The on-screen keyboard lights every note the engine is sounding, not only
+  the last one.
+- The VCO scopes and SID bus timeline draw one labelled lane per signal.
+  Modulation meters draw LFOs and pitch bend from the centre.
+- The SID register readout wraps the raw register image; SEQ steps past the
+  sequence length are faded; knob captions and values shrink to fit.
+- The DIGI panel re-reads its ~480 KB sample bank only when it changes, not
+  30 times a second.
+- MIX, KIT and DIGI knobs have a Shift fine-drag.
+
+### Documentation
+
+- New [docs/VST3_EDITOR.md](docs/VST3_EDITOR.md): a screenshot and guide for
+  each of the 17 tabs, the controls and gestures, and how the editor code
+  works (data flow, layout, decode law, platform notes, tests).
+- New [docs/VST3_IMPLEMENTATION.md](docs/VST3_IMPLEMENTATION.md): processor,
+  kernel host, state format v5, controller, MIDI mapping, messages, threading.
+- New [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): layers, the kernel's
+  block pipeline, engines, parameters, state, GUI models, telemetry and
+  wrappers. It replaces `docs/ARCHITECTURE_NOTES.md`.
+- New [docs/PARAMETER_REFERENCE.md](docs/PARAMETER_REFERENCE.md): all 512
+  parameters with default, values, steps and editor tab. It is generated from
+  the code, and `ParameterReferenceDocTests` fails when it is stale
+  (regenerate with the `arpsid_update_parameter_reference` target).
+- [docs/TAB_ARCHITECTURE.md](docs/TAB_ARCHITECTURE.md) is rewritten for the
+  current 17-tab ring; it described 9 tabs.
+- `scripts/update_editor_screenshots.sh` regenerates the editor screenshots.
+
 ## [0.9.6] — 2026-09-27
 
 ### Fixed (VST3 editor, Windows and Linux)

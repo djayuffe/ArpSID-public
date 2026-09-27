@@ -1,118 +1,87 @@
 # ArpSID GUI tab architecture
 
-This document is the current specification for the 9-tab GUI architecture.
-The canonical inventory lives in `include/arpsid/gui/tab_architecture.h`,
-where compile-time `static_assert` pins keep the tab order, labels, drum
-contexts, and implementation status locked to the release contract.
+The tab inventory lives in `include/arpsid/gui/tab_architecture.h`. The macOS
+Cocoa editor (AU, AUv3, Standalone and macOS VST3) and the Windows/Linux VST3
+editor both build their tab strip from `kProductionVisibleTabs`. Compile-time
+`static_assert`s in that header pin the order, the labels and the
+implementation status.
 
-All 9 tabs are implemented. There are no remaining
-GUI scaffold tabs.
+For each tab's contents see [VST3_EDITOR.md](VST3_EDITOR.md#tabs), which has a
+screenshot of every tab. For the parameters on each tab see
+[PARAMETER_REFERENCE.md](PARAMETER_REFERENCE.md).
 
-## Inventory
+## Production tab ring
 
-| # | Tab | HUD | Status | DrumContext | Notes |
-|---|---|---|---|---|---|
-| 0 | DRSID | DRSID | Implemented | DrSID_C64Wavetable | Register-microprogram drums on one SID |
-| 1 | SID-808 | S808 | Implemented | SID808_AnalogProjection | TR-style analog x0x projection |
-| 2 | DIGI | DIGI | Implemented | Digi4Bit | $D418 volume-DAC sample surface |
-| 3 | SEQ | SEQ | Implemented | None | Global step sequencer |
-| 4 | KIT | KIT | Implemented | None | Kit editor for all drum engines |
-| 5 | MIX | MIX | Implemented | None | Per-instrument mixer and FX |
-| 6 | SIDCORE | SCORE | Implemented | None | Live SID register timeline |
-| 7 | C64 STATE | C64 | Implemented | None | CPU/SID/CIA/PSID state inspector |
-| 8 | SETTINGS | SET | Implemented | None | Global preferences and diagnostics |
+`kProductionVisibleTabs` has 17 tabs, in segmented-control order:
 
-## Implemented Surfaces
+| # | Tab | HUD | Enum (persisted ID) | Primary drum context | Description (`TabSpec`) |
+|---:|---|---|---|---|---|
+| 0 | MAIN | MAIN | `Main` (0) | — | Primary SID instrument, VCO, filter, envelope and output surface. |
+| 1 | LFO / ARP | LFO | `LfoArp` (1) | — | Four realtime LFOs and the host/internal arpeggiator. |
+| 2 | SID REG | SIDREG | `SidRegisters` (3) | — | Direct SID register editor with OSC3, ENV3, POT and voice scopes. |
+| 3 | SEQ | SEQ | `Sequencer` (4) | SID-808 analog projection | Global step sequencer and SID-808/DrSID performance surface. |
+| 4 | DRSID | DRSID | `DrSid` (13) | DrSID C64 wavetable | Dedicated C64 register-microprogram drum surface. |
+| 5 | FILTER | FILTER | `Filter` (5) | — | Expanded filter controls and chronological input/output scopes. |
+| 6 | MACRO | MACRO | `Macro` (6) | — | Eight live macro controls and modulation routing. |
+| 7 | FORENSIC | FOREN | `Forensic` (7) | — | Analog-forensic controls, live VCO scopes and bus stress telemetry. |
+| 8 | SIDCORE | SCORE | `SidCore` (8) | — | SID bus matrix, register timeline, chip state and VCO scopes. |
+| 9 | C64 | C64 | `C64` (11) | — | Realtime C64 CPU, VIC-II, CIA, SID, memory and debug cockpit, with the SID player. |
+| 10 | HI-FI | HIFI | `HiFi` (12) | — | Post-SID quality, safety and audible-delta monitoring. |
+| 11 | BANK | BANK | `Bank` (9) | — | Factory and user patch/bank browser covering the canonical slot space. |
+| 12 | OPTIONS | OPT | `Options` (10) | — | Compact runtime options and C64 control hub. |
+| 13 | SETTINGS | SET | `Settings` (14) | — | Topology, theme, language, diagnostics and canonical-policy status. |
+| 14 | MIX | MIX | `Mix` (16) | — | Per-instrument mixer, FX, sends, limiter and monitor controls. |
+| 15 | KIT | KIT | `Kit` (17) | — | DrSID, SID-808 and DIGI kit assignment and voice editor. |
+| 16 | DIGI | DIGI | `Digi` (18) | DIGI 4-bit | `$D418` sample import, capture, pads, sequencing and bus telemetry. |
 
-### DRSID
+The enum values are persisted: saved GUI state stores the tab by its ID, not
+its position in the ring. Values are never reused or renumbered.
 
-DrSID remains the C64-wavetable drum surface. The tab is backed by the
-DrSID instrument-program and kit-compiler contracts, with deterministic
-register microprogram playback and factory-bank coverage.
+## Hidden IDs
 
-### SID-808
+| ID | Status | Why it exists |
+|---|---|---|
+| `LegacySidProjection` (2) | Compatibility only; never visible | An old persisted value. It migrates to a visible tab. |
+| `C64State` (15) | Has a `TabSpec`, not in the ring | The former C64 STATE inspector. Its diagnostics now live on C64 and SIDCORE. The spec stays so projects that persisted ID 15 migrate deterministically. |
 
-SID-808 remains the analog x0x projection surface. It owns the SID808
-engine/router path, transport integration, factory definitions, voice smoke,
-accent, hat choke, determinism, and peak-headroom coverage.
+Older source spellings (`DRSID`, `SID808`, `DIGI`, `SEQ`, `KIT`, `MIX`,
+`SIDCORE`, `C64STATE`) remain as enum aliases. `SID808` names the Sequencer
+surface; SID-808 was never a separate persisted tab.
 
-### DIGI
+## Invariants
 
-DIGI is implemented as the $D418 sample-facing tab. Its GUI model and tab
-wire are covered by the v563-v565 tests, including model defaults, tab
-projection, and state persistence.
+These are enforced by `static_assert` in `tab_architecture.h` and by the tab
+tests (`gui_tab_architecture_v543`, `tab_architecture_promotion_v566`,
+`tab_no_scaffold_v631`, `c64_state_tab_promotion_v581` and others):
 
-### SEQ
+1. The ring has exactly 17 unique tabs, and every one has a `TabSpec`.
+2. MAIN is first and DIGI is last. The legacy projection ID is never visible.
+3. All 17 visible tabs are implemented, and no visible tab is a scaffold.
+4. Every tab has a non-empty name and description, and a HUD label of at most
+   6 glyphs (it must fit the HUD status cell).
+5. There are 18 specs: the 17 visible tabs plus the migration-only C64 STATE.
+6. The primary drum context per tab matches the engine split (SEQ: SID-808,
+   DRSID: DrSID, DIGI: 4-bit). The GUI never sources engine identity; the
+   engine's `DrumKitIdentity` wins and the GUI reflects it.
+7. The Windows/Linux editor uses the same order: `EditorLayoutCoverageTests`
+   checks its tab table against `kProductionVisibleTabs`.
 
-SEQ is implemented as the global sequencer surface with note range, swing,
-tempo, rate-law, and step-grid coverage across the v567-v572 tests.
+## Tab data that is not parameters
 
-### KIT
+Most tabs edit host parameters. Four tabs also edit models that are saved with
+the plug-in state, but are not host parameters:
 
-KIT is implemented as a full drum-kit editing surface. The model, tab wire,
-32-step grid, assign config, voice config, and state blob are covered by the
-v555-v560 tests.
+| Tab | Model | Header |
+|---|---|---|
+| SETTINGS | `SettingsPanelModel`: topology, theme, language, diagnostics | `settings_panel_model.h` |
+| MIX | `MixPanelModel`: 16 channels, sends, master, FX chains | `mix_panel_model.h` |
+| KIT | `KitStateBlob`: the panel model, step grid, SID-808 voice configs, DIGI assignments | `kit_state_blob.h` |
+| DIGI | `DigiPanelModel` + `DigiSampleBankBlob`: slots, steps, user samples | `digi_panel_model.h`, `digi_sample_bank_v596.h` |
 
-### MIX
+SIDCORE reads a live data model instead, `SidCorePanelModel`
+(`sidcore_panel_model.h`). It is a fixed-size, RT-safe ring of the last SID
+register writes, fed by the render thread and read by the GUI; it is not saved.
 
-MIX is implemented as the per-instrument mixer and FX surface. The panel
-model, tab wire, FX processors, and state persistence are covered by the
-v547-v548, v554, and v561 tests.
-
-### SIDCORE
-
-SIDCORE is implemented as the live SID register/timeline surface. It is fed
-from the RT-safe SIDCORE model, ingress ring, scope triple-buffer, and C64
-PSID SIDCORE timeline coverage.
-
-### C64 STATE
-
-C64 STATE is implemented as the read-only C64 inspector. It includes
-platform/clock/CPU registers, SID model/topology readout, PSID address map,
-CIA/IEC/tape/ROM state, SID register mirror, memory-window summary, C64 bus
-oscilloscope views, SIDCORE timeline, and audit counters.
-
-### SETTINGS
-
-SETTINGS is implemented as the global preferences and diagnostics surface,
-with model, persistence, theme, language, and tab-wire coverage.
-
-## Audit-Correctness Invariants
-
-These invariants apply across all tabs and are pinned through the tab
-architecture header and tests:
-
-1. Tab inventory size is exactly 9.
-2. Enum order matches array order for state persistence.
-3. HUD labels are at most 6 characters.
-4. Implementation status is compile-time queryable.
-5. `implementedTabCount() == 9`.
-6. `scaffoldTabCount() == 0`.
-7. Primary `DrumContext` per tab matches the engine-split architecture.
-8. GUI never sources truth for engine identity; the engine-layer
-   `DrumKitIdentity` always wins and the GUI reflects it.
-
-## Validation
-
-The v591 final source package was built from the applied source tree after
-the GUI/tab/button/realtime/scope/telemetry cleanup and the DrSID/SID-808
-live drum-data audit. The v590 package added the final top-bar mount and
-dedicated DRSID telemetry/overlay wiring pass; v591 adds AUv3 render-scratch
-and transport hardening. Current validation baseline:
-
-- Fresh Release CMake configure: passed.
-- Fresh Release full build: passed.
-- Full ctest: 125/125 passed.
-- MIX/KIT/DIGI GUI POD state projects through `gui_realtime_projection_v588.h`
-  into compact render-friendly control and telemetry intent.
-- DrSID live kick overlay base/sweep telemetry, canonical Tom note 47, complete
-  8-class DrSID kit programs, and all SID-808 factory slots 120..149 are pinned
-  by `drsid_808_kit_data_v589_tests.cpp`.
-- Top-bar controls, dedicated DRSID panel live clock/chip/HUD/LED telemetry,
-  no-adapter clearing, and DRSID knob-overlay inclusion are pinned by
-  `gui_viewcontroller_wiring_v590_tests.cpp`.
-- AUv3 hard-ceiling render scratch, interleaved scratch epoch checks, chunk
-  beat math, and 8-attempt transport seqlock reads are pinned by
-  `auv3_render_scratch_transport_v591_tests.cpp`.
-- AUv2 installed component smoke and strict verifier/auval were already
-  green from the v582 binary pass.
+`tab_architecture.h` also carries implementation contracts for DIGI and KIT
+(`ImplementationContract::kDigiTabContract`, `kKitTabContract`) that describe
+what each surface must provide.

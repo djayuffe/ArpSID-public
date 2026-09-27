@@ -16,6 +16,8 @@
 #include "vstgui/lib/controls/coptionmenu.h"
 
 #include <algorithm>
+#include <array>
+#include <functional>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -190,7 +192,6 @@ void EditorView::buildHeader_() {
     addView(status_);
     outMeter_ = new MeterView(CRect(970, y + 4, kWidth - kMargin, y + 30), theme_, 2);
     addView(outMeter_);
-    patchLabel_ = nullptr;
 }
 
 void EditorView::selectTab(int index) {
@@ -213,6 +214,41 @@ void EditorView::buildAllPages() {
         }
 }
 
+// Page layout. A tab is a list of rows (EditorLayout); each row is split
+// horizontally by the sections' width weights. Heights:
+//   * a row of plain parameter sections gets exactly the height its controls
+//     need (natural height from the same flow layout that places them);
+//   * rows holding a live display or a model editor ("flexible" rows) share
+//     the remaining height by their height weights, never below their own
+//     natural height;
+//   * if the natural heights do not fit, every row falls back to its weight.
+// This keeps knob rows compact and gives scopes, grids and editors the room.
+namespace {
+
+bool isFlexibleDisplay(L::Display d) { return d != L::Display::None && d != L::Display::Actions; }
+
+} // namespace
+
+CCoord EditorView::sectionWidth_(const L::Row& row, int si, int secCount, float totalW) const {
+    const CCoord gap = 6.0;
+    return (pageArea_.getWidth() - gap * (secCount - 1)) * row.sections[static_cast<std::size_t>(si)].widthWeight / totalW;
+}
+
+CCoord EditorView::naturalSectionHeight_(const L::Section& sec, CCoord width) const {
+    // SectionPanel content inset: 22 px title band, 6 px sides and bottom.
+    const CCoord chrome = 22.0 + 6.0 + 4.0;
+    const bool hasParams = sec.params[0] != L::kEnd;
+    CCoord h = 0.0;
+    if (hasParams) {
+        CRect area(6, 22, width - 6, 10000);
+        if (sec.display != L::Display::None) area.right = area.left + area.getWidth() * 0.56;
+        h = flowSectionParams_(nullptr, sec, area);
+    }
+    if (sec.display == L::Display::Actions) h = std::max<CCoord>(h, 70.0);
+    else if (sec.display != L::Display::None) h = std::max<CCoord>(h, 90.0);
+    return h + chrome;
+}
+
 void EditorView::buildPage_(int index) {
     const L::Tab& tab = L::tabs()[static_cast<std::size_t>(index)];
     auto* page = new CViewContainer(pageArea_);
@@ -220,44 +256,105 @@ void EditorView::buildPage_(int index) {
     Page& p = pages_[static_cast<std::size_t>(index)];
     p.view = page;
 
-    float totalH = 0.f;
-    for (const auto& row : tab.rows) {
-        if (row.heightWeight <= 0.f) break;
-        totalH += row.heightWeight;
-    }
     const CCoord gap = 6.0;
-    const CCoord W = pageArea_.getWidth(), H = pageArea_.getHeight();
+    const CCoord H = pageArea_.getHeight();
     int rowCount = 0;
     for (const auto& row : tab.rows) {
         if (row.heightWeight <= 0.f) break;
         ++rowCount;
     }
+    // Per-row natural height and flexibility.
+    std::vector<CCoord> natural(static_cast<std::size_t>(rowCount), 0.0), rowH(static_cast<std::size_t>(rowCount), 0.0);
+    std::vector<bool> flex(static_cast<std::size_t>(rowCount), false);
+    float totalWeight = 0.f, flexWeight = 0.f;
+    for (int ri = 0; ri < rowCount; ++ri) {
+        const auto& row = tab.rows[static_cast<std::size_t>(ri)];
+        float totalW = 0.f;
+        int secCount = 0;
+        for (const auto& sct : row.sections) {
+            if (!sct.title) break;
+            totalW += sct.widthWeight;
+            ++secCount;
+        }
+        for (int si = 0; si < secCount; ++si) {
+            const auto& sec = row.sections[static_cast<std::size_t>(si)];
+            natural[static_cast<std::size_t>(ri)] = std::max(
+                natural[static_cast<std::size_t>(ri)], naturalSectionHeight_(sec, sectionWidth_(row, si, secCount, totalW)));
+            if (isFlexibleDisplay(sec.display)) flex[static_cast<std::size_t>(ri)] = true;
+        }
+        totalWeight += row.heightWeight;
+        if (flex[static_cast<std::size_t>(ri)]) flexWeight += row.heightWeight;
+    }
+    const CCoord avail = H - gap * (rowCount - 1);
+    CCoord fixedSum = 0.0, naturalSum = 0.0;
+    for (int ri = 0; ri < rowCount; ++ri) {
+        naturalSum += natural[static_cast<std::size_t>(ri)];
+        if (!flex[static_cast<std::size_t>(ri)]) fixedSum += natural[static_cast<std::size_t>(ri)];
+    }
+    if (naturalSum > avail || totalWeight <= 0.f) {
+        for (int ri = 0; ri < rowCount; ++ri)
+            rowH[static_cast<std::size_t>(ri)] = avail * tab.rows[static_cast<std::size_t>(ri)].heightWeight / totalWeight;
+    } else if (flexWeight > 0.f) {
+        // Fixed rows at natural height; flexible rows split the rest by
+        // weight, each at least its natural height.
+        CCoord rest = avail - fixedSum;
+        std::vector<bool> pinned(static_cast<std::size_t>(rowCount), false);
+        float w = flexWeight;
+        for (bool changed = true; changed;) {
+            changed = false;
+            for (int ri = 0; ri < rowCount; ++ri) {
+                const auto i = static_cast<std::size_t>(ri);
+                if (!flex[i] || pinned[i]) continue;
+                const CCoord share = rest * tab.rows[i].heightWeight / w;
+                if (share < natural[i]) {
+                    pinned[i] = true;
+                    rowH[i] = natural[i];
+                    rest -= natural[i];
+                    w -= tab.rows[i].heightWeight;
+                    changed = true;
+                }
+            }
+        }
+        for (int ri = 0; ri < rowCount; ++ri) {
+            const auto i = static_cast<std::size_t>(ri);
+            if (!flex[i]) rowH[i] = natural[i];
+            else if (!pinned[i]) rowH[i] = w > 0.f ? rest * tab.rows[i].heightWeight / w : natural[i];
+        }
+    } else {
+        // Only parameter rows: natural heights plus a weighted share of the
+        // leftover space.
+        const CCoord extra = avail - naturalSum;
+        for (int ri = 0; ri < rowCount; ++ri)
+            rowH[static_cast<std::size_t>(ri)] =
+                natural[static_cast<std::size_t>(ri)] + extra * tab.rows[static_cast<std::size_t>(ri)].heightWeight / totalWeight;
+    }
+
     CCoord y = 0.0;
     for (int ri = 0; ri < rowCount; ++ri) {
         const auto& row = tab.rows[static_cast<std::size_t>(ri)];
-        const CCoord rowH = (H - gap * (rowCount - 1)) * row.heightWeight / totalH;
+        const CCoord h = std::floor(rowH[static_cast<std::size_t>(ri)]);
         float totalW = 0.f;
         int secCount = 0;
-        for (const auto& s : row.sections) {
-            if (!s.title) break;
-            totalW += s.widthWeight;
+        for (const auto& sct : row.sections) {
+            if (!sct.title) break;
+            totalW += sct.widthWeight;
             ++secCount;
         }
         CCoord x = 0.0;
         for (int si = 0; si < secCount; ++si) {
             const auto& sec = row.sections[static_cast<std::size_t>(si)];
-            const CCoord w = (W - gap * (secCount - 1)) * sec.widthWeight / totalW;
-            auto* panel = new SectionPanel(CRect(x, y, x + w, y + rowH), sec.title, theme_);
+            const CCoord w = std::floor(sectionWidth_(row, si, secCount, totalW));
+            auto* panel = new SectionPanel(CRect(x, y, x + w, y + h), sec.title, theme_);
             const CRect content = panel->contentRect();
             const bool hasParams = sec.params[0] != L::kEnd;
             if (sec.display == L::Display::None) {
-                placeSectionParams_(panel, sec, content);
+                flowSectionParams_(panel, sec, content);
             } else if (hasParams) {
                 // Parameters on the left, the display on the right.
                 CRect left = content, right = content;
                 left.right = content.left + content.getWidth() * 0.56;
                 right.left = left.right + 6;
-                placeSectionParams_(panel, sec, left);
+                flowSectionParams_(panel, sec, left);
                 DisplayInstance d = createDisplay(sec.display, right, *ctx_);
                 if (d.view) panel->addView(d.view);
                 p.displays.push_back(std::move(d));
@@ -269,17 +366,19 @@ void EditorView::buildPage_(int index) {
             page->addView(panel);
             x += w + gap;
         }
-        y += rowH + gap;
+        y += h + gap;
     }
     addView(page);
 }
 
-void EditorView::placeSectionParams_(SectionPanel* panel, const L::Section& sec, CRect area) {
-    // Flow layout: knobs take a cell each; toggles and menus are stacked
-    // two-high in wider cells.
+CCoord EditorView::flowSectionParams_(SectionPanel* panel, const L::Section& sec, CRect area) const {
+    // Flow layout: knobs take a cell each; toggles and menus are stacked in
+    // 112 px wide cells, two or three to a knob-height cell. With panel ==
+    // nullptr nothing is created and only the used height is returned.
     CCoord x = area.left, y = area.top;
     const CCoord rowH = kKnobH;
     CCoord stackX = -1, stackUsed = 0;
+    bool any = false;
     auto newCell = [&](CCoord w) {
         if (x + w > area.right + 0.5 && x > area.left) {
             x = area.left;
@@ -291,11 +390,12 @@ void EditorView::placeSectionParams_(SectionPanel* panel, const L::Section& sec,
     };
     for (int id : sec.params) {
         if (id == L::kEnd) break;
+        any = true;
         const ControlKind kind = controlKindFor(id);
         if (kind == ControlKind::Knob) {
             stackX = -1;
             const CCoord cx = newCell(kKnobW);
-            panel->addView(createParamControl(id, CRect(cx, y, cx + kKnobW, y + kKnobH), *ctx_));
+            if (panel) panel->addView(createParamControl(id, CRect(cx, y, cx + kKnobW, y + kKnobH), *ctx_));
             continue;
         }
         const CCoord h = (kind == ControlKind::Menu) ? kMenuH : kToggleH;
@@ -304,9 +404,10 @@ void EditorView::placeSectionParams_(SectionPanel* panel, const L::Section& sec,
             stackUsed = 0;
         }
         const CCoord top = y + stackUsed + (kind == ControlKind::Toggle ? 4.0 : 0.0);
-        panel->addView(createParamControl(id, CRect(stackX, top, stackX + kStackW, top + h), *ctx_));
+        if (panel) panel->addView(createParamControl(id, CRect(stackX, top, stackX + kStackW, top + h), *ctx_));
         stackUsed += h + 4;
     }
+    return any ? (y + rowH) - area.top : 0.0;
 }
 
 void EditorView::valueChanged(CControl* control) {
@@ -317,9 +418,8 @@ void EditorView::valueChanged(CControl* control) {
     }
     if (tag < 0 || tag >= kNumParams) return;
     if (auto* menu = dynamic_cast<COptionMenu*>(control)) {
-        const int steps = std::max(1, static_cast<int>(normalizedParamStepCount(tag)));
-        const float norm = static_cast<float>(menu->getCurrentIndex()) / static_cast<float>(steps);
-        editorSetParam(backend_, tag, norm);
+        // Menus write the on-grid value of the chosen entry.
+        editorSetParam(backend_, tag, stepNormForIndex(tag, static_cast<int>(menu->getCurrentIndex())));
         return;
     }
     const float v = control->getValueNormalized();
@@ -378,7 +478,14 @@ void EditorView::refreshHeader_() {
                       t.hostTempo, t.hostPlaying ? "PLAY" : "STOP", t.arpEnabled ? "ARP " : "",
                       t.seqEnabled ? "SEQ" : "");
         status_->setText(buf);
-        keyboard_->setActiveNote(t.lastMidiNote);
+        // Light every note the engine is sounding (its active note tokens).
+        std::array<std::uint64_t, 2> mask{};
+        const int n = std::min<int>(t.activeTokenCount, 8);
+        for (int i = 0; i < n; ++i) {
+            const int note = t.tokens[i].note & 0x7F;
+            mask[static_cast<std::size_t>(note >> 6)] |= std::uint64_t{1} << (note & 63);
+        }
+        keyboard_->setActiveNotes(mask);
     } else {
         status_->setText("engine telemetry unavailable (processor out of process)");
     }
@@ -391,21 +498,16 @@ void EditorView::applyTheme_() {
         if (s.theme != themeId_) {
             themeId_ = s.theme;
             theme_ = makeTheme(themeId_);
+            // Option menus copy their colours when styled: restyle every menu
+            // at any depth (parameter menus, model-panel choice menus).
+            std::function<void(CViewContainer*)> restyle = [this, &restyle](CViewContainer* c) {
+                c->forEachChild([this, &restyle](CView* v) {
+                    if (auto* m = dynamic_cast<COptionMenu*>(v)) styleMenu(m, theme_);
+                    else if (auto* inner = dynamic_cast<CViewContainer*>(v)) restyle(inner);
+                });
+            };
             for (auto& p : pages_)
-                if (p.view) {
-                    // Menus copy their colours at creation: restyle them.
-                    p.view->forEachChild([this](CView* v) {
-                        if (auto* c = dynamic_cast<CViewContainer*>(v))
-                            c->forEachChild([this](CView* inner) {
-                                if (auto* m = dynamic_cast<COptionMenu*>(inner)) styleMenu(m, theme_);
-                                if (auto* pm = dynamic_cast<ParamMenu*>(inner)) styleMenu(pm->menu(), theme_);
-                                if (auto* cm = dynamic_cast<ChoiceMenu*>(inner))
-                                    cm->forEachChild([this](CView* x) {
-                                        if (auto* m = dynamic_cast<COptionMenu*>(x)) styleMenu(m, theme_);
-                                    });
-                            });
-                    });
-                }
+                if (p.view) restyle(p.view);
             styleMenu(patchMenu_, theme_);
             patchMenu_->setFont(uiFont(12.0, true));
             invalid();

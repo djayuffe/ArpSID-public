@@ -1,7 +1,20 @@
 // Copyright (C) 2024-2026 Ulf Bertilsson
 // ArpSID — live displays and model editors for the cross-platform editor.
+//
+// createDisplay() builds the view for each EditorLayout::Display:
+//   live displays   OUTPUT scope, filter response and in/out scopes, LFO
+//                   waves, VCO scopes, SID register readout, drum / forensic /
+//                   Hi-Fi / modulation meters, SID bus timeline, C64 machine,
+//                   the SEQ step grid and the PANIC / ALL NOTES OFF actions;
+//   model panels    BANK, SETTINGS, MIX, KIT, DIGI and the C64 SID player.
+// Displays refresh from the telemetry the EditorView reads each tick
+// (DisplayInstance::wantsScopes / wantsC64 request the heavy sections).
+// Model panels edit the processor's Vst3KernelHost models directly, mark the
+// project dirty, and reload when the host's model generation changes. See
+// docs/VST3_EDITOR.md for what every tab shows and how to use it.
 
 #include "gui/vstgui/arpsid_editor_view.h"
+#include "gui/vstgui/arpsid_editor_labels.h"
 #include "gui/vstgui/arpsid_wav_reader.h"
 
 #include "vst3/arpsid_vst3_kernel_host.h"
@@ -126,8 +139,7 @@ DisplayInstance makeFilterResponse(const CRect& r, EditorContext& ctx) {
     auto* v = new FilterCurveView(r, ctx.theme);
     DisplayInstance d{v};
     d.refresh = [v, &ctx]() {
-        const int modeIdx = static_cast<int>(std::lround(ctx.backend.param(kParamFilterMode) *
-                                                         static_cast<float>(normalizedParamStepCount(kParamFilterMode))));
+        const int modeIdx = stepIndexForParam(kParamFilterMode, ctx.backend.param(kParamFilterMode));
         v->setFilter(ctx.backend.param(kParamFilterCutoff), ctx.backend.param(kParamFilterResonance), modeIdx);
     };
     return d;
@@ -155,8 +167,7 @@ DisplayInstance makeLfoWaves(const CRect& r, EditorContext& ctx) {
         static const int kShape[4] = {kParamLFOShape, kParamLFO2Shape, kParamLFO3Shape, kParamLFO4Shape};
         static const int kDepth[4] = {kParamLFODepth, kParamLFO2Depth, kParamLFO3Depth, kParamLFO4Depth};
         for (int i = 0; i < 4; ++i) {
-            const int shape = static_cast<int>(std::lround(ctx.backend.param(kShape[i]) *
-                                                           static_cast<float>(normalizedParamStepCount(kShape[i]))));
+            const int shape = stepIndexForParam(kShape[i], ctx.backend.param(kShape[i]));
             const float phase = ctx.telemetry ? ctx.telemetry->lfoPhase[i] : 0.f;
             const float value = ctx.telemetry ? ctx.telemetry->lfoValue[i] : 0.f;
             v->setLfo(i, shape, ctx.backend.param(kDepth[i]), phase, value);
@@ -166,18 +177,15 @@ DisplayInstance makeLfoWaves(const CRect& r, EditorContext& ctx) {
 }
 
 DisplayInstance makeVcoScopes(const CRect& r, EditorContext& ctx) {
+    // One lane per SID voice: the voice's oscillator output (256 samples).
     auto* v = new ScopeView(r, ctx.theme, 3);
-    v->setCaption("VOICE 1 / 2 / 3");
+    v->setStacked({"V1", "V2", "V3"});
     DisplayInstance d{v};
     d.wantsScopes = true;
     d.refresh = [v, &ctx]() {
         if (!ctx.telemetry) return;
         const CColor c[3] = {ctx.theme.accent, ctx.theme.ledOn, ctx.theme.title};
-        float lane[256];
-        for (int k = 0; k < 3; ++k) {
-            for (int i = 0; i < 256; ++i) lane[i] = ctx.telemetry->vcoScope[k][i] * 0.33f + (1 - k) * 0.62f;
-            v->setTrace(k, lane, 256, c[k]);
-        }
+        for (int k = 0; k < 3; ++k) v->setTrace(k, ctx.telemetry->vcoScope[k], 256, c[k]);
     };
     return d;
 }
@@ -209,9 +217,13 @@ DisplayInstance makeSidRegisters(const CRect& r, EditorContext& ctx) {
         lines.push_back(fmt("FILTER  FC %03X  RES %X  ROUTE %X  MODE %X  VOL %X", fc, s[0x17] >> 4, s[0x17] & 0xF,
                             s[0x18] >> 4, s[0x18] & 0xF));
         lines.push_back(fmt("POTX %02X  POTY %02X  OSC3 %02X  ENV3 %02X", s[0x19], s[0x1A], s[0x1B], s[0x1C]));
-        std::string raw;
-        for (int i = 0; i < 0x1D; ++i) raw += fmt("%02X%s", s[i], (i % 8 == 7) ? "  " : " ");
-        lines.push_back(raw);
+        // Raw register image, 16 bytes per line after the start address.
+        for (int base = 0; base < 0x1D; base += 16) {
+            std::string raw = fmt("$D4%02X", base);
+            for (int i = base; i < std::min(base + 16, 0x1D); ++i)
+                raw += fmt("%s%02X", (i % 8 == 0 && i != base) ? "  " : " ", s[i]);
+            lines.push_back(raw);
+        }
         v->setLines(std::move(lines));
     };
     return d;
@@ -281,14 +293,17 @@ DisplayInstance makeHiFiMeters(const CRect& r, EditorContext& ctx) {
 }
 
 DisplayInstance makeModMonitor(const CRect& r, EditorContext& ctx) {
+    // LFOs and pitch bend are bipolar (-1..+1, centre = no modulation);
+    // wheel, pressure and the random source are 0..1.
     auto* v = new MeterView(r, ctx.theme, 8);
+    for (int i : {0, 1, 2, 3, 5}) v->setBipolar(i, true);
     DisplayInstance d{v};
     d.refresh = [v, &ctx]() {
         if (!ctx.telemetry) return;
         const auto& t = *ctx.telemetry;
-        for (int i = 0; i < 4; ++i) v->setLevel(i, 0.5f + 0.5f * t.lfoValue[i], fmt("LFO%d", i + 1));
+        for (int i = 0; i < 4; ++i) v->setLevel(i, t.lfoValue[i], fmt("LFO%d", i + 1));
         v->setLevel(4, t.modWheelNorm, "WHEEL");
-        v->setLevel(5, 0.5f + 0.5f * t.focusedPitchBend, "BEND");
+        v->setLevel(5, t.focusedPitchBend, "BEND");
         v->setLevel(6, t.focusedChannelPressure, "PRESS");
         v->setLevel(7, t.randomValue, "RANDOM");
     };
@@ -296,8 +311,13 @@ DisplayInstance makeModMonitor(const CRect& r, EditorContext& ctx) {
 }
 
 DisplayInstance makeSidCoreTimeline(const CRect& r, EditorContext& ctx) {
+    // The last 128 C64 bus samples the kernel published (oldest left), one
+    // lane per signal: SID register index, value written, write strobe,
+    // PHI2 phase and IRQ/DMA. All are -1..+1; a flat low line means the bus
+    // is idle (no C64 program running).
     auto* v = new ScopeView(r, ctx.theme, 5);
-    v->setCaption("SID REG / VALUE / WRITE / PHI2 / IRQ-DMA  (C64 bus)");
+    v->setCaption("C64 bus, newest sample right");
+    v->setStacked({"REG", "VALUE", "WRITE", "PHI2", "IRQ/DMA"});
     DisplayInstance d{v};
     d.wantsScopes = true;
     d.wantsC64 = true;
@@ -307,11 +327,7 @@ DisplayInstance makeSidCoreTimeline(const CRect& r, EditorContext& ctx) {
         const float* src[5] = {t.c64SidRegScope, t.c64SidValueScope, t.c64SidWritePulseScope, t.c64Phi2Scope,
                                t.c64IrqDmaScope};
         const CColor c[5] = {ctx.theme.accent, ctx.theme.ledOn, ctx.theme.title, ctx.theme.label, ctx.theme.warn};
-        float lane[128];
-        for (int k = 0; k < 5; ++k) {
-            for (int i = 0; i < 128; ++i) lane[i] = src[k][i] * 0.18f + (0.8f - 0.4f * k);
-            v->setTrace(k, lane, 128, c[k]);
-        }
+        for (int k = 0; k < 5; ++k) v->setTrace(k, src[k], 128, c[k]);
     };
     return d;
 }
@@ -337,10 +353,9 @@ DisplayInstance makeSeqSteps(const CRect& r, EditorContext& ctx) {
     auto onClick = [&ctx, stepParam](int c, int row, bool shift, bool right, float yFrac) {
         const int id = stepParam(c, row);
         if (row == 0) {
-            const int steps = static_cast<int>(normalizedParamStepCount(id));
-            int note = static_cast<int>(std::lround(ctx.backend.param(id) * static_cast<float>(steps)));
-            note = std::clamp(note + (right ? -1 : 1) * (shift ? 12 : 1), 0, steps);
-            editorSetParam(ctx.backend, id, static_cast<float>(note) / static_cast<float>(steps));
+            // Left click raises the note, right click lowers it; shift = octave.
+            const int note = stepIndexForParam(id, ctx.backend.param(id)) + (right ? -1 : 1) * (shift ? 12 : 1);
+            editorSetParam(ctx.backend, id, stepNormForIndex(id, note));
         } else {
             editorSetParam(ctx.backend, id, right ? 0.f : yFrac);
         }
@@ -350,22 +365,20 @@ DisplayInstance makeSeqSteps(const CRect& r, EditorContext& ctx) {
     seq->setDragPaint(true, true);
     DisplayInstance d{seq};
     d.refresh = [seq, &ctx, stepParam]() {
-        const int length = 1 + static_cast<int>(std::lround(ctx.backend.param(kParamSeqLength) *
-                                                            static_cast<float>(normalizedParamStepCount(kParamSeqLength))));
+        const int length = 1 + stepIndexForParam(kParamSeqLength, ctx.backend.param(kParamSeqLength));
         const int playing = ctx.telemetry && ctx.telemetry->seqEnabled ? ctx.telemetry->seqStep : -1;
         for (int s = 0; s < 32; ++s) {
             const bool inLen = s < length;
-            const int noteSteps = static_cast<int>(normalizedParamStepCount(stepParam(s, 0)));
-            const int note = static_cast<int>(std::lround(ctx.backend.param(stepParam(s, 0)) * static_cast<float>(noteSteps)));
+            const int note = stepIndexForParam(stepParam(s, 0), ctx.backend.param(stepParam(s, 0)));
             CellGrid::Cell n;
             n.text = noteName(note);
-            n.on = false;
+            n.dim = !inLen; // steps past the sequence length are not played
             n.cursor = (s == playing);
-            n.level = inLen ? 0.f : 0.f;
             seq->setCell(s, 0, n);
             for (int row = 1; row < 3; ++row) {
                 CellGrid::Cell c;
-                c.level = inLen ? std::max(0.02f, ctx.backend.param(stepParam(s, row))) : 0.f;
+                c.level = std::max(0.02f, ctx.backend.param(stepParam(s, row)));
+                c.dim = !inLen;
                 c.cursor = (s == playing);
                 seq->setCell(s, row, c);
             }
@@ -1116,13 +1129,17 @@ public:
         }));
         // $D418 runtime policy and MIDI pad map.
         const CCoord px = 380;
+        // Kernel DIGI modes (DigiAuthMode): 0 = authentic $D418 writes on the
+        // emulated C64 bus (honours I/O banking and open bus), 1 = fast $D418
+        // on a private SID. The legacy float path (2) exists only in debug
+        // builds and is not offered.
         addView(new ChoiceMenu(CRect(px, y0 + 20, px + 200, y0 + 58), "$D418 MODE", ctx.theme,
-                               {"legacy float", "authentic $D418", "fast $D418"},
+                               {"AUTH C64-BUS D418", "FAST PRIVATE D418"},
                                [this]() {
                                    uint8_t mode = 0;
                                    uint32_t rate = 0;
                                    if (host()) host()->digiD418RuntimeMode(mode, rate);
-                                   return static_cast<int>(mode);
+                                   return mode <= 1u ? static_cast<int>(mode) : 0;
                                },
                                [this](int i) {
                                    if (Vst3KernelHost* h = host()) {
@@ -1167,10 +1184,16 @@ public:
         addView(info_);
     }
 
+    // The model and the ~480 KB sample bank are fetched only when the host's
+    // model generation changes (state load, an edit here or in another
+    // editor), not on every 30 Hz refresh.
+    void onModelChanged() override {
+        if (Vst3KernelHost* h = host()) h->digi(model_, *bank_);
+    }
+
     void refresh() {
         Vst3KernelHost* h = host();
         if (!h) return;
-        h->digi(model_, *bank_);
         const int playing = ctx_.telemetry && ctx_.telemetry->seqEnabled ? ctx_.telemetry->digiStep : -1;
         for (int s = 0; s < GUI::kDigiActiveSlotCount; ++s) {
             pads_[static_cast<std::size_t>(s)]->setLit(model_.activeSlot == s);
@@ -1322,7 +1345,12 @@ private:
                 break;
             case 2:
             case 3: {
-                if (sidFile_.empty()) break;
+                if (sidFile_.empty()) {
+                    // A tune restored with the project was not loaded through
+                    // this editor, so its bytes are not here to re-init.
+                    status_ = h->isSidFileLoaded() ? "load the .sid again to change the subtune" : "no .sid loaded";
+                    break;
+                }
                 const int songs = std::max<int>(1, ctx_.telemetry ? ctx_.telemetry->psidSongs : 1);
                 subtune_ = (subtune_ + (i == 3 ? 1 : songs - 1)) % songs;
                 h->loadSidFile(sidFile_.data(), sidFile_.size(), static_cast<uint16_t>(subtune_));

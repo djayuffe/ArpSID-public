@@ -2,7 +2,8 @@
 // ArpSID — value labels for stepped parameters in the cross-platform editor.
 //
 // Each table follows the engine's own decoder for that parameter (same index
-// order and binning), so a menu entry always names what the engine plays:
+// order, and the binning of stepIndexForParam below), so a menu entry always
+// names what the engine plays:
 //   waveform  bitperfect_engine.h valueToWaveform (floor(v*8))
 //   filter    bitperfect_engine.h setFilterMode   (index == SID LP|BP|HP bits)
 //   voice     bitperfect_engine.h setVoiceMode    (round(v*3))
@@ -22,6 +23,41 @@
 #include <string>
 
 namespace ArpSID::Editor {
+
+// Index the engine plays for a stepped parameter's normalized value. Most
+// stepped parameters round (index = round(v * steps)); a few decode with
+// equal-width floor bins instead, and the editor must use the same law or a
+// host-automated value between grid points shows a different entry than the
+// one the engine plays:
+//   VCO waveform, filter mode  floor(v * 8)   (steps 7, 8 equal bins)
+//   arpeggiator octaves        floor(v * 3)   (steps 3, v = 1 -> index 3)
+inline int stepIndexForParam(int id, float norm) {
+    const int steps = static_cast<int>(normalizedParamStepCount(id));
+    if (steps <= 0) return 0;
+    const float v = std::clamp(std::isfinite(norm) ? norm : 0.f, 0.f, 1.f);
+    int idx;
+    switch (id) {
+        case kParamVCO1Waveform: case kParamVCO2Waveform: case kParamVCO3Waveform:
+        case kParamFilterMode:
+            idx = static_cast<int>(std::floor(std::min(v, 0.999999f) * static_cast<float>(steps + 1)));
+            break;
+        case kParamArpOctaves:
+            idx = static_cast<int>(v * static_cast<float>(steps));
+            break;
+        default:
+            idx = static_cast<int>(std::lround(v * static_cast<float>(steps)));
+            break;
+    }
+    return std::clamp(idx, 0, steps);
+}
+
+// Normalized value the editor writes for a stepped index (always on the grid,
+// so it decodes back to the same index under every law above).
+inline float stepNormForIndex(int id, int index) {
+    const int steps = static_cast<int>(normalizedParamStepCount(id));
+    if (steps <= 0) return 0.f;
+    return static_cast<float>(std::clamp(index, 0, steps)) / static_cast<float>(steps);
+}
 
 // Label for a stepped parameter's index, or nullptr to use the host text.
 inline const char* choiceLabel(int id, int index) {
@@ -53,16 +89,8 @@ inline const char* choiceLabel(int id, int index) {
 
 // Editor text for a parameter value, or empty to use the host text.
 inline std::string editorValueText(int id, float norm) {
-    const int steps = static_cast<int>(normalizedParamStepCount(id));
-    if (steps > 0) {
-        // Waveform and filter mode use floor bins; the others round.
-        const bool floorBins = id == kParamVCO1Waveform || id == kParamVCO2Waveform || id == kParamVCO3Waveform ||
-                               id == kParamFilterMode || id == kParamArpOctaves;
-        const float scaled = norm * static_cast<float>(steps);
-        const int idx = std::clamp(floorBins ? static_cast<int>(std::floor(scaled + 1e-4f))
-                                             : static_cast<int>(std::lround(scaled)), 0, steps);
-        if (const char* l = choiceLabel(id, idx)) return l;
-    }
+    if (normalizedParamStepCount(id) > 0)
+        if (const char* l = choiceLabel(id, stepIndexForParam(id, norm))) return l;
     char buf[32];
     if (id >= static_cast<int>(kParamSidRegD400) && id <= static_cast<int>(kParamSidRegD41D)) {
         std::snprintf(buf, sizeof buf, "$%02X", static_cast<unsigned>(std::lround(std::clamp(norm, 0.f, 1.f) * 255.f)));
@@ -73,7 +101,7 @@ inline std::string editorValueText(int id, float norm) {
             std::snprintf(buf, sizeof buf, "%+d st", static_cast<int>(std::lround(norm * 48.f)) - 24);
             return buf;
         case kParamArpPatternLength:
-            std::snprintf(buf, sizeof buf, "%d steps", 1 + static_cast<int>(std::lround(norm * 31.f)));
+            std::snprintf(buf, sizeof buf, "%d steps", 1 + stepIndexForParam(id, norm));
             return buf;
         default:
             return {};

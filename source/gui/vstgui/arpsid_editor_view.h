@@ -85,7 +85,11 @@ private:
     };
     void buildHeader_();
     void buildPage_(int visibleIndex);
-    void placeSectionParams_(SectionPanel* panel, const GUI::EditorLayout::Section& sec, VSTGUI::CRect area);
+    // Places the section's parameter controls in area (flow layout) and
+    // returns the height used; with panel == nullptr it only measures.
+    VSTGUI::CCoord flowSectionParams_(SectionPanel* panel, const GUI::EditorLayout::Section& sec, VSTGUI::CRect area) const;
+    VSTGUI::CCoord naturalSectionHeight_(const GUI::EditorLayout::Section& sec, VSTGUI::CCoord width) const;
+    VSTGUI::CCoord sectionWidth_(const GUI::EditorLayout::Row& row, int si, int secCount, float totalW) const;
     void refreshParams_();
     void refreshHeader_();
     void applyTheme_();
@@ -103,7 +107,6 @@ private:
 
     TabStrip* tabs_ = nullptr;
     VSTGUI::COptionMenu* patchMenu_ = nullptr;
-    Label* patchLabel_ = nullptr;
     Label* status_ = nullptr;
     MeterView* outMeter_ = nullptr;
     KeyboardView* keyboard_ = nullptr;

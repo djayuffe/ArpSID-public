@@ -32,8 +32,8 @@ Captured from the ArpSID standalone host (AUv3 presentation), running the shippe
 The Windows and Linux VST3 has the same 17 tabs, rendered with VSTGUI. These
 images come from `arpsid_vst3_editor_check`, which draws every tab offscreen
 with the engine running (a four-note chord held on the factory patch).
-Regenerate them with `cmake --build build-vst3 --target arpsid_vst3_editor_check`
-(PNGs in `build-vst3/editor-snapshots/`).
+**All 17 tabs, with a guide to each, are in [docs/VST3_EDITOR.md](docs/VST3_EDITOR.md).**
+Regenerate the images with `scripts/update_editor_screenshots.sh build-vst3`.
 
 ![ArpSID VST3 editor — MAIN tab](docs/screenshots/vst3-editor-main.png)
 
@@ -277,10 +277,13 @@ everything except the ROM files and runs the same guard before committing.
 | Document | Contents |
 |---|---|
 | [`CHANGELOG.md`](CHANGELOG.md) | Release notes. |
-| [`docs/ARCHITECTURE_NOTES.md`](docs/ARCHITECTURE_NOTES.md) | Wrapper/kernel authority rules. |
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | System architecture: layers, kernel block pipeline, engines, parameters, state, GUI models and telemetry, wrappers. |
+| [`docs/PARAMETER_REFERENCE.md`](docs/PARAMETER_REFERENCE.md) | Every parameter: ID, default, values, steps and editor tab (generated from the code and checked by a test). |
+| [`docs/VST3_EDITOR.md`](docs/VST3_EDITOR.md) | The Windows/Linux VST3 editor: a screenshot and guide for all 17 tabs, the controls, and how the editor code works. |
+| [`docs/VST3_IMPLEMENTATION.md`](docs/VST3_IMPLEMENTATION.md) | VST3 internals: processor, kernel host, state format v5, controller, MIDI mapping, messages, threading, tests. |
 | [`docs/REALTIME_OWNERSHIP.md`](docs/REALTIME_OWNERSHIP.md) | Which code runs on the render thread vs. the producer side. |
 | [`docs/REALTIME_ROLLBACK_JOURNAL.md`](docs/REALTIME_ROLLBACK_JOURNAL.md) | Rollback-safe C64 render transactions. |
-| [`docs/TAB_ARCHITECTURE.md`](docs/TAB_ARCHITECTURE.md) | GUI tab specification. |
+| [`docs/TAB_ARCHITECTURE.md`](docs/TAB_ARCHITECTURE.md) | The 17-tab production ring, persisted tab IDs and invariants. |
 | [`docs/D418_NIBBLE_SPEC.md`](docs/D418_NIBBLE_SPEC.md) | DIGI `$D418` 4-bit sample format. |
 | [`docs/SID_FILE_FORMAT_NOTES.md`](docs/SID_FILE_FORMAT_NOTES.md) | PSID/RSID handling. |
 | [`docs/C64_EXACTNESS_BOUNDARIES.md`](docs/C64_EXACTNESS_BOUNDARIES.md) | What the C64 player does and does not claim. |

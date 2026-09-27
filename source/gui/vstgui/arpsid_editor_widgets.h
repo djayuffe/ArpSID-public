@@ -26,6 +26,10 @@ using VSTGUI::CPoint;
 using VSTGUI::CRect;
 
 // ── theme ───────────────────────────────────────────────────────────────────
+// Colours for one GUI::Theme (Dark, Light, C64 Classic, High Contrast), built
+// from the shared palette (theme_palette_v552.h) so the editor matches the
+// macOS GUI. Widgets keep a reference, so a theme change is a reassignment
+// of the EditorView's Theme plus a redraw (menus are restyled explicitly).
 struct Theme {
     CColor bg, panel, panelEdge, title, label, value, border, accent, inactive, ledOn, ledOff, text, warn;
 };
@@ -40,6 +44,13 @@ VSTGUI::CFontRef monoFont(CCoord size);
 // formatter so they display the canonical host strings.
 using ValueFormatter = std::function<std::string(int tag, float normalized)>;
 
+// Rotary control for a continuous parameter (or one with more than 32 steps).
+// Drag vertically (horizontal counts a quarter): 180 px spans 0..1, Shift is
+// fine (1200 px). Wheel: 2 % per notch (Shift 0.2 %). Double-click or
+// Ctrl-click resets to the default. Every gesture is wrapped in
+// beginEdit/endEdit so hosts record one automation gesture. The arc shows the
+// value (270 degrees, from the lower left); caption and value text are fitted
+// inside the control.
 class ParamKnob : public VSTGUI::CControl {
 public:
     ParamKnob(const CRect& r, VSTGUI::IControlListener* l, int tag, std::string label, const Theme& theme,
@@ -61,6 +72,8 @@ private:
     bool dragging_ = false;
 };
 
+// On/off parameter (step count 1): LED plus caption; a click flips it inside
+// one begin/perform/end edit gesture.
 class ParamToggle : public VSTGUI::CControl {
 public:
     ParamToggle(const CRect& r, VSTGUI::IControlListener* l, int tag, std::string label, const Theme& theme);
@@ -77,9 +90,12 @@ class ParamMenu : public VSTGUI::CViewContainer {
 public:
     ParamMenu(const CRect& r, VSTGUI::IControlListener* l, int tag, std::string label, int steps,
               const Theme& theme, const ValueFormatter& fmt);
+    // Selects the entry the engine plays for v (stepIndexForParam).
     void setNormalized(float v);
     VSTGUI::COptionMenu* menu() const { return menu_; }
     void drawBackgroundRect(CDrawContext* ctx, const CRect& r) override;
+    // Keeps the inner menu under the caption when the container is resized.
+    void setViewSize(const CRect& r, bool invalid = true) override;
     CLASS_METHODS_NOCOPY(ParamMenu, CViewContainer)
 private:
     std::string label_;
@@ -89,6 +105,8 @@ private:
 };
 
 // ── containers / decoration ─────────────────────────────────────────────────
+// Titled, rounded group box. Children are placed in contentRect() (local
+// coordinates below the 22 px title band).
 class SectionPanel : public VSTGUI::CViewContainer {
 public:
     SectionPanel(const CRect& r, std::string title, const Theme& theme);
@@ -100,6 +118,8 @@ private:
     const Theme& theme_;
 };
 
+// Static or live text. setColor points at a Theme colour so the label follows
+// theme changes without being rebuilt.
 class Label : public VSTGUI::CView {
 public:
     Label(const CRect& r, std::string text, const Theme& theme, CCoord size = 11.0, bool bold = false,
@@ -150,29 +170,44 @@ private:
 };
 
 // ── displays ────────────────────────────────────────────────────────────────
+// Oscilloscope for one or more -1..+1 traces (oldest sample left). Traces
+// either share the whole view around the centre line or, with setStacked,
+// get one labelled lane each.
 class ScopeView : public VSTGUI::CView {
 public:
     ScopeView(const CRect& r, const Theme& theme, int traces);
     void setTrace(int i, const float* data, int n, CColor color);
     void setCaption(std::string c) { caption_ = std::move(c); }
+    // Stacked lanes: trace i gets its own horizontal band with a name at the
+    // left edge (used for the VCO scopes and the SID bus timeline). Unstacked
+    // traces share the full height around the centre line.
+    void setStacked(std::vector<std::string> laneNames) { laneNames_ = std::move(laneNames); }
     void draw(CDrawContext* ctx) override;
 private:
     const Theme& theme_;
     std::vector<std::vector<float>> traces_;
     std::vector<CColor> colors_;
     std::string caption_;
+    std::vector<std::string> laneNames_;
 };
 
+// Bar meters (horizontal with labels on the left, or vertical with labels
+// below). Unipolar bars keep a decaying peak mark and turn to the warning
+// colour above 0.95.
 class MeterView : public VSTGUI::CView {
 public:
     MeterView(const CRect& r, const Theme& theme, int bars, bool vertical = false);
+    // Unipolar bars take 0..1; a bipolar bar takes -1..+1 and fills from the
+    // centre (LFO values, pitch bend).
     void setLevel(int i, float level, std::string label = {});
+    void setBipolar(int i, bool bipolar);
     void draw(CDrawContext* ctx) override;
 private:
     const Theme& theme_;
     std::vector<float> levels_;
     std::vector<float> peaks_;
     std::vector<std::string> labels_;
+    std::vector<bool> bipolar_;
     bool vertical_;
 };
 
@@ -193,7 +228,14 @@ class KeyboardView : public VSTGUI::CView {
 public:
     KeyboardView(const CRect& r, const Theme& theme, int firstNote, int octaves,
                  std::function<void(int, int)> noteOn, std::function<void(int)> noteOff);
-    void setActiveNote(int note) { if (active_ != note) { active_ = note; invalid(); } }
+    // Notes the engine is sounding (drawn lit in addition to the key held
+    // with the mouse). Bit n of the mask is MIDI note n.
+    void setActiveNotes(const std::array<std::uint64_t, 2>& mask) {
+        if (active_ != mask) {
+            active_ = mask;
+            invalid();
+        }
+    }
     void draw(CDrawContext* ctx) override;
     void onMouseDownEvent(VSTGUI::MouseDownEvent& e) override;
     void onMouseMoveEvent(VSTGUI::MouseMoveEvent& e) override;
@@ -205,8 +247,11 @@ private:
     int first_, octaves_;
     std::function<void(int, int)> noteOn_;
     std::function<void(int)> noteOff_;
+    bool lit_(int note) const {
+        return note == held_ || (note >= 0 && note < 128 && ((active_[static_cast<std::size_t>(note >> 6)] >> (note & 63)) & 1u));
+    }
     int held_ = -1;
-    int active_ = -1;
+    std::array<std::uint64_t, 2> active_{};
 };
 
 // Generic grid of cells (step sequencers, pads, register maps). The owner
@@ -218,6 +263,7 @@ public:
         bool on = false;
         bool accent = false;
         bool cursor = false;
+        bool dim = false;        // outside the active range (drawn faded)
         std::string text;
     };
     // onClick(col, row, shift, right, yFrac): yFrac is the click height inside
@@ -247,7 +293,9 @@ private:
     int lastC_ = -1, lastR_ = -1;
 };
 
-// Filter response curve from normalized cutoff / resonance / mode.
+// Filter response curve from normalized cutoff / resonance / mode index
+// (SID LP/BP/HP bits). An approximate display: cutoff maps 30 Hz..12 kHz
+// exponentially; the audio path is the engine's SID filter model.
 class FilterCurveView : public VSTGUI::CView {
 public:
     FilterCurveView(const CRect& r, const Theme& theme);
@@ -271,7 +319,10 @@ private:
     std::array<L, 4> lfo_{};
 };
 
-// Knob-like control over an arbitrary 0..255 model byte (MIX/KIT/DIGI).
+// Knob over an integer model field (MIX/KIT/DIGI: bytes, semitones, nibbles,
+// 12-bit pulse width) read and written through get/set callbacks. Drag: 180 px
+// spans the range, Shift is 6x finer; wheel steps by 1. The owning panel
+// publishes the model and marks the project dirty in set.
 class ByteKnob : public VSTGUI::CView {
 public:
     ByteKnob(const CRect& r, std::string label, const Theme& theme, int minV, int maxV,
@@ -280,6 +331,7 @@ public:
     void onMouseDownEvent(VSTGUI::MouseDownEvent& e) override;
     void onMouseMoveEvent(VSTGUI::MouseMoveEvent& e) override;
     void onMouseUpEvent(VSTGUI::MouseUpEvent& e) override;
+    void onMouseCancelEvent(VSTGUI::MouseCancelEvent& e) override;
     void onMouseWheelEvent(VSTGUI::MouseWheelEvent& e) override;
 private:
     std::string label_;
@@ -293,7 +345,8 @@ private:
     bool dragging_ = false;
 };
 
-// Pop-up choice over a model field.
+// Captioned pop-up choice over a model field (get returns the index, set
+// receives the chosen one). Used by the model panels and SETTINGS.
 class ChoiceMenu : public VSTGUI::CViewContainer, public VSTGUI::IControlListener {
 public:
     ChoiceMenu(const CRect& r, std::string label, const Theme& theme, std::vector<std::string> items,
@@ -301,6 +354,10 @@ public:
     void refresh();
     void valueChanged(VSTGUI::CControl* c) override;
     void drawBackgroundRect(CDrawContext* ctx, const CRect& r) override;
+    // Keeps the inner menu under the caption when the container is resized
+    // (panels may create the control first and place it afterwards).
+    void setViewSize(const CRect& r, bool invalid = true) override;
+    VSTGUI::COptionMenu* menu() const { return menu_; }
     CLASS_METHODS_NOCOPY(ChoiceMenu, CViewContainer)
 private:
     std::string label_;

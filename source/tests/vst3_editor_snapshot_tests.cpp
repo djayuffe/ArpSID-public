@@ -35,6 +35,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstdio>
+#include <filesystem>
 #include <fstream>
 #include <set>
 #include <string>
@@ -123,6 +124,8 @@ std::string safeName(const char* n) {
 
 int main(int argc, char** argv) {
     const std::string outDir = argc > 1 ? argv[1] : ".";
+    std::error_code dirErr;
+    std::filesystem::create_directories(outDir, dirErr);
     std::setvbuf(stdout, nullptr, _IONBF, 0); // progress survives a crash
 #if defined(_WIN32)
     // Direct2D / WIC offscreen drawing needs COM (a host provides it).

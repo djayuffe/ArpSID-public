@@ -3821,6 +3821,19 @@ target_include_directories(arpsid_editor_layout_coverage_tests PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/source)
 add_test(NAME EditorLayoutCoverageTests COMMAND arpsid_editor_layout_coverage_tests)
 
+# docs/PARAMETER_REFERENCE.md is generated from the parameter table, the
+# presentation laws and the editor layout; the test fails when it is stale.
+add_executable(arpsid_parameter_reference_doc_tests source/tests/parameter_reference_doc_tests.cpp)
+target_compile_features(arpsid_parameter_reference_doc_tests PRIVATE cxx_std_17)
+target_include_directories(arpsid_parameter_reference_doc_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/source)
+add_test(NAME ParameterReferenceDocTests
+         COMMAND arpsid_parameter_reference_doc_tests "${CMAKE_CURRENT_SOURCE_DIR}/docs/PARAMETER_REFERENCE.md")
+add_custom_target(arpsid_update_parameter_reference
+    COMMAND arpsid_parameter_reference_doc_tests --write "${CMAKE_CURRENT_SOURCE_DIR}/docs/PARAMETER_REFERENCE.md"
+    DEPENDS arpsid_parameter_reference_doc_tests
+    VERBATIM)
+
 add_executable(arpsid_vst3_factory_preset_count_v686_tests source/tests/vst3_factory_preset_count_v686_tests.cpp)
 target_compile_features(arpsid_vst3_factory_preset_count_v686_tests PRIVATE cxx_std_17)
 target_compile_definitions(arpsid_vst3_factory_preset_count_v686_tests PRIVATE ARPSID_SOURCE_DIR="${CMAKE_SOURCE_DIR}")

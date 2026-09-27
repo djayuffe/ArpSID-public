@@ -2,6 +2,7 @@
 // ArpSID — VSTGUI widgets for the cross-platform editor (see header).
 
 #include "gui/vstgui/arpsid_editor_widgets.h"
+#include "gui/vstgui/arpsid_editor_labels.h"
 
 #include "arpsid/gui/theme_palette_v552.h"
 
@@ -41,6 +42,17 @@ CColor withAlpha(CColor c, uint8_t a) {
 }
 
 constexpr double kPi = 3.14159265358979323846;
+
+// Strokes an arc (VSTGUI angles: degrees, clockwise from 3 o'clock) through a
+// graphics path. CDrawContext::drawArc cannot be used: VSTGUI's cairo backend
+// passes the degrees to cairo_arc as radians, so on Linux every arc wraps
+// into a full circle. Paths convert the angles on every platform.
+void strokeArc(CDrawContext* ctx, const CRect& rect, double startDeg, double endDeg) {
+    auto path = owned(ctx->createGraphicsPath());
+    if (!path) return;
+    path->addArc(rect, startDeg, endDeg, true);
+    ctx->drawGraphicsPath(path, CDrawContext::kPathStroked);
+}
 
 // Draws a label inside rect: shrinks the font (down to 7.5 pt) until the
 // text fits, and only then shortens it, so long parameter names stay readable.
@@ -147,18 +159,18 @@ void ParamKnob::draw(CDrawContext* ctx) {
 
     ctx->setDrawMode(kAntiAliasing | kNonIntegralMode);
     ctx->setFontColor(theme_.label);
-    drawFitted(ctx, label_, CRect(r.left, r.top, r.right, r.top + labelH), kCenterText, 10.0);
+    // Drawing is clipped to the control, so the caption must fit its width.
+    drawFitted(ctx, label_, CRect(r.left + 1, r.top, r.right - 1, r.top + labelH), kCenterText, 10.0);
 
     const float v = std::clamp(getValueNormalized(), 0.f, 1.f);
     ctx->setLineWidth(3.0);
     ctx->setFrameColor(mix(theme_.inactive, theme_.panel, 0.3f));
     CRect arc = knob;
     arc.inset(2.5, 2.5);
-    ctx->drawArc(arc, static_cast<float>(kArcStart), static_cast<float>(kArcStart + kArcSweep), kDrawStroked);
+    strokeArc(ctx, arc, kArcStart, kArcStart + kArcSweep);
     if (v > 0.001f) {
         ctx->setFrameColor(isEditing() ? theme_.title : theme_.accent);
-        ctx->drawArc(arc, static_cast<float>(kArcStart), static_cast<float>(kArcStart + kArcSweep * v),
-                     kDrawStroked);
+        strokeArc(ctx, arc, kArcStart, kArcStart + kArcSweep * v);
     }
     CRect body = knob;
     body.inset(dia * 0.22, dia * 0.22);
@@ -173,9 +185,8 @@ void ParamKnob::draw(CDrawContext* ctx) {
                   CPoint(c.x + std::cos(a) * rad * 0.95, c.y + std::sin(a) * rad * 0.95));
 
     const std::string text = fmt_ ? fmt_(getTag(), v) : std::to_string(static_cast<int>(v * 100.f));
-    ctx->setFont(uiFont(10.0));
     ctx->setFontColor(theme_.value);
-    ctx->drawString(text.c_str(), CRect(r.left - 4, r.bottom - valueH, r.right + 4, r.bottom), kCenterText);
+    drawFitted(ctx, text, CRect(r.left, r.bottom - valueH, r.right, r.bottom), kCenterText, 10.0);
     setDirty(false);
 }
 
@@ -292,8 +303,17 @@ ParamMenu::ParamMenu(const CRect& r, IControlListener* l, int tag, std::string l
 }
 
 void ParamMenu::setNormalized(float v) {
-    const int idx = std::clamp(static_cast<int>(std::lround(v * static_cast<float>(steps_))), 0, steps_);
+    const int idx = std::clamp(stepIndexForParam(menu_->getTag(), v), 0, steps_);
     if (menu_->getCurrentIndex() != idx) menu_->setCurrent(idx);
+}
+
+void ParamMenu::setViewSize(const CRect& r, bool inv) {
+    CViewContainer::setViewSize(r, inv);
+    if (menu_) {
+        const CRect m(2, 15, r.getWidth() - 2, r.getHeight() - 4);
+        menu_->setViewSize(m, inv);
+        menu_->setMouseableArea(m);
+    }
 }
 
 void ParamMenu::drawBackgroundRect(CDrawContext* ctx, const CRect&) {
@@ -454,25 +474,44 @@ void ScopeView::draw(CDrawContext* ctx) {
     ctx->drawRect(r, kDrawFilled);
     ctx->setLineWidth(1.0);
     ctx->setFrameColor(withAlpha(theme_.border, 60));
-    for (int g = 1; g < 4; ++g) {
-        const CCoord y = r.top + r.getHeight() * g / 4.0;
-        ctx->drawLine(CPoint(r.left, y), CPoint(r.right, y));
-    }
+    if (laneNames_.empty())
+        for (int g = 1; g < 4; ++g) {
+            const CCoord y = r.top + r.getHeight() * g / 4.0;
+            ctx->drawLine(CPoint(r.left, y), CPoint(r.right, y));
+        }
     for (int g = 1; g < 8; ++g) {
         const CCoord x = r.left + r.getWidth() * g / 8.0;
         ctx->drawLine(CPoint(x, r.top), CPoint(x, r.bottom));
     }
-    const CCoord mid = r.top + r.getHeight() / 2.0;
     const int nTraces = static_cast<int>(traces_.size());
+    const bool stacked = !laneNames_.empty();
+    const CCoord nameW = stacked ? 44.0 : 0.0;
+    const CCoord captionH = caption_.empty() ? 0.0 : 14.0;
     for (int t = 0; t < nTraces; ++t) {
         const auto& d = traces_[static_cast<std::size_t>(t)];
+        // Lane geometry: stacked traces each get a band below the caption.
+        CCoord laneTop = r.top, laneH = r.getHeight();
+        if (stacked) {
+            laneH = (r.getHeight() - captionH) / nTraces;
+            laneTop = r.top + captionH + laneH * t;
+            if (t > 0) {
+                ctx->setFrameColor(withAlpha(theme_.border, 90));
+                ctx->drawLine(CPoint(r.left, laneTop), CPoint(r.right, laneTop));
+            }
+            if (t < static_cast<int>(laneNames_.size())) {
+                ctx->setFontColor(colors_[static_cast<std::size_t>(t)]);
+                drawFitted(ctx, laneNames_[static_cast<std::size_t>(t)],
+                           CRect(r.left + 3, laneTop, r.left + nameW - 2, laneTop + laneH), kLeftText, 9.0, true);
+            }
+        }
         if (d.size() < 2) continue;
-        const CCoord laneH = r.getHeight();
+        const CCoord mid = laneTop + laneH / 2.0;
+        const CCoord x0 = r.left + nameW, span = r.getWidth() - nameW;
         auto path = owned(ctx->createGraphicsPath());
         if (!path) continue;
         for (std::size_t i = 0; i < d.size(); ++i) {
-            const CCoord x = r.left + r.getWidth() * static_cast<CCoord>(i) / static_cast<CCoord>(d.size() - 1);
-            const CCoord y = mid - std::clamp(static_cast<CCoord>(d[i]), -1.0, 1.0) * laneH * 0.45;
+            const CCoord x = x0 + span * static_cast<CCoord>(i) / static_cast<CCoord>(d.size() - 1);
+            const CCoord y = mid - std::clamp(static_cast<CCoord>(d[i]), -1.0, 1.0) * laneH * (stacked ? 0.40 : 0.45);
             if (i == 0) path->beginSubpath(CPoint(x, y));
             else path->addLine(CPoint(x, y));
         }
@@ -495,13 +534,19 @@ void ScopeView::draw(CDrawContext* ctx) {
 
 MeterView::MeterView(const CRect& r, const Theme& theme, int bars, bool vertical)
     : CView(r), theme_(theme), levels_(static_cast<std::size_t>(bars), 0.f),
-      peaks_(static_cast<std::size_t>(bars), 0.f), labels_(static_cast<std::size_t>(bars)), vertical_(vertical) {}
+      peaks_(static_cast<std::size_t>(bars), 0.f), labels_(static_cast<std::size_t>(bars)),
+      bipolar_(static_cast<std::size_t>(bars), false), vertical_(vertical) {}
+
+void MeterView::setBipolar(int i, bool bipolar) {
+    if (i >= 0 && i < static_cast<int>(bipolar_.size())) bipolar_[static_cast<std::size_t>(i)] = bipolar;
+}
 
 void MeterView::setLevel(int i, float level, std::string label) {
     if (i < 0 || i >= static_cast<int>(levels_.size())) return;
-    const float l = std::clamp(std::isfinite(level) ? level : 0.f, 0.f, 1.f);
+    const bool bip = bipolar_[static_cast<std::size_t>(i)];
+    const float l = std::clamp(std::isfinite(level) ? level : 0.f, bip ? -1.f : 0.f, 1.f);
     auto& pk = peaks_[static_cast<std::size_t>(i)];
-    pk = std::max(l, pk * 0.92f);
+    pk = bip ? 0.f : std::max(l, pk * 0.92f);
     levels_[static_cast<std::size_t>(i)] = l;
     if (!label.empty()) labels_[static_cast<std::size_t>(i)] = std::move(label);
     invalid();
@@ -514,7 +559,7 @@ void MeterView::draw(CDrawContext* ctx) {
     const bool labelled = std::any_of(labels_.begin(), labels_.end(), [](const std::string& s) { return !s.empty(); });
     for (int i = 0; i < n; ++i) {
         CRect lane;
-        CCoord labelSpan = labelled ? 42.0 : 0.0;
+        CCoord labelSpan = labelled ? 50.0 : 0.0;
         if (vertical_) {
             const CCoord w = r.getWidth() / n;
             lane = CRect(r.left + w * i + 2, r.top, r.left + w * (i + 1) - 2, r.bottom - (labelled ? 14.0 : 0.0));
@@ -528,7 +573,19 @@ void MeterView::draw(CDrawContext* ctx) {
         const float pk = peaks_[static_cast<std::size_t>(i)];
         CRect fill = lane;
         CRect peakMark = lane;
-        if (vertical_) {
+        const bool bip = bipolar_[static_cast<std::size_t>(i)];
+        if (bip) {
+            // Fill from the centre towards the signed value; mark the centre.
+            if (vertical_) {
+                const CCoord c = lane.getCenter().y;
+                fill.top = std::min(c, c - lane.getHeight() * 0.5 * l);
+                fill.bottom = std::max(c, c - lane.getHeight() * 0.5 * l);
+            } else {
+                const CCoord c = lane.getCenter().x;
+                fill.left = std::min(c, c + lane.getWidth() * 0.5 * l);
+                fill.right = std::max(c, c + lane.getWidth() * 0.5 * l);
+            }
+        } else if (vertical_) {
             fill.top = lane.bottom - lane.getHeight() * l;
             peakMark.top = lane.bottom - lane.getHeight() * pk;
             peakMark.bottom = peakMark.top + 2;
@@ -537,18 +594,24 @@ void MeterView::draw(CDrawContext* ctx) {
             peakMark.left = lane.left + lane.getWidth() * pk - 2;
             peakMark.right = peakMark.left + 2;
         }
-        ctx->setFillColor(l > 0.95f ? theme_.warn : theme_.ledOn);
+        ctx->setFillColor(std::fabs(l) > 0.95f && !bip ? theme_.warn : theme_.ledOn);
         ctx->drawRect(fill, kDrawFilled);
+        if (bip) {
+            ctx->setFillColor(withAlpha(theme_.border, 160));
+            const CPoint c = lane.getCenter();
+            ctx->drawRect(vertical_ ? CRect(lane.left, c.y - 0.5, lane.right, c.y + 0.5)
+                                    : CRect(c.x - 0.5, lane.top, c.x + 0.5, lane.bottom),
+                          kDrawFilled);
+        }
         ctx->setFillColor(theme_.title);
         if (pk > 0.01f) ctx->drawRect(peakMark, kDrawFilled);
         if (labelled) {
-            ctx->setFont(uiFont(9.0));
             ctx->setFontColor(theme_.label);
             const auto& text = labels_[static_cast<std::size_t>(i)];
             if (vertical_)
-                ctx->drawString(text.c_str(), CRect(lane.left - 4, r.bottom - 13, lane.right + 4, r.bottom), kCenterText);
+                drawFitted(ctx, text, CRect(lane.left - 4, r.bottom - 13, lane.right + 4, r.bottom), kCenterText, 9.0);
             else
-                ctx->drawString(text.c_str(), CRect(r.left, lane.top, r.left + labelSpan - 3, lane.bottom), kRightText);
+                drawFitted(ctx, text, CRect(r.left, lane.top, r.left + labelSpan - 3, lane.bottom), kRightText, 9.0);
         }
     }
     setDirty(false);
@@ -629,7 +692,7 @@ void KeyboardView::draw(CDrawContext* ctx) {
     for (int w = 0; w < whites; ++w) {
         const int note = first_ + (w / 7) * 12 + kWhiteSemis[w % 7];
         CRect k(r.left + w * ww, r.top, r.left + (w + 1) * ww - 1, r.bottom);
-        const bool down = (note == held_ || note == active_);
+        const bool down = lit_(note);
         ctx->setFillColor(down ? theme_.accent : CColor(236, 236, 240, 255));
         ctx->drawRect(k, kDrawFilled);
         if (w % 7 == 0) {
@@ -647,7 +710,7 @@ void KeyboardView::draw(CDrawContext* ctx) {
             if (note > first_ + octaves_ * 12) continue;
             const CCoord cx = r.left + (o * 7 + kWhiteIndex[k] + 1) * ww;
             CRect b(cx - ww * 0.32, r.top, cx + ww * 0.32, r.top + r.getHeight() * 0.62);
-            const bool down = (note == held_ || note == active_);
+            const bool down = lit_(note);
             ctx->setFillColor(down ? theme_.accent : CColor(24, 24, 30, 255));
             ctx->drawRect(b, kDrawFilled);
         }
@@ -701,7 +764,7 @@ void CellGrid::setCell(int col, int row, Cell c) {
     if (col < 0 || row < 0 || col >= cols_ || row >= rows_) return;
     auto& dst = cells_[static_cast<std::size_t>(row * cols_ + col)];
     if (dst.level != c.level || dst.on != c.on || dst.accent != c.accent || dst.cursor != c.cursor ||
-        dst.text != c.text) {
+        dst.dim != c.dim || dst.text != c.text) {
         dst = std::move(c);
         invalid();
     }
@@ -712,7 +775,9 @@ CRect CellGrid::cellRect_(int c, int r) const {
     const CCoord labelW = rowLabels_.empty() ? 0.0 : 52.0;
     const CCoord w = (v.getWidth() - labelW) / cols_;
     const CCoord h = v.getHeight() / rows_;
-    return CRect(v.left + labelW + c * w, v.top + r * h, v.left + labelW + (c + 1) * w, v.top + (r + 1) * h);
+    // Whole-pixel edges keep cell borders and text crisp at 1x.
+    return CRect(std::floor(v.left + labelW + c * w), std::floor(v.top + r * h),
+                 std::floor(v.left + labelW + (c + 1) * w), std::floor(v.top + (r + 1) * h));
 }
 
 bool CellGrid::cellAt_(const CPoint& p, int& c, int& r) const {
@@ -743,7 +808,9 @@ void CellGrid::draw(CDrawContext* ctx) {
             if (cell.on || cell.level > 0.f) {
                 CRect f = cr;
                 if (cell.level > 0.f && cell.level < 1.f) f.top = cr.bottom - cr.getHeight() * cell.level;
-                ctx->setFillColor(cell.accent ? theme_.title : (cell.on ? theme_.ledOn : withAlpha(theme_.ledOn, 90)));
+                CColor fc = cell.accent ? theme_.title : (cell.on ? theme_.ledOn : withAlpha(theme_.ledOn, 90));
+                if (cell.dim) fc.alpha = static_cast<uint8_t>(fc.alpha / 3);
+                ctx->setFillColor(fc);
                 ctx->drawRect(f, kDrawFilled);
             }
             if (cell.cursor) {
@@ -753,7 +820,7 @@ void CellGrid::draw(CDrawContext* ctx) {
             }
             if (!cell.text.empty()) {
                 ctx->setFont(uiFont(8.5));
-                ctx->setFontColor(cell.on ? theme_.bg : theme_.label);
+                ctx->setFontColor(cell.on ? theme_.bg : (cell.dim ? withAlpha(theme_.label, 90) : theme_.label));
                 ctx->drawString(cell.text.c_str(), cr, kCenterText);
             }
         }
@@ -929,20 +996,19 @@ void ByteKnob::draw(CDrawContext* ctx) {
     knob.offset(r.left + (r.getWidth() - dia) / 2.0, r.top + labelH);
     ctx->setDrawMode(kAntiAliasing | kNonIntegralMode);
     ctx->setFontColor(theme_.label);
-    drawFitted(ctx, label_, CRect(r.left - 4, r.top, r.right + 4, r.top + labelH), kCenterText, 9.5);
+    drawFitted(ctx, label_, CRect(r.left + 1, r.top, r.right - 1, r.top + labelH), kCenterText, 9.5);
     CRect arc = knob;
     arc.inset(2.0, 2.0);
     ctx->setLineWidth(2.5);
     ctx->setFrameColor(mix(theme_.inactive, theme_.panel, 0.3f));
-    ctx->drawArc(arc, static_cast<float>(kArcStart), static_cast<float>(kArcStart + kArcSweep), kDrawStroked);
+    strokeArc(ctx, arc, kArcStart, kArcStart + kArcSweep);
     if (norm > 0.001f) {
         ctx->setFrameColor(dragging_ ? theme_.title : theme_.accent);
-        ctx->drawArc(arc, static_cast<float>(kArcStart), static_cast<float>(kArcStart + kArcSweep * norm),
-                     kDrawStroked);
+        strokeArc(ctx, arc, kArcStart, kArcStart + kArcSweep * norm);
     }
     const std::string t = text_ ? text_(v) : std::to_string(v);
     ctx->setFontColor(theme_.value);
-    ctx->drawString(t.c_str(), CRect(r.left - 6, r.bottom - valueH, r.right + 6, r.bottom), kCenterText);
+    drawFitted(ctx, t, CRect(r.left, r.bottom - valueH, r.right, r.bottom), kCenterText, 10.0);
     setDirty(false);
 }
 
@@ -956,9 +1022,11 @@ void ByteKnob::onMouseDownEvent(MouseDownEvent& e) {
 
 void ByteKnob::onMouseMoveEvent(MouseMoveEvent& e) {
     if (!dragging_) return;
+    // 180 px of vertical drag spans the range; shift drags 6x finer.
     const double range = static_cast<double>(max_ - min_);
     const double dy = anchor_.y - e.mousePosition.y;
-    const int v = std::clamp(anchorValue_ + static_cast<int>(std::lround(dy / 180.0 * range)), min_, max_);
+    const double span = e.modifiers.has(ModifierKey::Shift) ? 1080.0 : 180.0;
+    const int v = std::clamp(anchorValue_ + static_cast<int>(std::lround(dy / span * range)), min_, max_);
     if (set_ && (!get_ || get_() != v)) {
         set_(v);
         invalid();
@@ -967,6 +1035,12 @@ void ByteKnob::onMouseMoveEvent(MouseMoveEvent& e) {
 }
 
 void ByteKnob::onMouseUpEvent(MouseUpEvent& e) {
+    dragging_ = false;
+    invalid();
+    e.consumed = true;
+}
+
+void ByteKnob::onMouseCancelEvent(MouseCancelEvent& e) {
     dragging_ = false;
     invalid();
     e.consumed = true;
@@ -990,6 +1064,15 @@ ChoiceMenu::ChoiceMenu(const CRect& r, std::string label, const Theme& theme, st
     for (const auto& it : items) menu_->addEntry(it.c_str());
     addView(menu_);
     refresh();
+}
+
+void ChoiceMenu::setViewSize(const CRect& r, bool inv) {
+    CViewContainer::setViewSize(r, inv);
+    if (menu_) {
+        const CRect m(2, 15, r.getWidth() - 2, r.getHeight() - 3);
+        menu_->setViewSize(m, inv);
+        menu_->setMouseableArea(m);
+    }
 }
 
 void ChoiceMenu::refresh() {
