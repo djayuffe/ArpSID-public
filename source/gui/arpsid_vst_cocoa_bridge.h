@@ -24,6 +24,13 @@ int  arpsidControllerLoadedFactorySlot(void* editController) noexcept;
 // controller so a reopened editor keeps the size the user chose.
 double arpsidControllerEditorZoom(void* editController) noexcept;
 void arpsidControllerSetEditorZoom(void* editController, double zoom) noexcept;
+// Editor tab kept by the controller (and saved in the project).
+int  arpsidControllerEditorTab(void* editController) noexcept;
+void arpsidControllerSetEditorTab(void* editController, int tab) noexcept;
+// Host track name (UTF-8, empty if unknown) and colour (0xAARRGGBB, 0 if
+// unknown) from IInfoListener.
+void arpsidControllerTrackName(void* editController, char* out, unsigned long outSize) noexcept;
+unsigned int arpsidControllerTrackColour(void* editController) noexcept;
 void arpsidControllerSendUiMidi(void* editController, unsigned char status, unsigned char data1,
                                 unsigned char data2) noexcept;
 // The cross-platform (VSTGUI) editor view; nullptr where it is not built.

@@ -39,6 +39,24 @@ struct EditorBackend {
 
     // Ask the host to resize the editor window (optional).
     virtual bool requestResize(int width, int height) { (void)width; (void)height; return false; }
+
+    // Tab shown when the editor opens; the host keeps it between openings
+    // and in the project (VST3 controller state).
+    virtual int savedTab() const { return 0; }
+    virtual void tabChanged(int visibleIndex) { (void)visibleIndex; }
+
+    // Right-click on a parameter control: show the host's menu for that
+    // parameter (automation, MIDI learn, ...) plus "Reset to Default".
+    // x/y are editor coordinates. False when the host offers no menu.
+    virtual bool paramContextMenu(int id, double x, double y) { (void)id; (void)x; (void)y; return false; }
+
+    // Host track the plug-in sits on (VST3 IInfoListener); empty / 0 when the
+    // host does not say. Colour is 0xAARRGGBB.
+    virtual std::string trackName() const { return {}; }
+    virtual std::uint32_t trackColour() const { return 0; }
+
+    // Host bypass state (shown in the header).
+    virtual bool bypassed() const { return false; }
 };
 
 // Convenience edit: begin + perform + end.

@@ -12,6 +12,7 @@
 
 #include "common/arpsid_telemetry_snapshot.h"
 
+#include "vstgui/lib/cframe.h"
 #include "vstgui/lib/cviewcontainer.h"
 #include "vstgui/lib/controls/icontrollistener.h"
 
@@ -52,7 +53,9 @@ DisplayInstance createDisplay(GUI::EditorLayout::Display d, const VSTGUI::CRect&
 // Parameter control for id inside rect (knob / toggle / menu by cardinality).
 VSTGUI::CView* createParamControl(int paramId, const VSTGUI::CRect& r, EditorContext& ctx);
 
-class EditorView final : public VSTGUI::CViewContainer, public VSTGUI::IControlListener {
+class EditorView final : public VSTGUI::CViewContainer,
+                         public VSTGUI::IControlListener,
+                         public VSTGUI::IKeyboardHook {
 public:
     static constexpr VSTGUI::CCoord kWidth = 1200.0;
     static constexpr VSTGUI::CCoord kHeight = 800.0;
@@ -77,6 +80,16 @@ public:
     void buildAllPages();
 
     void drawBackgroundRect(VSTGUI::CDrawContext* ctx, const VSTGUI::CRect& r) override;
+
+    // Right-click on a parameter control opens the host's parameter menu.
+    void onMouseDownEvent(VSTGUI::MouseDownEvent& e) override;
+    // Computer keyboard plays notes (registered by the plug view as the
+    // frame's keyboard hook): A W S E D F T G Y H U J K O L = C..D one octave
+    // up, Z / X shift the octave. Keys with Ctrl/Alt/Cmd go to the host.
+    void onKeyboardEvent(VSTGUI::KeyboardEvent& e, VSTGUI::CFrame* frame) override;
+    // Parameter id under the editor point, or -1.
+    int paramIdAt(const VSTGUI::CPoint& where) const;
+    int keyboardOctave() const { return keyOctave_; }
 
 private:
     struct Page {
@@ -112,6 +125,12 @@ private:
     KeyboardView* keyboard_ = nullptr;
     VSTGUI::CRect pageArea_;
     int shownPatch_ = -1;
+    Label* track_ = nullptr;
+    CColor trackColour_{};
+    std::string shownTrack_;
+    std::uint32_t shownTrackColour_ = 0;
+    int keyOctave_ = 4;                       // C4 = MIDI 60 on the A key
+    std::map<char32_t, int> keysDown_;        // key -> note it started
 };
 
 } // namespace ArpSID::Editor

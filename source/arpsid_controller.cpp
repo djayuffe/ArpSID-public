@@ -20,6 +20,9 @@
 #include "public.sdk/source/vst/vstparameters.h"
 #include "pluginterfaces/vst/ivstmidicontrollers.h"
 #include "pluginterfaces/vst/ivstunits.h"
+#include "pluginterfaces/vst/ivstchannelcontextinfo.h"
+#include "pluginterfaces/vst/ivstattributes.h"
+#include "pluginterfaces/vst/vstpresetkeys.h"
 #include "pluginterfaces/base/ibstream.h"
 // ustring.h removed: UString128 replaced with manual ASCII-to-char16 conversion
 #include "base/source/fstreamer.h"
@@ -72,6 +75,7 @@ class ArpSIDControllerPhase3
     , public IMidiMapping
     , public IUnitInfo
     , public IPresetControllerLivePush
+    , public ChannelContext::IInfoListener
 {
 public:
     // ── Construction ────────────────────────────────────────────────────────
@@ -87,13 +91,13 @@ public:
         tresult result = EditController::initialize(context);
         if (result != kResultOk) return result;
         registerAllParameters_();
+        registerBypassParameter_();
         buildUnitInfo_();
         return kResultOk;
     }
 
     tresult PLUGIN_API terminate() override {
         kernelHost_ = nullptr;
-        editorView_ = nullptr;
         livePushFn_ = nullptr;
         livePushUser_ = nullptr;
         return EditController::terminate();
@@ -118,7 +122,6 @@ public:
             IPlugView* view = nullptr;
             if (!view) return nullptr;
 #endif
-            editorView_ = view;
 #if defined(ARPSID_VST_EDITOR_DIAGNOSTICS)
             std::fprintf(stderr, "[plugin/controller] createView -> %p\n", static_cast<void*>(view));
 #endif
@@ -168,6 +171,50 @@ public:
         SidStateRootV1 root{};
         if (!Vst3KernelHost::decodeStateRoot(bytes.data(), (size_t)nRead, root)) return kResultFalse;
         mirrorStateRootToParameters_(root, /*notifyHost*/ false);
+        EditController::setParamNormalized((ParamID)kVst3BypassParamId,
+                                           Vst3KernelHost::decodeBypass(bytes.data(), (size_t)nRead) ? 1.0 : 0.0);
+        return kResultOk;
+    }
+
+    // Controller-only state (saved by the host next to the processor state):
+    // the editor size and the tab it was left on.
+    //   u32 magic 'ASEC', u32 version 1, f64 zoom, i32 tab
+    static constexpr uint32 kEditorStateMagic_ = 0x41534543u; // 'ASEC'
+    tresult PLUGIN_API setState(IBStream* state) override {
+        if (!state) return kResultFalse;
+        IBStreamer s(state, kLittleEndian);
+        uint32 magic = 0, version = 0;
+        double zoom = 1.0;
+        int32 tab = 0;
+        if (!s.readInt32u(magic) || magic != kEditorStateMagic_ || !s.readInt32u(version) || version < 1 ||
+            !s.readDouble(zoom) || !s.readInt32(tab))
+            return kResultOk; // no or foreign editor state: keep the defaults
+        if (std::isfinite(zoom)) setEditorZoom(zoom);
+        setEditorTab(tab);
+        return kResultOk;
+    }
+
+    tresult PLUGIN_API getState(IBStream* state) override {
+        if (!state) return kResultFalse;
+        IBStreamer s(state, kLittleEndian);
+        return (s.writeInt32u(kEditorStateMagic_) && s.writeInt32u(1u) && s.writeDouble(editorZoom_) &&
+                s.writeInt32(editorTab_))
+            ? kResultOk
+            : kResultFalse;
+    }
+
+    // ── IInfoListener: the host track (name / colour) ───────────────────────
+    tresult PLUGIN_API setChannelContextInfos(IAttributeList* list) override {
+        if (!list) return kResultFalse;
+        String128 name{};
+        if (list->getString(ChannelContext::kChannelNameKey, name, sizeof(name)) == kResultOk) {
+            char buf[256] = {};
+            (void)ArpSID_utf16ToUtf8(name, buf, sizeof(buf));
+            trackName_ = buf;
+        }
+        int64 colour = 0;
+        if (list->getInt(ChannelContext::kChannelColorKey, colour) == kResultOk)
+            trackColour_ = (uint32)colour;
         return kResultOk;
     }
 
@@ -223,6 +270,10 @@ public:
     int loadedFactorySlot() const noexcept { return loadedFactorySlot_; }
     double editorZoom() const noexcept { return editorZoom_; }
     void setEditorZoom(double z) noexcept { editorZoom_ = std::clamp(z, 0.25, 4.0); }
+    int editorTab() const noexcept { return editorTab_; }
+    void setEditorTab(int t) noexcept { editorTab_ = std::clamp(t, 0, (int)ArpSID::GUI::kTabCount - 1); }
+    const std::string& trackName() const noexcept { return trackName_; }
+    uint32 trackColour() const noexcept { return trackColour_; }
 
     // Editor on-screen keyboard -> processor (see arpsid_vst_messages.h).
     void sendUiMidi(uint8_t status, uint8_t data1, uint8_t data2) {
@@ -244,7 +295,8 @@ public:
         Steinberg::Vst::ParamID tag,
         Steinberg::Vst::ParamValue valueNormalized,
         String128 string) override {
-        if (tag >= (Steinberg::Vst::ParamID)kNumParams) return kResultFalse;
+        if (tag >= (Steinberg::Vst::ParamID)kNumParams)
+            return EditController::getParamStringByValue(tag, valueNormalized, string);
         char buf[64] = {};
         if (!SidParameterPresentation::formatNormalized((int)tag, (float)valueNormalized,
                                                         buf, sizeof(buf)))
@@ -256,7 +308,9 @@ public:
     tresult PLUGIN_API getParamValueByString(Steinberg::Vst::ParamID tag,
                                               TChar* string,
                                               Steinberg::Vst::ParamValue& valueNormalized) override {
-        if (!string || tag >= (Steinberg::Vst::ParamID)kNumParams) return kResultFalse;
+        if (!string) return kResultFalse;
+        if (tag >= (Steinberg::Vst::ParamID)kNumParams)
+            return EditController::getParamValueByString(tag, string, valueNormalized);
         char buf[128] = {};
         (void)ArpSID_utf16ToUtf8(string, buf, sizeof(buf));
         float normalized = 0.0f;
@@ -352,8 +406,17 @@ public:
                                        int32 programIndex,
                                        Steinberg::Vst::CString attributeId,
                                        String128 attributeValue) override {
-        (void)listId; (void)programIndex; (void)attributeId;
         attributeValue[0] = 0;
+        if (listId != kProgramListId_ || programIndex < 0 || programIndex >= kMaxPresets_ || !attributeId)
+            return kResultFalse;
+        if (std::strcmp(attributeId, PresetAttributes::kPlugInCategory) == 0) {
+            utf8ToTChar("Instrument|Synth", attributeValue, 128);
+            return kResultOk;
+        }
+        if (std::strcmp(attributeId, PresetAttributes::kPlugInName) == 0) {
+            utf8ToTChar("ArpSID", attributeValue, 128);
+            return kResultOk;
+        }
         return kResultFalse;
     }
 
@@ -391,6 +454,7 @@ public:
         QUERY_INTERFACE(_iid, obj, IMidiMapping::iid, IMidiMapping)
         QUERY_INTERFACE(_iid, obj, IUnitInfo::iid, IUnitInfo)
         QUERY_INTERFACE(_iid, obj, IPresetControllerLivePush::iid, IPresetControllerLivePush)
+        QUERY_INTERFACE(_iid, obj, ChannelContext::IInfoListener::iid, ChannelContext::IInfoListener)
         return EditController::queryInterface(_iid, obj);
     }
 
@@ -439,6 +503,15 @@ private:
                 unitForParam_(i));
             parameters.addParameter(rp);
         }
+    }
+
+    // Host bypass (kIsBypass): VST3 only, outside the shared parameter space.
+    void registerBypassParameter_() {
+        String128 title{};
+        utf8ToTChar("Bypass", title, 128);
+        parameters.addParameter(title, nullptr, 1, 0.0,
+                                ParameterInfo::kCanAutomate | ParameterInfo::kIsBypass,
+                                (ParamID)kVst3BypassParamId, kRootUnitId);
     }
 
     // ── Unit / Program-list ─────────────────────────────────────────────────
@@ -542,6 +615,9 @@ private:
 
     UnitID selectedUnit_ = kRootUnitId;
     double editorZoom_ = 1.0;
+    int editorTab_ = 0;
+    std::string trackName_;
+    uint32 trackColour_ = 0;
     bool mirroringState_ = false;
     int loadedFactorySlot_ = -1;
     Vst3KernelHost* kernelHost_ = nullptr;
@@ -553,7 +629,6 @@ private:
 
     PresetLiveParamPushFn livePushFn_ = nullptr;
     void* livePushUser_ = nullptr;
-    Steinberg::IPtr<Steinberg::IPlugView> editorView_;
     std::vector<UnitInfo> units_;
 };
 
@@ -575,6 +650,28 @@ void arpsidControllerSelectFactoryPatch(void* editController, int slot) noexcept
 int arpsidControllerLoadedFactorySlot(void* editController) noexcept {
     auto* c = static_cast<ArpSIDControllerPhase3*>(static_cast<EditController*>(editController));
     return c ? c->loadedFactorySlot() : 0;
+}
+
+int arpsidControllerEditorTab(void* editController) noexcept {
+    auto* c = static_cast<ArpSIDControllerPhase3*>(static_cast<EditController*>(editController));
+    return c ? c->editorTab() : 0;
+}
+
+void arpsidControllerSetEditorTab(void* editController, int tab) noexcept {
+    if (auto* c = static_cast<ArpSIDControllerPhase3*>(static_cast<EditController*>(editController)))
+        c->setEditorTab(tab);
+}
+
+void arpsidControllerTrackName(void* editController, char* out, unsigned long outSize) noexcept {
+    if (!out || outSize == 0) return;
+    out[0] = '\0';
+    if (auto* c = static_cast<ArpSIDControllerPhase3*>(static_cast<EditController*>(editController)))
+        std::snprintf(out, outSize, "%s", c->trackName().c_str());
+}
+
+unsigned int arpsidControllerTrackColour(void* editController) noexcept {
+    auto* c = static_cast<ArpSIDControllerPhase3*>(static_cast<EditController*>(editController));
+    return c ? (unsigned int)c->trackColour() : 0u;
 }
 
 void arpsidControllerSendUiMidi(void* editController, unsigned char status, unsigned char data1,

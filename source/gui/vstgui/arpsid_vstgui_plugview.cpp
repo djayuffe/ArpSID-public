@@ -14,12 +14,16 @@
 #include "public.sdk/source/vst/vsteditcontroller.h"
 #include "public.sdk/source/vst/vstguieditor.h"
 #include "pluginterfaces/gui/iplugviewcontentscalesupport.h"
+#include "pluginterfaces/vst/ivstcontextmenu.h"
+#include "base/source/fobject.h"
 
 #include "vstgui/lib/cframe.h"
 #include "vstgui/lib/cvstguitimer.h"
 
 #include <algorithm>
 #include <cmath>
+#include <functional>
+#include "vst3/arpsid_vst3_kernel_host.h"
 
 namespace ArpSID {
 
@@ -29,9 +33,31 @@ using Steinberg::Vst::EditController;
 using Steinberg::Vst::ParamID;
 using Steinberg::Vst::ParamValue;
 
+// Target for ArpSID's own entries in the host parameter menu.
+class MenuTarget final : public Steinberg::FObject, public Steinberg::Vst::IContextMenuTarget {
+public:
+    explicit MenuTarget(std::function<void(Steinberg::int32)> fn) : fn_(std::move(fn)) {}
+    Steinberg::tresult PLUGIN_API executeMenuItem(Steinberg::int32 tag) override {
+        if (fn_) fn_(tag);
+        return Steinberg::kResultOk;
+    }
+    OBJ_METHODS(MenuTarget, FObject)
+    DEFINE_INTERFACES
+        DEF_INTERFACE(Steinberg::Vst::IContextMenuTarget)
+    END_DEFINE_INTERFACES(FObject)
+    REFCOUNT_METHODS(FObject)
+
+private:
+    std::function<void(Steinberg::int32)> fn_;
+};
+
 class ControllerBackend final : public EditorBackend {
 public:
     explicit ControllerBackend(EditController* c) : c_(c) {}
+
+    // Set by the plug view: shows the host menu for a parameter at editor
+    // coordinates (the view knows its zoom and IPlugView identity).
+    std::function<bool(int, double, double)> contextMenu;
 
     float param(int id) const override {
         return static_cast<float>(c_->getParamNormalized(static_cast<ParamID>(id)));
@@ -53,6 +79,18 @@ public:
     void sendMidi(uint8_t s, uint8_t d1, uint8_t d2) override { arpsidControllerSendUiMidi(c_, s, d1, d2); }
     Vst3KernelHost* kernelHost() override { return arpsidControllerKernelHost(c_); }
     void markStateDirty() override { arpsidControllerMarkStateDirty(c_); }
+    int savedTab() const override { return arpsidControllerEditorTab(c_); }
+    void tabChanged(int tab) override { arpsidControllerSetEditorTab(c_, tab); }
+    bool paramContextMenu(int id, double x, double y) override { return contextMenu && contextMenu(id, x, y); }
+    std::string trackName() const override {
+        char buf[256] = {};
+        arpsidControllerTrackName(c_, buf, sizeof buf);
+        return buf;
+    }
+    std::uint32_t trackColour() const override { return arpsidControllerTrackColour(c_); }
+    bool bypassed() const override {
+        return c_->getParamNormalized(static_cast<ParamID>(kVst3BypassParamId)) >= 0.5;
+    }
 
 private:
     EditController* c_;
@@ -64,6 +102,7 @@ public:
     explicit CrossPlatformEditor(EditController* controller)
         : VSTGUIEditor(controller, nullptr), backend_(controller), controller_(controller) {
         zoom_ = clampZoom_(arpsidControllerEditorZoom(controller));
+        backend_.contextMenu = [this](int id, double x, double y) { return popupParamMenu_(id, x, y); };
         Steinberg::ViewRect r(0, 0, static_cast<Steinberg::int32>(std::lround(Editor::EditorView::kWidth * zoom_)),
                               static_cast<Steinberg::int32>(std::lround(Editor::EditorView::kHeight * zoom_)));
         setRect(r);
@@ -82,6 +121,7 @@ public:
             return false;
         }
         applyZoom_(false);
+        frame->registerKeyboardHook(view_.get());
         timer_ = VSTGUI::makeOwned<VSTGUI::CVSTGUITimer>([this](VSTGUI::CVSTGUITimer*) {
             if (view_) view_->refresh();
         }, 33);
@@ -94,6 +134,7 @@ public:
             timer_ = nullptr;
         }
         if (frame) {
+            if (view_) frame->unregisterKeyboardHook(view_.get());
             frame->forget();
             frame = nullptr;
         }
@@ -139,6 +180,32 @@ public:
     REFCOUNT_METHODS(VSTGUIEditor)
 
 private:
+    // Host parameter menu (IComponentHandler3) with "Reset to Default".
+    bool popupParamMenu_(int id, double x, double y) {
+        Steinberg::FUnknownPtr<Steinberg::Vst::IComponentHandler3> handler(controller_->getComponentHandler());
+        if (!handler) return false;
+        ParamID pid = static_cast<ParamID>(id);
+        Steinberg::IPtr<Steinberg::Vst::IContextMenu> menu =
+            Steinberg::owned(handler->createContextMenu(this, &pid));
+        if (!menu) return false;
+        auto target = Steinberg::owned(new MenuTarget([this, id](Steinberg::int32 tag) {
+            if (tag != 1) return;
+            if (auto* p = controller_->getParameterObject(static_cast<ParamID>(id)))
+                editorSetParam(backend_, id, static_cast<float>(p->getInfo().defaultNormalizedValue));
+        }));
+        Steinberg::Vst::IContextMenu::Item sep{};
+        sep.flags = Steinberg::Vst::IContextMenuItem::kIsSeparator;
+        menu->addItem(sep, nullptr);
+        Steinberg::Vst::IContextMenu::Item item{};
+        const char* text = "Reset to Default";
+        for (int i = 0; text[i] && i < 127; ++i) item.name[i] = static_cast<Steinberg::Vst::TChar>(text[i]);
+        item.tag = 1;
+        menu->addItem(item, target);
+        menu->popup(static_cast<Steinberg::UCoord>(std::lround(x * zoom_)),
+                    static_cast<Steinberg::UCoord>(std::lround(y * zoom_)));
+        return true;
+    }
+
     static constexpr double kMinZoom = 0.5, kMaxZoom = 3.0;
     static double clampZoom_(double z) { return std::clamp(z, kMinZoom, kMaxZoom); }
     // The largest zoom whose 3:2 editor fits the offered rect.

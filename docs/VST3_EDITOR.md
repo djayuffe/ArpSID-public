@@ -36,8 +36,9 @@ The editor is designed at 1200 × 800 and scales as one piece.
   (600 × 400) to three times (3600 × 2400); the 3:2 shape is kept.
 - **HiDPI.** The host's content scale factor multiplies your chosen size, so
   the editor keeps its size relative to the screen.
-- **Remembered size.** The plug-in instance remembers the size while it is
-  loaded, so a reopened editor opens at the same size.
+- **Remembered size and tab.** The editor reopens at the size and on the tab
+  you left it. Both are saved with the project (in the controller state), so
+  they survive closing and reopening the project too.
 
 **Header**
 
@@ -46,7 +47,8 @@ The editor is designed at 1200 × 800 and scales as one piece.
 | `ArpSID` / version | Product name and the plug-in version. |
 | `<` `>` | Previous / next factory patch. |
 | Patch menu | All 180 factory patches (`001 Acoustic Grand Piano` … `180 Digi 4-bit Kit 30`). Picking one goes the same way as a host program change: the controller asks the processor to load the patch and then mirrors its parameter values back to the host. |
-| Status line | Engine mode (`CLASSIC`, `SYNTH`, `DRSID`, `C64`, or `C64 PLAYER` while a .sid tune plays), active voices, host tempo, `PLAY`/`STOP`, and `ARP` / `SEQ` when they are on. |
+| Status line | `BYPASSED` while the host bypass is on, then the engine mode (`CLASSIC`, `SYNTH`, `DRSID`, `C64`, or `C64 PLAYER` while a .sid tune plays), active voices, host tempo, `PLAY`/`STOP`, and `ARP` / `SEQ` when they are on. |
+| Track line | The host track's name, in the track's colour, when the host shares it (VST3 channel context), then the computer-keyboard octave (`keys A-L  octave C4 (Z/X)`). |
 | Output meters | Left and right output peak, with a falling peak mark. They turn red above 0.95. |
 
 **Tab strip.** There are 17 tabs in the canonical order (`tab_architecture.h`,
@@ -57,6 +59,37 @@ where you click: about 40 at the top of the key, 127 at the bottom. Dragging
 across keys plays a glissando. The notes go to the processor as MIDI (channel 1)
 through the host's message channel. Every note the engine is sounding is lit,
 whether it came from the host, the keyboard or a held chord.
+
+### Playing from the computer keyboard
+
+While the editor has keyboard focus, the letter keys play notes, laid out like
+a piano:
+
+| Keys | Notes |
+|---|---|
+| `A S D F G H J K L` | white keys C, D, E, F, G, A, B, C, D |
+| `W E T Y U O` | black keys C♯, D♯, F♯, G♯, A♯, C♯ |
+| `Z` / `X` | octave down / up (C0–C8; starts at C4, MIDI 60) |
+
+Notes use velocity 100 on MIDI channel 1. Key repeat is ignored, so holding a
+key holds the note. Keys pressed with Ctrl, Alt or Cmd, and every other key
+(space, arrows, numbers), go to the host, so transport shortcuts keep working.
+Some hosts keep all keys for themselves; there, use the on-screen keyboard.
+
+### Parameter menu (right-click)
+
+Right-click any knob, switch or menu to open the host's menu for that
+parameter. What it offers depends on the host: typically automation lanes,
+MIDI learn or remote-control assignment. ArpSID adds **Reset to Default** at
+the end. Double-click (or Ctrl-click) a knob also resets it.
+
+### Bypass
+
+The host's bypass button uses ArpSID's `Bypass` parameter. Bypass fades the
+output out over 10 ms and back in the same way, so it never clicks. The
+engine keeps running while bypassed: held notes, the arpeggiator, the
+sequencer and a playing .sid tune stay in time. The state is saved with the
+project, and the header shows `BYPASSED`.
 
 ---
 

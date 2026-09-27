@@ -15,6 +15,7 @@
 #include "au3/ArpSIDCanonicalEvents.h"
 #include "vst3/arpsid_vst3_kernel_host.h"
 
+#include <array>
 #include <memory>
 #include <vector>
 
@@ -50,6 +51,8 @@ public:
 private:
     void sendKernelHost_();
     void collectEvents_(Steinberg::Vst::ProcessData& data, int frameCount);
+    void readBypass_(Steinberg::Vst::ProcessData& data) noexcept;
+    void applyBypass_(float** out, int channels, int frames) noexcept;
     static void readTransport_(const Steinberg::Vst::ProcessContext* ctx, double sampleRate,
                                int frameCount, TransportState& out) noexcept;
 
@@ -58,6 +61,13 @@ private:
     int eventCount_ = 0;
     std::uint32_t eventOrder_ = 0;
     double sampleRate_ = 44100.0;
+    // 64-bit processing scratch (float render, converted at the bus edge).
+    std::array<std::vector<float>, 2> scratchOut_{};
+    std::array<std::vector<float>, 2> scratchIn_{};
+    // Host bypass fade (audio thread).
+    static constexpr double kBypassRampSeconds = 0.01;
+    float bypassGain_ = 1.0f;
+    float bypassRampStep_ = 1.0f / 441.0f;
 };
 
 } // namespace ArpSID

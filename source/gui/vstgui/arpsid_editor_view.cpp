@@ -14,6 +14,7 @@
 
 #include "vstgui/lib/cdrawcontext.h"
 #include "vstgui/lib/controls/coptionmenu.h"
+#include "vstgui/lib/events.h"
 
 #include <algorithm>
 #include <array>
@@ -150,10 +151,14 @@ EditorView::EditorView(EditorBackend& backend)
                                  },
                                  [this](int note) { backend_.sendMidi(0x80, static_cast<uint8_t>(note), 0); });
     addView(keyboard_);
-    selectTab(0);
+    const int saved = backend_.savedTab();
+    selectTab(saved >= 0 && saved < tabCount() ? saved : 0);
 }
 
-EditorView::~EditorView() = default;
+EditorView::~EditorView() {
+    // Release computer-keyboard notes still held when the editor closes.
+    for (const auto& kv : keysDown_) backend_.sendMidi(0x80, static_cast<uint8_t>(kv.second), 0);
+}
 
 int EditorView::tabCount() const { return static_cast<int>(L::tabs().size()); }
 
@@ -187,9 +192,13 @@ void EditorView::buildHeader_() {
         backend_.selectFactoryPatch(std::min(kCanonicalFactoryPatchSlotMax, backend_.currentFactorySlot() + 1));
     }));
 
-    status_ = new Label(CRect(606, y, 960, y + 34), "", theme_, 10.5);
+    status_ = new Label(CRect(606, y + 1, 960, y + 19), "", theme_, 10.5);
     status_->setColor(&theme_.value);
     addView(status_);
+    // Host track (IInfoListener) in its colour, and the computer-keyboard octave.
+    track_ = new Label(CRect(606, y + 19, 960, y + 35), "", theme_, 10.0);
+    track_->setColor(&theme_.label);
+    addView(track_);
     outMeter_ = new MeterView(CRect(970, y + 4, kWidth - kMargin, y + 30), theme_, 2);
     addView(outMeter_);
 }
@@ -203,6 +212,7 @@ void EditorView::selectTab(int index) {
     pages_[static_cast<std::size_t>(index)].view->setVisible(true);
     currentTab_ = index;
     if (tabs_) tabs_->setSelected(index);
+    backend_.tabChanged(index);
     invalid();
 }
 
@@ -474,7 +484,8 @@ void EditorView::refreshHeader_() {
         const char* mode = t.psidActive ? "C64 PLAYER"
                                         : (t.renderMode >= 0 && t.renderMode < 4 ? kModes[t.renderMode] : "?");
         char buf[160];
-        std::snprintf(buf, sizeof buf, "%s   voices %d   %.1f BPM %s   %s%s", mode, t.activeVoices,
+        std::snprintf(buf, sizeof buf, "%s%s   voices %d   %.1f BPM %s   %s%s",
+                      backend_.bypassed() ? "BYPASSED   " : "", mode, t.activeVoices,
                       t.hostTempo, t.hostPlaying ? "PLAY" : "STOP", t.arpEnabled ? "ARP " : "",
                       t.seqEnabled ? "SEQ" : "");
         status_->setText(buf);
@@ -487,7 +498,101 @@ void EditorView::refreshHeader_() {
         }
         keyboard_->setActiveNotes(mask);
     } else {
-        status_->setText("engine telemetry unavailable (processor out of process)");
+        status_->setText(backend_.bypassed() ? "BYPASSED   engine telemetry unavailable (processor out of process)"
+                                             : "engine telemetry unavailable (processor out of process)");
+    }
+
+    const std::string name = backend_.trackName();
+    const std::uint32_t colour = backend_.trackColour();
+    if (name != shownTrack_ || colour != shownTrackColour_ || track_->getViewSize().isEmpty()) {
+        shownTrack_ = name;
+        shownTrackColour_ = colour;
+        if (colour != 0) {
+            // Keep dark host colours readable on the dark theme.
+            trackColour_ = CColor(static_cast<uint8_t>(colour >> 16), static_cast<uint8_t>(colour >> 8),
+                                  static_cast<uint8_t>(colour), 255);
+            const float t = trackColour_.getLightness() < 90 ? 0.5f : 0.15f;
+            const auto blend = [t](uint8_t x, uint8_t y) {
+                return static_cast<uint8_t>(std::lround(x + (static_cast<float>(y) - x) * t));
+            };
+            trackColour_ = CColor(blend(trackColour_.red, theme_.value.red), blend(trackColour_.green, theme_.value.green),
+                                  blend(trackColour_.blue, theme_.value.blue), 255);
+            track_->setColor(&trackColour_);
+        } else {
+            track_->setColor(&theme_.label);
+        }
+    }
+    char line[320];
+    std::snprintf(line, sizeof line, "%s%s%skeys A-L  octave C%d (Z/X)", name.empty() ? "" : "track ",
+                  name.c_str(), name.empty() ? "" : "   ", keyOctave_);
+    track_->setText(line);
+}
+
+int EditorView::paramIdAt(const CPoint& where) const {
+    for (CView* v = getViewAt(where, GetViewOptions().deep().includeInvisible(false)); v && v != this;
+         v = v->getParentView()) {
+        if (auto* m = dynamic_cast<ParamMenu*>(v)) {
+            for (const auto& [id, menu] : menus_)
+                if (menu == m) return id;
+        }
+        if (auto* c = dynamic_cast<CControl*>(v)) {
+            const auto range = controls_.equal_range(static_cast<int>(c->getTag()));
+            for (auto it = range.first; it != range.second; ++it)
+                if (it->second == c) return it->first;
+        }
+    }
+    return -1;
+}
+
+void EditorView::onMouseDownEvent(MouseDownEvent& e) {
+    if (e.buttonState.isRight()) {
+        const int id = paramIdAt(e.mousePosition);
+        if (id >= 0 && backend_.paramContextMenu(id, e.mousePosition.x, e.mousePosition.y)) {
+            e.consumed = true;
+            return;
+        }
+    }
+    CViewContainer::onMouseDownEvent(e);
+}
+
+namespace {
+// Semitone above C for the computer-keyboard piano (-1: not a note key).
+int semitoneForKey(char32_t c) {
+    switch (c) {
+        case 'a': return 0;  case 'w': return 1;  case 's': return 2;  case 'e': return 3;
+        case 'd': return 4;  case 'f': return 5;  case 't': return 6;  case 'g': return 7;
+        case 'y': return 8;  case 'h': return 9;  case 'u': return 10; case 'j': return 11;
+        case 'k': return 12; case 'o': return 13; case 'l': return 14;
+        default: return -1;
+    }
+}
+} // namespace
+
+void EditorView::onKeyboardEvent(KeyboardEvent& e, CFrame* frame) {
+    (void)frame;
+    if (e.modifiers.has(ModifierKey::Control) || e.modifiers.has(ModifierKey::Alt) ||
+        e.modifiers.has(ModifierKey::Super))
+        return;
+    const char32_t c = (e.character >= 'A' && e.character <= 'Z') ? e.character + 32 : e.character;
+    if (e.type == EventType::KeyDown) {
+        if (c == 'z' || c == 'x') {
+            if (!e.isRepeat) keyOctave_ = std::clamp(keyOctave_ + (c == 'x' ? 1 : -1), 0, 8);
+            e.consumed = true;
+            return;
+        }
+        const int semi = semitoneForKey(c);
+        if (semi < 0) return;
+        e.consumed = true;
+        if (e.isRepeat || keysDown_.count(c)) return;
+        const int note = std::clamp((keyOctave_ + 1) * 12 + semi, 0, 127);
+        keysDown_[c] = note;
+        backend_.sendMidi(0x90, static_cast<uint8_t>(note), 100);
+    } else if (e.type == EventType::KeyUp) {
+        const auto it = keysDown_.find(c);
+        if (it == keysDown_.end()) return;
+        backend_.sendMidi(0x80, static_cast<uint8_t>(it->second), 0);
+        keysDown_.erase(it);
+        e.consumed = true;
     }
 }
 

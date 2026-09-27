@@ -5,6 +5,51 @@ All notable changes to ArpSID are documented here. The project uses
 version is `VERSION.txt`, mirrored by `project(VERSION)` in `CMakeLists.txt`
 and `include/arpsid/version.h`.
 
+## [0.9.9] — 2026-09-27
+
+### Added (VST3)
+
+- **Host bypass.** A `Bypass` parameter (`kIsBypass`) drives the host's
+  bypass button. It fades the output out and in over 10 ms, so it never
+  clicks, while the engine keeps running (notes, arpeggiator, sequencer and
+  .sid playback stay in time). It is saved with the project (`BYPS` state
+  chunk) and the editor header shows `BYPASSED`.
+- **64-bit processing.** Hosts that run a 64-bit audio path (Reaper, Cubase
+  and others) no longer need to convert around ArpSID.
+- **Editor state in the project.** The editor size and the last tab are saved
+  in the controller state, so a reopened project opens the editor the way you
+  left it.
+- **Right-click parameter menu.** Right-clicking a knob, switch or menu opens
+  the host's menu for that parameter (automation, MIDI learn, ...) with an
+  added `Reset to Default`.
+- **Computer-keyboard notes.** `A`–`L` play a piano octave and a half, `W E T
+  Y U O` the black keys, `Z`/`X` shift the octave. Keys with Ctrl/Alt/Cmd
+  still go to the host.
+- **Track name and colour.** Hosts that share channel context
+  (`IInfoListener`) see their track name, in the track colour, in the editor
+  header.
+- **Program attributes.** Factory programs report the `Instrument|Synth`
+  category to hosts that sort presets by it.
+
+### Fixed (VST3)
+
+- The controller no longer keeps a reference to the last editor view after
+  the host closed it (a reference cycle kept the view alive until the plug-in
+  was unloaded).
+- Host text for parameters outside the shared set (Bypass) now uses the
+  generic conversion instead of failing.
+
+### Tests
+
+- Host integration test: bypass (flag, silence, persistence, recovery),
+  64-bit rendering and oversized blocks, controller state round trip, track
+  info, program category.
+- Kernel host state test: bypass save/restore/clear and legacy states.
+- Editor test: tab memory, right-click menu hit testing, computer-keyboard
+  notes and octave shift, Ctrl passthrough.
+- The extended SDK validator (`validator -e`) passes 537 tests, including
+  bypass persistence.
+
 ## [0.9.8] — 2026-09-27
 
 ### Added (VST3)

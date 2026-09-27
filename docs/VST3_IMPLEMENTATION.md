@@ -55,7 +55,8 @@ has three parts:
 | Audio out | one main output bus, stereo (mono accepted) |
 | Audio in | `DIGI Capture In`: auxiliary (side-chain), stereo or mono, **inactive by default**. It is only read while a DIGI recording is armed. |
 | Events | one input bus, `MIDI In`, 16 channels |
-| Sample size | 32-bit float |
+| Sample size | 32-bit and 64-bit float (the engine renders 32-bit; 64-bit buses are converted at the edge) |
+| Bypass | `Bypass` parameter (id 1024, `kIsBypass`), soft: see [Host bypass](#host-bypass) |
 | Tail | `kInfiniteTail` (release, reverb and delay can ring on) |
 | Process context | tempo, transport state, project time (music), cycle, bar position, time signature |
 
@@ -74,14 +75,19 @@ the patch is applied at the first rendered block.
 
 ### `setupProcessing` / `setActive`
 
-`setupProcessing` calls `Vst3KernelHost::setup(sampleRate, maxSamplesPerBlock)`.
+`setupProcessing` calls `Vst3KernelHost::setup(sampleRate, maxSamplesPerBlock)`
+and sizes the 64-bit scratch buffers (two output and two input channels of
+`maxSamplesPerBlock` floats) and the bypass fade step.
 A re-setup (new sample rate or block size) keeps the audible state: the host
 snapshots every parameter and the sticky preset slot, sets the kernel up again,
 restores the snapshot and republishes the GUI models. `setActive(false)` resets
-the kernel (voices, effect tails).
+the kernel (voices, effect tails). Activation also snaps the bypass fade to
+its target, so a bypassed instance starts silent without a fade.
 
 ### `process`
 
+0. **Bypass.** The last point of the `Bypass` queue (if any) sets the host's
+   bypass flag; see [Host bypass](#host-bypass).
 1. **Parameter flush.** With `numSamples == 0` there is no audio. The last
    value of each changed parameter is staged through the kernel's non-realtime
    parameter intent.
@@ -103,9 +109,30 @@ the kernel (voices, effect tails).
    `TransportState`: tempo, musical position, playing, cycle active, and loop
    start/end. The render sample rate always comes from `setupProcessing`.
 5. **Render.** The output buffers are cleared, then `Vst3KernelHost::render`
-   runs.
+   runs, then the bypass fade is applied. With 64-bit buses the capture input
+   is converted to float scratch first, the kernel renders into float scratch,
+   and the result is widened into the host's `double` buffers. A 64-bit block
+   larger than `maxSamplesPerBlock` (a host error) is answered with silence
+   instead of overrunning the scratch buffers.
 6. **Silence flags.** A channel that is exactly zero for the whole block is
    flagged silent, so hosts can skip downstream processing.
+
+### Host bypass
+
+`Bypass` (parameter id **1024**, flags `kCanAutomate | kIsBypass`, on/off, in
+the root unit) is VST3-only. It sits outside the shared 0–511 parameter space,
+so AU and Standalone ids are unchanged. Hosts use it for their bypass button.
+
+- Bypass is **soft**: the engine keeps running (notes, arpeggiator, sequencer
+  and the C64 player stay in time), only the output fades to silence over
+  10 ms (`kBypassRampSeconds`), and back in the same way. Switching never
+  clicks.
+- Fully bypassed blocks are exact zeros, so the silence flags are set.
+- The flag is saved in the processor state (`BYPS` chunk). The controller
+  reads it in `setComponentState` (`Vst3KernelHost::decodeBypass`), so a
+  reopened project shows the right bypass state. States without the chunk
+  (all earlier versions) load un-bypassed.
+- The editor header shows `BYPASSED` while it is on.
 
 ### `getState` / `setState`
 
@@ -215,6 +242,7 @@ versions can add chunks without breaking older readers.
 | `DIGR` | 6 bytes: `$D418` mode, rate (24-bit), pad root note, pad channel | |
 | `OUTM` | 1 byte: pure-SID 1Q1 output mode | |
 | `SIDF` | `u16` subtune (little-endian) + the loaded `.sid` file | Written only while a tune is loaded. Loading a state without it unloads any tune left from before, so a restore is deterministic. Added in 0.9.8; older versions skip it. |
+| `BYPS` | 1 byte: host bypass | Always written. A state without it loads un-bypassed. Added in 0.9.9; older versions skip it. |
 
 **Reading.**
 
@@ -263,8 +291,9 @@ The controller registers all 512 parameters (`kNumParams`) as `RangeParameter`
   - Program is `kIsProgramChange | kIsList`.
   - Panic, Virtual Gate and Bank Command are hidden.
   - Every parameter whose table entry is automatable can be automated.
-  - Toggles are never marked `kIsBypass`, because that flag belongs to the
-    host's bypass.
+  - Toggles of the shared set are never marked `kIsBypass`. That flag
+    belongs only to the separate `Bypass` parameter (id 1024), which is the
+    host's bypass; see [Host bypass](#host-bypass).
 
 ### Factory patches
 
@@ -282,7 +311,31 @@ attached to the root unit.
   A guard flag keeps that mirror from starting a second load.
 - **Project load.** `setComponentState` decodes the root from the processor's
   state (any version) and mirrors it the same way, without notifying the
-  host.
+  host. It also reads the `BYPS` chunk into the Bypass parameter.
+- **Program attributes.** `getProgramInfo` reports `PlugInCategory` =
+  `Instrument|Synth` and `PlugInName` = `ArpSID` for every factory program.
+
+### Controller state (`getState` / `setState`)
+
+The controller saves its own small state next to the processor state. It holds
+editor settings that are not part of the sound:
+
+| Field | Type | Meaning |
+|---|---|---|
+| magic | `u32` | `ASEC` (0x41534543) |
+| version | `u32` | 1 |
+| zoom | `f64` | editor size (1.0 = 1200 × 800 at host scale 1; clamped 0.25–4) |
+| tab | `i32` | the tab the editor was left on |
+
+All fields are little-endian. A missing, short or foreign stream leaves the
+defaults (size 1.0, MAIN tab), so older projects open normally.
+
+### Track information (`IInfoListener`)
+
+Hosts that support channel context (Cubase, Nuendo, Studio One, Reaper and
+others) call `setChannelContextInfos` with the track name and colour. The
+controller keeps both, and the editor header shows the name in the track's
+colour (darkened host colours are lightened so they stay readable).
 
 ### MIDI mapping (`IMidiMapping`)
 
@@ -346,9 +399,18 @@ on parameters only, and says so on the panels that need the engine.
     3:2 size into the offered rect, clamped to 0.5×–3× of 1200 × 800.
     `onSize` sets the frame zoom. The host's content scale multiplies the
     user's size.
-  - **Remembered size.** The controller keeps the size
-    (`arpsidControllerEditorZoom`), so a reopened editor opens at the same
-    size.
+  - **Remembered size and tab.** The controller keeps the size
+    (`arpsidControllerEditorZoom`) and the tab (`arpsidControllerEditorTab`)
+    and saves both in its state, so a reopened editor, and a reopened
+    project, come back at the same size on the same tab.
+  - **Parameter menu.** Right-clicking a parameter control asks the host for
+    its menu (`IComponentHandler3::createContextMenu`: automation, MIDI
+    learn and so on, depending on the host) and adds `Reset to Default`. The
+    menu opens at the click, scaled by the editor zoom. Hosts without
+    `IComponentHandler3` get no menu; the click is passed on.
+  - **Computer keyboard.** The editor view is the frame's keyboard hook.
+    Letter keys play notes (see [VST3_EDITOR.md](VST3_EDITOR.md#playing-from-the-computer-keyboard));
+    keys with Ctrl, Alt or Cmd go to the host.
 - **Windows and Linux without the editor** (`-DARPSID_VST3_EDITOR=OFF`):
   `createView` returns no view, and hosts show their generic parameter UI.
   `source/gui/arpsid_vst_headless_bridge.cpp` provides the Cocoa entry points
@@ -360,7 +422,7 @@ on parameters only, and says so on the panels that need the engine.
 
 | Thread | What runs there |
 |---|---|
-| Audio (`process`) | `collectEvents_`, `readTransport_`, `Vst3KernelHost::render` → `ArpSIDDSPKernel::processBlock`. No locks, no allocation. Scheduled roots and GUI models arrive through the kernel's mailboxes. |
+| Audio (`process`) | `readBypass_`, `collectEvents_`, `readTransport_`, `applyBypass_`, `Vst3KernelHost::render` → `ArpSIDDSPKernel::processBlock`. No locks, no allocation. Scheduled roots and GUI models arrive through the kernel's mailboxes. |
 | Main / UI | Controller calls, messages, `setState` / `getState`, the editor timer, model edits, telemetry reads, SID file loads. |
 
 - **Models.** `modelMutex_` guards the models on the non-realtime side. The
@@ -411,9 +473,9 @@ Installing released builds: [INSTALL.md](INSTALL.md).
 | Test | Checks |
 |---|---|
 | Steinberg `validator` (runs during every `arpsid_vst3` build) | 47 SDK conformance tests: buses, state, parameters, process formats, flush, variable block size, and more. |
-| `arpsid_vst3_host_check` / `Vst3HostIntegrationTests` (`source/tests/vst3_host_integration_tests.cpp`) | Loads the built bundle like a host and checks each of these: <ul><li>both classes instantiate and connect;</li><li>Program is a 180-entry program-change list;</li><li>the MIDI bus has 16 channels, and the DIGI capture input is an auxiliary bus, inactive by default;</li><li>units: 32 units, each parameter in an existing unit, Program in the root, and <code>selectUnit</code> remembered;</li><li>on Windows and Linux, editor sizing: the 3:2 constraint, the minimum size, and a reopened view keeping its size;</li><li>tempo, transport and musical position are requested;</li><li>the MIDI mapping leaves unmapped CCs alone;</li><li>selecting a program refreshes the host and the controller mirror matches the processor state;</li><li>editor-keyboard (UiMidi) and host note-ons produce audio, and Master Volume automation reaches the engine;</li><li>a v5 state loads into a second instance;</li><li>a legacy v4 state is accepted by processor and controller.</li></ul> |
+| `arpsid_vst3_host_check` / `Vst3HostIntegrationTests` (`source/tests/vst3_host_integration_tests.cpp`) | Loads the built bundle like a host and checks each of these: <ul><li>both classes instantiate and connect;</li><li>Program is a 180-entry program-change list;</li><li>the MIDI bus has 16 channels, and the DIGI capture input is an auxiliary bus, inactive by default;</li><li>units: 32 units, each parameter in an existing unit, Program in the root, and <code>selectUnit</code> remembered;</li><li>on Windows and Linux, editor sizing: the 3:2 constraint, the minimum size, and a reopened view keeping its size;</li><li>tempo, transport and musical position are requested;</li><li>the MIDI mapping leaves unmapped CCs alone;</li><li>selecting a program refreshes the host and the controller mirror matches the processor state;</li><li>editor-keyboard (UiMidi) and host note-ons produce audio, and Master Volume automation reaches the engine;</li><li>a v5 state loads into a second instance;</li><li>a legacy v4 state is accepted by processor and controller;</li><li>Bypass is a <code>kIsBypass</code> on/off parameter in the root unit, silences the output, is saved in the state and read back by a fresh controller, and un-bypassing restores the sound;</li><li>64-bit processing renders a note with finite samples, and an oversized 64-bit block does not overrun;</li><li>the controller state round-trips the editor size and tab, and a foreign stream is ignored;</li><li><code>IInfoListener</code> accepts a track name and colour;</li><li>programs report the <code>Instrument|Synth</code> category.</li></ul> |
 | `arpsid_vst3_editor_check` | The offscreen editor render ([VST3_EDITOR.md](VST3_EDITOR.md#tests)). |
-| `Vst3KernelHostStateTests` (`source/tests/vst3_kernel_host_state_tests.cpp`, SDK-free, runs in every build) | The v5 state keeps the models, the C64 tune and its subtune. A tune-less state unloads a tune. A restored tune can switch subtune. A truncated state keeps what came before the cut. A DIGI capture round trip works (arm, feed, stop, then the slot plays the take). |
+| `Vst3KernelHostStateTests` (`source/tests/vst3_kernel_host_state_tests.cpp`, SDK-free, runs in every build) | The v5 state keeps the models, the C64 tune and its subtune. A tune-less state unloads a tune. A restored tune can switch subtune. A truncated state keeps what came before the cut. A DIGI capture round trip works (arm, feed, stop, then the slot plays the take). Bypass is saved, restored, cleared by an un-bypassed state, read by `decodeBypass`, and never set by a legacy state. |
 | `EditorLayoutCoverageTests`, `ParameterReferenceDocTests` | Editor coverage and the decode law, and that the parameter reference is up to date. |
 
 CI runs all of these on Linux x86_64/aarch64 and Windows x64/arm64. On macOS

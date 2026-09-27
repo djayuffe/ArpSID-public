@@ -12,6 +12,9 @@
 //     auxiliary audio bus, inactive by default.
 //   * IProcessContextRequirements requests tempo/transport/musical time.
 //   * On-screen keyboard notes (UiMidi message) produce audio.
+//   * Host bypass (kIsBypass) fades the output and is saved in the state;
+//     64-bit processing; controller (editor) state; IInfoListener; program
+//     attributes.
 //   * The processor runs the shared kernel: state carries the GUI models
 //     (SETTINGS/MIX/KIT/DIGI), legacy Phase2 (v4) project state still loads,
 //     host note events and sample-accurate automation reach the engine.
@@ -23,6 +26,7 @@
 #include "public.sdk/source/common/memorystream.h"
 #include "public.sdk/source/vst/hosting/eventlist.h"
 #include "public.sdk/source/vst/hosting/parameterchanges.h"
+#include "base/source/fstreamer.h"
 #include "pluginterfaces/vst/ivstaudioprocessor.h"
 #include "pluginterfaces/vst/ivstcomponent.h"
 #include "pluginterfaces/vst/ivsteditcontroller.h"
@@ -30,12 +34,15 @@
 #include "pluginterfaces/vst/ivstmidicontrollers.h"
 #include "pluginterfaces/vst/ivstprocesscontext.h"
 #include "pluginterfaces/vst/ivstunits.h"
+#include "pluginterfaces/vst/ivstchannelcontextinfo.h"
+#include "pluginterfaces/vst/vstpresetkeys.h"
 #include "pluginterfaces/gui/iplugview.h"
 
 #include "parameter_ids.h"
 #include "arpsid_vst_messages.h"
 #include "au3/ArpSIDStateSerializer.h"
 #include "factory_patch_params.h"
+#include "vst3/arpsid_vst3_kernel_host.h"
 
 #include <cmath>
 #include <cstdio>
@@ -105,6 +112,40 @@ double renderRms(IAudioProcessor* proc, int blocks, int frames,
         ctx.projectTimeSamples += frames;
     }
     return n ? std::sqrt(sum / (double)n) : 0.0;
+}
+
+// Same as renderRms with 64-bit buffers; also reports non-finite samples.
+double renderRms64(IAudioProcessor* proc, int blocks, int frames, IEventList* firstEvents, bool& finite) {
+    std::vector<double> l((size_t)frames), r((size_t)frames);
+    double* chans[2] = {l.data(), r.data()};
+    AudioBusBuffers out{};
+    out.numChannels = 2;
+    out.channelBuffers64 = chans;
+    double sum = 0.0;
+    size_t n = 0;
+    finite = true;
+    for (int b = 0; b < blocks; ++b) {
+        ProcessData data{};
+        data.processMode = kRealtime;
+        data.symbolicSampleSize = kSample64;
+        data.numSamples = frames;
+        data.numOutputs = 1;
+        data.outputs = &out;
+        if (b == 0) data.inputEvents = firstEvents;
+        proc->process(data);
+        for (int i = 0; i < frames; ++i) {
+            finite &= std::isfinite(l[(size_t)i]) && std::isfinite(r[(size_t)i]);
+            sum += l[(size_t)i] * l[(size_t)i] + r[(size_t)i] * r[(size_t)i];
+            n += 2;
+        }
+    }
+    return n ? std::sqrt(sum / (double)n) : 0.0;
+}
+
+ParameterChanges* oneChange(ParameterChanges& pc, ParamID id, double value) {
+    int32 qi = 0, pi = 0;
+    if (IParamValueQueue* q = pc.addParameterData(id, qi)) q->addPoint(0, value, pi);
+    return &pc;
 }
 
 void sendMessage(IConnectionPoint* to, const char* id, const std::vector<std::pair<const char*, int64>>& ints) {
@@ -350,6 +391,41 @@ int main(int argc, char** argv) {
         std::printf("master volume 0: rms %.6f\n", muted);
         CHECK(muted < hostNote * 0.05, "automation of Master Volume reaches the engine");
 
+        // ── Host bypass: fades out while the engine keeps running ─────────
+        const ParamID bypassId = (ParamID)ArpSID::kVst3BypassParamId;
+        {
+            ParameterInfo bi{};
+            bool found = false;
+            for (int32 i = 0; i < controller->getParameterCount(); ++i)
+                if (controller->getParameterInfo(i, bi) == kResultOk && bi.id == bypassId) { found = true; break; }
+            CHECK(found && (bi.flags & ParameterInfo::kIsBypass) && bi.stepCount == 1 && bi.unitId == kRootUnitId,
+                  "Bypass parameter: kIsBypass, on/off, root unit");
+            String128 txt{};
+            CHECK(controller->getParamStringByValue(bypassId, 1.0, txt) == kResultOk && txt[0] != 0,
+                  "Bypass has host text");
+        }
+        ParameterChanges vol;
+        (void)renderRms(proc, 2, 512, nullptr, oneChange(vol, (ParamID)ArpSID::kParamMasterVolume, 0.8));
+        const double live = renderRms(proc, 8, 512);
+        ParameterChanges byOn;
+        (void)renderRms(proc, 2, 512, nullptr, oneChange(byOn, bypassId, 1.0));
+        const double bypassed = renderRms(proc, 8, 512);
+        std::printf("bypass: live %.6f, bypassed %.6f\n", live, bypassed);
+        CHECK(live > 1e-4 && bypassed == 0.0, "bypass silences the output");
+        {
+            MemoryStream bst;
+            CHECK(component->getState(&bst) == kResultOk, "getState while bypassed");
+            bst.seek(0, IBStream::kIBSeekSet, nullptr);
+            IPtr<IEditController> c = makeController();
+            CHECK(c && c->setComponentState(&bst) == kResultOk && c->getParamNormalized(bypassId) > 0.5,
+                  "bypass is saved in the state and mirrored by the controller");
+            if (c) c->terminate();
+        }
+        ParameterChanges byOff;
+        (void)renderRms(proc, 2, 512, nullptr, oneChange(byOff, bypassId, 0.0));
+        const double back = renderRms(proc, 8, 512);
+        CHECK(back > live * 0.25, "un-bypass restores the output");
+
         Event off{};
         off.type = Event::kNoteOffEvent;
         off.noteOff.pitch = 64;
@@ -359,6 +435,74 @@ int main(int argc, char** argv) {
         (void)renderRms(proc, 2, 512, &offs);
         proc->setProcessing(false);
         component->setActive(false);
+
+        // ── 64-bit processing ─────────────────────────────────────────────
+        CHECK(proc->canProcessSampleSize(kSample64) == kResultTrue, "supports 64-bit samples");
+        ProcessSetup setup64{kRealtime, kSample64, 512, 48000.0};
+        CHECK(proc->setupProcessing(setup64) == kResultOk, "setupProcessing (64-bit)");
+        component->setActive(true);
+        proc->setProcessing(true);
+        EventList notes64;
+        Event on64 = on;
+        on64.sampleOffset = 0;
+        notes64.addEvent(on64);
+        bool finite = false;
+        const double rms64 = renderRms64(proc, 16, 512, &notes64, finite);
+        std::printf("64-bit note: rms %.6f\n", rms64);
+        CHECK(finite && rms64 > 1e-4, "64-bit processing renders the note");
+        // A block larger than announced must not overrun the scratch buffers.
+        (void)renderRms64(proc, 1, 2048, nullptr, finite);
+        CHECK(finite, "oversized 64-bit block stays finite");
+        EventList offs64;
+        offs64.addEvent(off);
+        (void)renderRms64(proc, 2, 512, &offs64, finite);
+        proc->setProcessing(false);
+        component->setActive(false);
+    }
+
+    // ── Controller (editor) state, track info, program attributes ─────────
+    {
+        MemoryStream cs;
+        IBStreamer w(&cs, kLittleEndian);
+        w.writeInt32u(0x41534543u);
+        w.writeInt32u(1u);
+        w.writeDouble(1.5);
+        w.writeInt32(3);
+        cs.seek(0, IBStream::kIBSeekSet, nullptr);
+        CHECK(controller->setState(&cs) == kResultOk, "controller setState (editor state)");
+        MemoryStream out;
+        CHECK(controller->getState(&out) == kResultOk, "controller getState");
+        out.seek(0, IBStream::kIBSeekSet, nullptr);
+        IBStreamer r(&out, kLittleEndian);
+        uint32 magic = 0, version = 0;
+        double zoom = 0.0;
+        int32 tab = -1;
+        CHECK(r.readInt32u(magic) && r.readInt32u(version) && r.readDouble(zoom) && r.readInt32(tab) &&
+                  magic == 0x41534543u && version == 1u && std::fabs(zoom - 1.5) < 1e-9 && tab == 3,
+              "editor size and tab round-trip through the controller state");
+        MemoryStream junk;
+        int32 jw = 0;
+        const char garbage[5] = {'x', 'y', 'z', 'w', 'q'};
+        junk.write(const_cast<char*>(garbage), 5, &jw);
+        junk.seek(0, IBStream::kIBSeekSet, nullptr);
+        CHECK(controller->setState(&junk) == kResultOk, "foreign controller state is ignored");
+
+        FUnknownPtr<ChannelContext::IInfoListener> info(controller);
+        CHECK(info, "IInfoListener available");
+        if (info) {
+            IPtr<IAttributeList> attrs = HostAttributeList::make();
+            const char16 name[] = u"Lead SID";
+            attrs->setString(ChannelContext::kChannelNameKey, reinterpret_cast<const TChar*>(name));
+            attrs->setInt(ChannelContext::kChannelColorKey, (int64)0xFF3366CC);
+            CHECK(info->setChannelContextInfos(attrs) == kResultOk, "setChannelContextInfos");
+        }
+
+        FUnknownPtr<IUnitInfo> ui(controller);
+        if (ui) {
+            String128 v{};
+            CHECK(ui->getProgramInfo(1, 0, PresetAttributes::kPlugInCategory, v) == kResultOk && v[0] == 'I',
+                  "program category is Instrument|Synth");
+        }
     }
 
     // ── Kernel state format: canonical root + every GUI model ──────────────

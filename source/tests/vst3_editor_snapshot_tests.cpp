@@ -32,6 +32,7 @@
 #endif
 
 #include <array>
+#include "vstgui/lib/events.h"
 #include <cctype>
 #include <cmath>
 #include <cstdio>
@@ -78,7 +79,18 @@ public:
     void sendMidi(uint8_t s, uint8_t d1, uint8_t d2) override {
         const uint8_t b[3] = {s, d1, d2};
         host_.injectMidi(b, 3);
+        midi.push_back({s, d1, d2});
     }
+    int savedTab() const override { return savedTabValue; }
+    void tabChanged(int t) override { lastTab = t; }
+    bool paramContextMenu(int id, double, double) override {
+        menuId = id;
+        return true;
+    }
+    std::string trackName() const override { return "Lead SID"; }
+    std::uint32_t trackColour() const override { return 0xFF3366CCu; }
+    int savedTabValue = 0, lastTab = -1, menuId = -1;
+    std::vector<std::array<uint8_t, 3>> midi;
     Vst3KernelHost* kernelHost() override { return &host_; }
     void markStateDirty() override { ++dirty; }
     int edits = 0, dirty = 0;
@@ -186,6 +198,60 @@ int main(int argc, char** argv) {
         renderAudio(host, 2);
         check(backend.edits == editsBefore + 1 && std::fabs(host.parameter(kParamFilterResonance) - 0.5f) < 1e-3f,
               "editor edit reaches the kernel");
+
+        // Tab memory: the editor reports tab changes and reopens on the saved tab.
+        view->selectTab(2);
+        check(backend.lastTab == 2, "tab change reported to the host");
+        backend.savedTabValue = 5;
+        {
+            auto reopened = makeOwned<Editor::EditorView>(backend);
+            check(reopened->selectedTab() == 5, "editor reopens on the saved tab");
+        }
+        view->selectTab(0);
+
+        // Right-click on a parameter control asks the host for its menu.
+        int foundId = -1;
+        CPoint hit;
+        for (CCoord y = 100; y < 600 && foundId < 0; y += 7)
+            for (CCoord x = 12; x < 1188 && foundId < 0; x += 7)
+                if ((foundId = view->paramIdAt(CPoint(x, y))) >= 0) hit = CPoint(x, y);
+        check(foundId >= 0 && foundId < kNumParams, "a parameter control is found under the mouse");
+        MouseDownEvent right;
+        right.mousePosition = hit;
+        right.buttonState.set(MouseButton::Right);
+        view->onMouseDownEvent(right);
+        check(right.consumed && backend.menuId == foundId, "right-click opens the host parameter menu");
+        check(view->paramIdAt(CPoint(4, 4)) < 0, "no parameter at the editor corner");
+
+        // Computer keyboard: A = C4 (60), X raises the octave, Ctrl+key is the host's.
+        auto key = [&](char32_t c, EventType t, bool ctrl = false) {
+            KeyboardEvent e(t);
+            e.character = c;
+            if (ctrl) e.modifiers.add(ModifierKey::Control);
+            view->onKeyboardEvent(e, nullptr);
+            return e.consumed;
+        };
+        backend.midi.clear();
+        check(key('a', EventType::KeyDown) && key('a', EventType::KeyUp), "A key is consumed");
+        check(backend.midi.size() == 2 && backend.midi[0][0] == 0x90 && backend.midi[0][1] == 60 &&
+                  backend.midi[1][0] == 0x80 && backend.midi[1][1] == 60,
+              "A plays and releases C4");
+        key('x', EventType::KeyDown);
+        key('x', EventType::KeyUp);
+        key('k', EventType::KeyDown);
+        key('k', EventType::KeyUp);
+        check(backend.midi.size() == 4 && backend.midi[2][1] == 84, "X shifts up an octave (K = C6)");
+        key('z', EventType::KeyDown);
+        check(!key('a', EventType::KeyDown, true), "Ctrl+A is left to the host");
+        check(backend.midi.size() == 4, "Ctrl+A plays nothing");
+        {
+            auto closing = makeOwned<Editor::EditorView>(backend);
+            KeyboardEvent held(EventType::KeyDown);
+            held.character = 'd';
+            closing->onKeyboardEvent(held, nullptr);
+        }
+        check(backend.midi.size() == 6 && backend.midi[5][0] == 0x80 && backend.midi[5][1] == backend.midi[4][1],
+              "closing the editor releases a held computer-keyboard note");
     }
     VSTGUI::exit();
 #if defined(_WIN32)

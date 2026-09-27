@@ -126,6 +126,25 @@ int main() {
         check(e.digiCaptureStatus().frames == 40 * 256, "a disarmed capture ignores input");
     }
 
+    // Host bypass: saved as its own chunk, restored, and read by the controller.
+    {
+        Vst3KernelHost a;
+        a.setup(44100.0, 512);
+        check(!a.bypass(), "a new instance is not bypassed");
+        a.setBypass(true);
+        const auto on = a.saveState();
+        check(Vst3KernelHost::decodeBypass(on.data(), on.size()), "decodeBypass reads the saved flag");
+        Vst3KernelHost b;
+        b.setup(44100.0, 512);
+        check(b.loadState(on.data(), on.size()) && b.bypass(), "bypass restores");
+        a.setBypass(false);
+        const auto off = a.saveState();
+        check(!Vst3KernelHost::decodeBypass(off.data(), off.size()), "decodeBypass: not bypassed");
+        check(b.loadState(off.data(), off.size()) && !b.bypass(), "loading an un-bypassed state clears bypass");
+        const std::uint8_t legacy[4] = {4, 0, 0, 0};
+        check(!Vst3KernelHost::decodeBypass(legacy, sizeof legacy), "legacy state is never bypassed");
+    }
+
     if (failures) {
         std::fprintf(stderr, "vst3_kernel_host_state_tests: %d failure(s)\n", failures);
         return 1;

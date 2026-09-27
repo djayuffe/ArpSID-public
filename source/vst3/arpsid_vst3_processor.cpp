@@ -124,16 +124,22 @@ tresult PLUGIN_API ArpSIDVst3Processor::setBusArrangements(SpeakerArrangement* i
 tresult PLUGIN_API ArpSIDVst3Processor::setupProcessing(ProcessSetup& setup) {
     sampleRate_ = setup.sampleRate > 0.0 ? setup.sampleRate : 44100.0;
     host_->setup(sampleRate_, setup.maxSamplesPerBlock);
+    // 64-bit hosts: the kernel renders float, converted at the bus edge.
+    const std::size_t frames = static_cast<std::size_t>(std::max<int32>(1, setup.maxSamplesPerBlock));
+    for (auto& b : scratchOut_) b.assign(frames, 0.0f);
+    for (auto& b : scratchIn_) b.assign(frames, 0.0f);
+    bypassRampStep_ = static_cast<float>(1.0 / std::max(1.0, kBypassRampSeconds * sampleRate_));
     return AudioEffect::setupProcessing(setup);
 }
 
 tresult PLUGIN_API ArpSIDVst3Processor::setActive(TBool state) {
     if (!state) host_->reset();
+    bypassGain_ = host_->bypass() ? 0.0f : 1.0f; // no ramp across activation
     return AudioEffect::setActive(state);
 }
 
 tresult PLUGIN_API ArpSIDVst3Processor::canProcessSampleSize(int32 symbolicSampleSize) {
-    return symbolicSampleSize == kSample32 ? kResultTrue : kResultFalse;
+    return (symbolicSampleSize == kSample32 || symbolicSampleSize == kSample64) ? kResultTrue : kResultFalse;
 }
 
 uint32 PLUGIN_API ArpSIDVst3Processor::getTailSamples() {
@@ -238,8 +244,39 @@ void ArpSIDVst3Processor::collectEvents_(ProcessData& data, int frameCount) {
     eventCount_ = n;
 }
 
+void ArpSIDVst3Processor::readBypass_(ProcessData& data) noexcept {
+    IParameterChanges* changes = data.inputParameterChanges;
+    if (!changes) return;
+    for (int32 q = 0; q < changes->getParameterCount(); ++q) {
+        IParamValueQueue* queue = changes->getParameterData(q);
+        if (!queue || queue->getParameterId() != static_cast<ParamID>(kVst3BypassParamId)) continue;
+        int32 offset = 0;
+        ParamValue value = 0.0;
+        const int32 points = queue->getPointCount();
+        if (points > 0 && queue->getPoint(points - 1, offset, value) == kResultOk && std::isfinite(value))
+            host_->setBypass(value >= 0.5);
+    }
+}
+
+void ArpSIDVst3Processor::applyBypass_(float** out, int channels, int frames) noexcept {
+    const float target = host_->bypass() ? 0.0f : 1.0f;
+    if (bypassGain_ == target) {
+        if (target == 0.0f)
+            for (int c = 0; c < channels; ++c) std::memset(out[c], 0, static_cast<std::size_t>(frames) * sizeof(float));
+        return;
+    }
+    // Short linear fade so bypass switching never clicks; the engine keeps
+    // running (notes, arp and sequencer stay in time) while bypassed.
+    for (int i = 0; i < frames; ++i) {
+        bypassGain_ = target > bypassGain_ ? std::min(target, bypassGain_ + bypassRampStep_)
+                                           : std::max(target, bypassGain_ - bypassRampStep_);
+        for (int c = 0; c < channels; ++c) out[c][i] *= bypassGain_;
+    }
+}
+
 tresult PLUGIN_API ArpSIDVst3Processor::process(ProcessData& data) {
     const int frames = std::max<int32>(0, data.numSamples);
+    readBypass_(data);
 
     if (frames == 0) {
         // Parameter flush without audio: stage the last value of each change.
@@ -260,34 +297,71 @@ tresult PLUGIN_API ArpSIDVst3Processor::process(ProcessData& data) {
         return kResultOk;
     }
 
+    const bool is64 = data.symbolicSampleSize == kSample64;
+    // 64-bit blocks go through float scratch sized in setupProcessing; a host
+    // that exceeds its announced block size gets silence, never an overrun.
+    if (is64 && static_cast<std::size_t>(frames) > scratchOut_[0].size()) {
+        if (data.numOutputs > 0 && data.outputs && data.outputs[0].channelBuffers64)
+            for (int32 c = 0; c < data.outputs[0].numChannels; ++c)
+                if (double* d = data.outputs[0].channelBuffers64[c])
+                    std::fill(d, d + frames, 0.0);
+        return kResultOk;
+    }
+
     collectEvents_(data, frames);
 
     // DIGI capture input (side-chain). Only read while a capture is armed.
-    const bool captureIn = data.numInputs > 0 && data.inputs && data.inputs[0].numChannels > 0 &&
-                           data.inputs[0].channelBuffers32 && data.inputs[0].channelBuffers32[0];
-    host_->setDigiCaptureInputActive(captureIn);
-    if (captureIn)
-        host_->captureDigiInput(data.inputs[0].channelBuffers32, data.inputs[0].numChannels, frames);
+    const float* in[2] = {nullptr, nullptr};
+    int inChannels = 0;
+    if (data.numInputs > 0 && data.inputs && data.inputs[0].numChannels > 0) {
+        inChannels = std::min<int32>(2, data.inputs[0].numChannels);
+        for (int c = 0; c < inChannels; ++c) {
+            if (is64) {
+                const double* src = data.inputs[0].channelBuffers64 ? data.inputs[0].channelBuffers64[c] : nullptr;
+                if (!src) { inChannels = c; break; }
+                for (int i = 0; i < frames; ++i) scratchIn_[c][static_cast<std::size_t>(i)] = static_cast<float>(src[i]);
+                in[c] = scratchIn_[c].data();
+            } else {
+                in[c] = data.inputs[0].channelBuffers32 ? data.inputs[0].channelBuffers32[c] : nullptr;
+                if (!in[c]) { inChannels = c; break; }
+            }
+        }
+    }
+    host_->setDigiCaptureInputActive(inChannels > 0);
+    if (inChannels > 0) host_->captureDigiInput(in, inChannels, frames);
+
     TransportState transport{};
     readTransport_(data.processContext, sampleRate_, frames, transport);
 
     float* out[2] = {nullptr, nullptr};
     int channels = 0;
-    if (data.numOutputs > 0 && data.outputs && data.outputs[0].channelBuffers32) {
-        channels = std::min<int32>(2, data.outputs[0].numChannels);
+    if (data.numOutputs > 0 && data.outputs) {
+        const int32 busChannels = data.outputs[0].numChannels;
+        channels = std::min<int32>(2, busChannels);
         for (int c = 0; c < channels; ++c) {
-            out[c] = data.outputs[0].channelBuffers32[c];
-            if (out[c]) std::memset(out[c], 0, static_cast<std::size_t>(frames) * sizeof(float));
-            else channels = c;
+            if (is64) {
+                out[c] = (data.outputs[0].channelBuffers64 && data.outputs[0].channelBuffers64[c])
+                             ? scratchOut_[c].data() : nullptr;
+            } else {
+                out[c] = data.outputs[0].channelBuffers32 ? data.outputs[0].channelBuffers32[c] : nullptr;
+            }
+            if (!out[c]) { channels = c; break; }
+            std::memset(out[c], 0, static_cast<std::size_t>(frames) * sizeof(float));
         }
     }
     host_->render(channels > 0 ? out : nullptr, channels, frames, events_.data(), eventCount_, transport);
+    if (channels > 0) applyBypass_(out, channels, frames);
 
     if (channels > 0) {
         bool silent = true;
         for (int c = 0; c < channels && silent; ++c)
             for (int i = 0; i < frames; ++i)
                 if (out[c][i] != 0.0f) { silent = false; break; }
+        if (is64)
+            for (int c = 0; c < channels; ++c) {
+                double* d = data.outputs[0].channelBuffers64[c];
+                for (int i = 0; i < frames; ++i) d[i] = static_cast<double>(out[c][i]);
+            }
         data.outputs[0].silenceFlags = silent ? ((1ull << channels) - 1ull) : 0ull;
     }
     return kResultOk;

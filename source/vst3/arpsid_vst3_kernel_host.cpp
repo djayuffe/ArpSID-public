@@ -38,6 +38,7 @@ constexpr std::uint32_t kTagDigiBank = fourcc('D', 'I', 'G', 'B'); // DigiSample
 constexpr std::uint32_t kTagDigiRt   = fourcc('D', 'I', 'G', 'R'); // D418 mode + rate + pad map
 constexpr std::uint32_t kTagOutput   = fourcc('O', 'U', 'T', 'M'); // pure SID 1Q1 output mode
 constexpr std::uint32_t kTagSidFile  = fourcc('S', 'I', 'D', 'F'); // u16 subtune + loaded .sid file
+constexpr std::uint32_t kTagBypass   = fourcc('B', 'Y', 'P', 'S'); // host bypass (1 byte)
 constexpr std::size_t kMaxSidFileBytes = 1u << 20;                    // PSID/RSID files are far smaller
 
 void putU32(std::vector<std::uint8_t>& out, std::uint32_t v) {
@@ -222,6 +223,8 @@ std::vector<std::uint8_t> Vst3KernelHost::saveState() const {
     putChunk(out, kTagDigiRt, digiRt, sizeof(digiRt));
     const std::uint8_t pure = kernel_->pureSid1Q1OutputModeEnabled() ? 1u : 0u;
     putChunk(out, kTagOutput, &pure, 1);
+    const std::uint8_t bypassed = bypass() ? 1u : 0u;
+    putChunk(out, kTagBypass, &bypassed, 1);
     {
         std::lock_guard<std::mutex> sidLock(sidMutex_);
         if (!sidFile_.empty() && kernel_->isPsidLoaded()) {
@@ -252,6 +255,20 @@ bool Vst3KernelHost::decodeStateRoot(const std::uint8_t* data, std::size_t size,
     return false;
 }
 
+bool Vst3KernelHost::decodeBypass(const std::uint8_t* data, std::size_t size) noexcept {
+    if (!data || size < 4 || getU32(data) < kStateVersion) return false;
+    std::size_t pos = 4;
+    while (pos + 8 <= size) {
+        const std::uint32_t tag = getU32(data + pos);
+        const std::uint32_t len = getU32(data + pos + 4);
+        pos += 8;
+        if (len > size - pos) return false;
+        if (tag == kTagBypass) return len >= 1 && data[pos] != 0;
+        pos += len;
+    }
+    return false;
+}
+
 bool Vst3KernelHost::loadState(const std::uint8_t* data, std::size_t size) {
     if (!data || size < 4) return false;
     const std::uint32_t version = getU32(data);
@@ -265,6 +282,7 @@ bool Vst3KernelHost::loadState(const std::uint8_t* data, std::size_t size) {
     }
 
     bool haveRoot = false;
+    bool bypassed = false; // a state without the chunk is not bypassed
     bool haveDigiModel = false, haveDigiBank = false;
     std::vector<std::uint8_t> sidBytes;
     std::uint16_t sidSubtune = 0;
@@ -331,6 +349,9 @@ bool Vst3KernelHost::loadState(const std::uint8_t* data, std::size_t size) {
             case kTagOutput:
                 if (len >= 1) kernel_->setPureSid1Q1OutputMode(p[0] != 0);
                 break;
+            case kTagBypass:
+                bypassed = len >= 1 && p[0] != 0;
+                break;
             case kTagSidFile:
                 if (len > 2 && len - 2 <= kMaxSidFileBytes) {
                     sidSubtune = static_cast<std::uint16_t>(p[0] | (p[1] << 8));
@@ -351,6 +372,7 @@ bool Vst3KernelHost::loadState(const std::uint8_t* data, std::size_t size) {
     }
     publishModelsLocked_(true);
     lock.unlock();
+    setBypass(bypassed);
     // The C64 tune saved with the project; a state without one unloads any
     // tune left from before, so a restore is deterministic.
     if (!sidBytes.empty()) {

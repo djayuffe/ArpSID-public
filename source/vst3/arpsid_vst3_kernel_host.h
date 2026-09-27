@@ -33,6 +33,11 @@
 
 namespace ArpSID {
 
+// VST3-only host bypass parameter (ParameterInfo::kIsBypass). It lives
+// outside the shared 0..kNumParams-1 space so AU/Standalone ids are
+// unchanged; the plug-in keeps running while bypassed and fades its output.
+constexpr int kVst3BypassParamId = 1024;
+
 class ArpSIDDSPKernel;
 struct TimedEvent;
 struct TransportState;
@@ -139,6 +144,12 @@ public:
     };
     DigiCaptureStatus digiCaptureStatus() const noexcept;
 
+    // ── host bypass (kVst3BypassParamId; saved in the state) ───────────────
+    void setBypass(bool on) noexcept { bypass_.store(on, std::memory_order_relaxed); }
+    bool bypass() const noexcept { return bypass_.load(std::memory_order_relaxed); }
+    // Reads the bypass flag from saved state (false when the state has none).
+    static bool decodeBypass(const std::uint8_t* data, std::size_t size) noexcept;
+
     // ── MIDI from the editor (non-realtime; queued into the kernel) ─────────
     void injectMidi(const std::uint8_t* data, std::uint8_t length) noexcept;
 
@@ -176,6 +187,7 @@ private:
     std::atomic<bool> captureArmed_{false};
     std::atomic<bool> captureBusy_{false};
     std::atomic<bool> captureInputActive_{false};
+    std::atomic<bool> bypass_{false};
     std::atomic<std::uint32_t> captureFrames_{0};
     std::atomic<float> capturePeak_{0.f};
     int captureSlot_ = 0;
