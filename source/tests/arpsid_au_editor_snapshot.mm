@@ -127,52 +127,18 @@ NSView* makeEditor(AudioUnit unit) {
     return factory ? [factory uiViewForAudioUnit:unit withSize:NSMakeSize(kWidth, kHeight)] : nil;
 }
 
-// Captures the view hierarchy two ways: AppKit's cached display (drawRect
-// content) into <path>, and the Core Animation layer tree (layer-only content
-// such as scopes) into <layerPath>. The docs use whichever is complete.
-NSData* pngOf(NSBitmapImageRep* rep) { return [rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}]; }
-
-bool writePng(NSView* view, NSString* path, NSString* layerPath, NSUInteger& bytes) {
+// Captures the view hierarchy (drawRect and layer-backed content) at the
+// backing scale of the window.
+bool writePng(NSView* view, NSString* path, NSUInteger& bytes) {
     [view layoutSubtreeIfNeeded];
     [view displayIfNeeded];
     const NSRect bounds = view.bounds;
     NSBitmapImageRep* rep = [view bitmapImageRepForCachingDisplayInRect:bounds];
     if (!rep) return false;
     [view cacheDisplayInRect:bounds toBitmapImageRep:rep];
-    NSData* png = pngOf(rep);
+    NSData* png = [rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
     bytes = png.length;
-    const bool ok = png && [png writeToFile:path atomically:YES];
-
-    if (view.layer && layerPath) {
-        NSBitmapImageRep* layerRep = [[NSBitmapImageRep alloc]
-            initWithBitmapDataPlanes:nullptr pixelsWide:(NSInteger)bounds.size.width
-                          pixelsHigh:(NSInteger)bounds.size.height bitsPerSample:8 samplesPerPixel:4
-                            hasAlpha:YES isPlanar:NO colorSpaceName:NSDeviceRGBColorSpace
-                         bytesPerRow:0 bitsPerPixel:0];
-        NSGraphicsContext* gc = layerRep ? [NSGraphicsContext graphicsContextWithBitmapImageRep:layerRep] : nil;
-        if (gc) {
-            CGContextRef cg = gc.CGContext;
-            CGContextSetRGBFillColor(cg, 0, 0, 0, 1);
-            CGContextFillRect(cg, CGRectMake(0, 0, bounds.size.width, bounds.size.height));
-            if (!view.layer.geometryFlipped) {
-                CGContextTranslateCTM(cg, 0, bounds.size.height);
-                CGContextScaleCTM(cg, 1, -1);
-            }
-            [view.layer renderInContext:cg];
-            [gc flushGraphics];
-            [pngOf(layerRep) writeToFile:layerPath atomically:YES];
-        }
-    }
-    return ok;
-}
-
-// Screen capture of the on-screen window (includes Metal content). Needs the
-// window server; skipped quietly where screen capture is not permitted.
-void screenCapture(NSWindow* w, NSString* path) {
-    NSTask* task = [[NSTask alloc] init];
-    task.executableURL = [NSURL fileURLWithPath:@"/usr/sbin/screencapture"];
-    task.arguments = @[ @"-x", @"-o", [NSString stringWithFormat:@"-l%ld", (long)w.windowNumber], path ];
-    if ([task launchAndReturnError:nil]) [task waitUntilExit];
+    return png && [png writeToFile:path atomically:YES];
 }
 
 std::string slug(const char* name) {
@@ -228,9 +194,8 @@ int main(int argc, char** argv) {
         }
         NSString* outDir = [NSString stringWithUTF8String:argv[1]];
         const bool flavors = argc > 2 && std::string(argv[2]) == "--flavors";
-        for (NSString* sub in @[ @"layer", @"screen" ])
-            [[NSFileManager defaultManager] createDirectoryAtPath:[outDir stringByAppendingPathComponent:sub]
-                                      withIntermediateDirectories:YES attributes:nil error:nil];
+        [[NSFileManager defaultManager] createDirectoryAtPath:outDir withIntermediateDirectories:YES
+                                                   attributes:nil error:nil];
         [NSApplication sharedApplication];
         [NSApp setActivationPolicy:NSApplicationActivationPolicyAccessory];
 
@@ -257,12 +222,8 @@ int main(int argc, char** argv) {
                 }
                 NSString* path = [outDir stringByAppendingPathComponent:
                                              [NSString stringWithFormat:@"au-editor-%s.png", slug(t.name).c_str()]];
-                NSString* layerPath = [outDir stringByAppendingPathComponent:
-                                             [NSString stringWithFormat:@"layer/au-editor-%s.png", slug(t.name).c_str()]];
                 NSUInteger bytes = 0;
-                check(writePng(editor, path, layerPath, bytes), std::string("write ") + path.UTF8String);
-                screenCapture(window, [outDir stringByAppendingPathComponent:
-                                                  [NSString stringWithFormat:@"screen/au-editor-%s.png", slug(t.name).c_str()]]);
+                check(writePng(editor, path, bytes), std::string("write ") + path.UTF8String);
                 check(bytes > 30000, std::string("tab ") + t.name + " renders real content");
                 std::printf("  %-10s -> %s (%lu KB)\n", t.name, path.UTF8String, (unsigned long)(bytes / 1024));
             }
@@ -301,12 +262,8 @@ int main(int argc, char** argv) {
                 }
                 NSString* path = [outDir stringByAppendingPathComponent:
                                              [NSString stringWithFormat:@"au-flavor-%s.png", f.name]];
-                NSString* layerPath = [outDir stringByAppendingPathComponent:
-                                             [NSString stringWithFormat:@"layer/au-flavor-%s.png", f.name]];
                 NSUInteger bytes = 0;
-                check(writePng(editor, path, layerPath, bytes), std::string("write ") + path.UTF8String);
-                screenCapture(window, [outDir stringByAppendingPathComponent:
-                                                  [NSString stringWithFormat:@"screen/au-flavor-%s.png", f.name]]);
+                check(writePng(editor, path, bytes), std::string("write ") + path.UTF8String);
                 std::printf("  flavor %-15s -> %s (%lu KB)\n", f.name, path.UTF8String, (unsigned long)(bytes / 1024));
                 [window orderOut:nil];
                 NSResponder* vc = controllerForView(editor);

@@ -30,9 +30,8 @@ trap 'rm -rf "$tmp"' EXIT
 
 out="$ROOT/docs/screenshots"
 mkdir -p "$out"
-# Prefer the window capture (it includes Metal content) when it exists.
 for f in "$tmp"/au-*.png; do
-  name="$(basename "$f")"
-  if [ -s "$tmp/screen/$name" ]; then cp "$tmp/screen/$name" "$out/$name"; else cp "$f" "$out/$name"; fi
-  echo "  $out/$name"
+  sips --resampleWidth 1280 "$f" >/dev/null   # Retina captures are 2x
+  cp "$f" "$out/"
+  echo "  $out/$(basename "$f")"
 done

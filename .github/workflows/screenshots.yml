@@ -39,6 +39,8 @@ jobs:
           echo "exit $?" >> "$out/snapshot.log"
           cat "$out/snapshot.log"
           sw_vers > "$out/runner.txt"
+          # Retina captures are 2x; the docs use the 1280-pixel design size.
+          for f in "$out"/*.png; do sips --resampleWidth 1280 "$f" >/dev/null; done
       - name: Publish to the ci-screenshots branch
         run: |
           out="${RUNNER_TEMP}/shots"

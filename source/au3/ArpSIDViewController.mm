@@ -28,6 +28,7 @@
 #include "arpsid/core/sid_midi_cc_mapping.h"
 #include "arpsid/core/sid_runtime_mod_ops.h"
 #include "arpsid/core/sid_runtime_state_root_presentation.h"
+#include "arpsid/core/sid_parameter_presentation.h"
 #include "arpsid/core/sid_mod_matrix_types.h"
 #include "arpsid/patchbank/forensic_patch_bank.h"
 #include "arpsid/gui/kit_panel_model.h"
@@ -2971,6 +2972,16 @@ static constexpr double kArpSIDGuiActivePollHz_v820 = 24.0;
 -(void)setModulatedValue:(float)v activity:(float)activity label:(NSString* _Nullable)label;
 @end
 
+// Knob value text: the host display text (units, named choices) from the
+// shared presentation authority, so the editor and the host agree; plain
+// three-decimal text for knobs that are not bound to a parameter.
+static NSString* ArpSIDKnobValueText(int paramId, float normalized) {
+    char buf[64] = {};
+    if (ArpSID::SidParameterPresentation::formatNormalized(paramId, normalized, buf, sizeof buf) && buf[0])
+        return [NSString stringWithUTF8String:buf] ?: [NSString stringWithFormat:@"%.3f", normalized];
+    return [NSString stringWithFormat:@"%.3f", normalized];
+}
+
 @implementation ArpSIDKnobView{
     NSPoint _ds;
     float _dv;
@@ -2985,7 +2996,7 @@ static constexpr double kArpSIDGuiActivePollHz_v820 = 24.0;
 
 -(instancetype)initF:(NSRect)r n:(NSString*)n p:(int)p d:(float)d{
     self=[super initWithFrame:r];if(!self)return nil;
-    _paramID=p;_pname=n;_value=d;_defaultValue=d;_vstr=[NSString stringWithFormat:@"%.3f",d];
+    _paramID=p;_pname=n;_value=d;_defaultValue=d;_vstr=ArpSIDKnobValueText(p,d);
     _glowAmt=0;_glowDecay=0;_modulatedValue=d;_modulationActivity=0.f;
     self.focusRingType=NSFocusRingTypeExterior;
     self.toolTip=@"Drag vertically or horizontally. Shift for fine control. Arrow keys adjust, Page Up/Down makes larger changes, and Home/Option-click/double-click/right-click resets.";
@@ -3046,8 +3057,24 @@ static constexpr double kArpSIDGuiActivePollHz_v820 = 24.0;
     // ── Name label ────────────────────────────────────────────────────────
     NSColor*labelC=_touched?colTitle():(_hovered?[hoverC colorWithAlphaComponent:.96f]:(accentC?[accentC colorWithAlphaComponent:.90f]:colLabel()));
     NSDictionary*la=@{NSForegroundColorAttributeName:labelC,NSFontAttributeName:monoF(8.5)};
-    NSString*ns=_pname.length>9?[_pname substringToIndex:9]:_pname;
+    // Fit the caption to the knob: shrink to 6.5 pt, then shorten with "…".
+    NSString*ns=_pname?:@"";
+    const CGFloat maxW=MAX((CGFloat)8.f,b.size.width-4.f);
     NSSize sz=[ns sizeWithAttributes:la];
+    for(CGFloat fs=8.f;sz.width>maxW&&fs>=6.5f;fs-=.5f){
+        la=@{NSForegroundColorAttributeName:labelC,NSFontAttributeName:monoF(fs)};
+        sz=[ns sizeWithAttributes:la];
+    }
+    if(sz.width>maxW){
+        NSUInteger n=ns.length;
+        NSString*cut=ns;
+        while(n>1&&sz.width>maxW){
+            --n;
+            cut=[[ns substringToIndex:n] stringByAppendingString:@"…"];
+            sz=[cut sizeWithAttributes:la];
+        }
+        ns=cut;
+    }
     [ns drawAtPoint:NSMakePoint(cx-sz.width*.5f,b.size.height-12) withAttributes:la];
 
     // ── Track arc ─────────────────────────────────────────────────────────
@@ -3157,7 +3184,7 @@ static constexpr double kArpSIDGuiActivePollHz_v820 = 24.0;
     const float nv = ArpSIDUIClamp01(v);
     if (fabsf(nv - _value) <= 0.0005f) return;
     _value = nv;
-    _vstr=[NSString stringWithFormat:@"%.3f",_value];
+    _vstr=ArpSIDKnobValueText(_paramID,_value);
     [self setNeedsDisplay:YES];}
 
 -(void)setAutomated:(float)v{
