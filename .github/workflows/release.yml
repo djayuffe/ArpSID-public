@@ -166,12 +166,23 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           tag="${{ needs.prepare.outputs.tag }}"
+          # Only the packages and their checksums are release assets (CI also
+          # produces other artifacts, e.g. editor snapshots).
+          assets=(dist/*.zip dist/SHA256SUMS.txt)
           if [ "${{ needs.prepare.outputs.exists }}" = "true" ]; then
-            gh release upload "$tag" dist/* --clobber
+            gh release upload "$tag" "${assets[@]}" --clobber
+            # Drop assets that are no longer part of the release set.
+            keep="$(for a in "${assets[@]}"; do basename "$a"; done)"
+            gh release view "$tag" --json assets --jq '.assets[].name' | while read -r name; do
+              if ! grep -qxF "$name" <<<"$keep"; then
+                echo "removing stale asset $name"
+                gh release delete-asset "$tag" "$name" --yes
+              fi
+            done
             gh release edit "$tag" --notes-file release-notes.md
           else
             draft=""
             if [ "${{ inputs.draft }}" = "true" ]; then draft="--draft"; fi
-            gh release create "$tag" dist/* --target "${{ needs.prepare.outputs.ref }}" \
+            gh release create "$tag" "${assets[@]}" --target "${{ needs.prepare.outputs.ref }}" \
               --title "ArpSID ${{ needs.prepare.outputs.version }}" --notes-file release-notes.md $draft
           fi
