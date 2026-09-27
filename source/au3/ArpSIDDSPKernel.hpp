@@ -9560,7 +9560,7 @@ private:
         for (int i = 0; i < 8; ++i) {
             const ParamID pid = ArpSID::sidAkaiMpkMiniDefaultKnobParamByIndex(i);
             float value = 0.0f;
-            if (pid >= 0 && pid < kNumParams) value = renderParams_[(size_t)pid];
+            if (static_cast<size_t>(pid) < renderParams_.size()) value = renderParams_[(size_t)pid];
             telemetryMpkKnobValue_[(size_t)i].store(ArpSIDSanitizeTelemetryUnitFloat(value), std::memory_order_relaxed);
         }
     }

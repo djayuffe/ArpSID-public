@@ -20,27 +20,9 @@
 #include <mach/mach_time.h>
 
 namespace {
-static inline float ArpSIDSanitizeUnitFloat(float v, int pid = -1) noexcept {
-    return ArpSID::sanitizeNormalizedParamValue(pid, v, ArpSID::defaultNormalizedParamValue(pid));
-}
-
-static inline double ArpSIDSanitizeFiniteDouble(double v, double fallback = 0.0) noexcept {
-    return std::isfinite(v) ? v : fallback;
-}
-
-static inline int ArpSIDSanitizeRangeInt(int v, int lo, int hi, int fallback) noexcept {
-    if (v < lo || v > hi) return fallback;
-    return v;
-}
-
 static inline float ArpSIDSanitizeScopeSample(float v) noexcept {
     if (!std::isfinite(v)) return 0.0f;
     return std::clamp(v, -1.25f, 1.25f);
-}
-
-static inline float ArpSIDSanitizeBipolarFloat(float v, float fallback = 0.0f) noexcept {
-    if (!std::isfinite(v)) return fallback;
-    return std::clamp(v, -1.0f, 1.0f);
 }
 
 static constexpr int kArpSIDAdapterMinMaxFrames = 64;
