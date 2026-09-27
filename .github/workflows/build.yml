@@ -158,12 +158,28 @@ jobs:
         run: |
           cmake --install build-vst3 --prefix "${RUNNER_TEMP}/stage"
           test -f "${RUNNER_TEMP}/stage/lib/vst3/arpsid_vst3.vst3/Contents/${{ matrix.arch }}-linux/arpsid_vst3.so"
+      - name: Stage release folder (bundle + installer)
+        run: |
+          pkg="${RUNNER_TEMP}/pkg"
+          mkdir -p "$pkg"
+          cp -R build-vst3/VST3/Release/arpsid_vst3.vst3 "$pkg/"
+          scripts/install/stage_installer.sh vst3 "$pkg"
+      - name: Installer smoke test
+        run: |
+          pkg="${RUNNER_TEMP}/pkg"
+          "$pkg/install.sh" --check
+          "$pkg/install.sh" --dest "${RUNNER_TEMP}/vst3-user" --yes
+          test -f "${RUNNER_TEMP}/vst3-user/arpsid_vst3.vst3/Contents/${{ matrix.arch }}-linux/arpsid_vst3.so"
+          "$pkg/install.sh" --dest "${RUNNER_TEMP}/vst3-user" --uninstall
+          test ! -e "${RUNNER_TEMP}/vst3-user/arpsid_vst3.vst3"
+          bash -n scripts/install/get_arpsid.sh scripts/install/install_macos.sh scripts/linux/install_build_deps.sh
+          scripts/linux/install_build_deps.sh --dry-run
       - name: Package
         if: inputs.release
         run: |
           v="$(tr -d '[:space:]' < VERSION.txt)"
           mkdir -p "${RUNNER_TEMP}/dist"
-          (cd build-vst3/VST3/Release && zip -qr "${RUNNER_TEMP}/dist/ArpSID-${v}-vst3-linux-${{ matrix.arch }}.zip" arpsid_vst3.vst3)
+          (cd "${RUNNER_TEMP}/pkg" && zip -qr "${RUNNER_TEMP}/dist/ArpSID-${v}-vst3-linux-${{ matrix.arch }}.zip" .)
       - uses: actions/upload-artifact@v7
         if: inputs.release
         with: { name: "linux-vst3-${{ matrix.arch }}", path: "${{ runner.temp }}/dist/*" }
@@ -194,6 +210,12 @@ jobs:
           cmake --build build-vst3 --config Release --target arpsid_vst3 arpsid_vst3_host_tests arpsid_vst3_editor_snapshot -- -m -nologo -v:minimal 2>&1 | tee build-vst3.log
           scripts/ci/check_build_warnings.sh build-vst3.log "$(cygpath -w "$GITHUB_WORKSPACE")"
           test -d build-vst3/VST3/Release/arpsid_vst3.vst3
+          # Static CRT: the module must not need the Visual C++ Redistributable.
+          mod="$(find build-vst3/VST3/Release/arpsid_vst3.vst3/Contents -name 'arpsid_vst3.vst3' -type f | head -n 1)"
+          test -n "$mod"
+          if grep -a -i -q -E 'vcruntime140|msvcp140' "$mod"; then
+            echo "::error::arpsid_vst3 imports the dynamic MSVC runtime"; exit 1
+          fi
       - name: VST3 host integration test
         run: cmake --build build-vst3 --config Release --target arpsid_vst3_host_check
       - name: Editor render (every tab, offscreen)
@@ -201,12 +223,29 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: always() && matrix.arch == 'x64'
         with: { name: editor-snapshots-windows, path: build-vst3/editor-snapshots, if-no-files-found: ignore }
+      - name: Stage release folder (bundle + installer)
+        run: |
+          pkg="${RUNNER_TEMP}/pkg"
+          mkdir -p "$pkg"
+          cp -R build-vst3/VST3/Release/arpsid_vst3.vst3 "$pkg/"
+          scripts/install/stage_installer.sh vst3-windows "$pkg"
+      - name: Installer smoke test
+        shell: pwsh
+        run: |
+          $pkg = Join-Path $env:RUNNER_TEMP 'pkg'
+          $dest = Join-Path $env:RUNNER_TEMP 'vst3-user'
+          & "$pkg\install.ps1" -Check
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & "$pkg\install.ps1" -Scope User -Dest $dest
+          if (-not (Test-Path "$dest\arpsid_vst3.vst3\Contents")) { throw 'install.ps1 did not install the bundle' }
+          & "$pkg\install.ps1" -Scope User -Dest $dest -Uninstall
+          if (Test-Path "$dest\arpsid_vst3.vst3") { throw 'install.ps1 -Uninstall left the bundle' }
       - name: Package
         if: inputs.release
         run: |
           v="$(tr -d '[:space:]' < VERSION.txt)"
           mkdir -p "${RUNNER_TEMP}/dist"
-          (cd build-vst3/VST3/Release && 7z a -tzip -bso0 "$(cygpath -w "${RUNNER_TEMP}/dist/ArpSID-${v}-vst3-windows-${{ matrix.arch }}.zip")" arpsid_vst3.vst3)
+          (cd "${RUNNER_TEMP}/pkg" && 7z a -tzip -bso0 "$(cygpath -w "${RUNNER_TEMP}/dist/ArpSID-${v}-vst3-windows-${{ matrix.arch }}.zip")" .)
       - uses: actions/upload-artifact@v7
         if: inputs.release
         with: { name: "windows-vst3-${{ matrix.arch }}", path: "${{ runner.temp }}/dist/*" }
@@ -280,8 +319,15 @@ jobs:
         run: |
           v="$(tr -d '[:space:]' < VERSION.txt)"
           mkdir -p "${RUNNER_TEMP}/dist"
-          ditto -c -k --keepParent "$AUV2_COMPONENT" "${RUNNER_TEMP}/dist/ArpSID-${v}-auv2-macos-universal.zip"
-          ditto -c -k --keepParent "$VST3_BUNDLE"    "${RUNNER_TEMP}/dist/ArpSID-${v}-vst3-macos-universal.zip"
+          # Each zip: the bundle at the root plus install_macos.sh and INSTALL.txt.
+          for kind in auv2 vst3; do
+            stage="${RUNNER_TEMP}/pkg-$kind"
+            mkdir -p "$stage"
+            if [ "$kind" = auv2 ]; then ditto "$AUV2_COMPONENT" "$stage/ArpSID.component"
+            else ditto "$VST3_BUNDLE" "$stage/arpsid_vst3.vst3"; fi
+            scripts/install/stage_installer.sh macos "$stage"
+            ditto -c -k "$stage" "${RUNNER_TEMP}/dist/ArpSID-${v}-${kind}-macos-universal.zip"
+          done
       - uses: actions/upload-artifact@v7
         if: inputs.release
         with: { name: macos, path: "${{ runner.temp }}/dist/*" }
@@ -344,8 +390,14 @@ jobs:
         run: |
           v="$(tr -d '[:space:]' < VERSION.txt)"
           mkdir -p "${RUNNER_TEMP}/dist"
-          ditto -c -k --keepParent "$STANDALONE_APP" "${RUNNER_TEMP}/dist/ArpSID-${v}-standalone-macos-universal.zip"
-          ditto -c -k --keepParent "$AUV3_APP"       "${RUNNER_TEMP}/dist/ArpSID-${v}-auv3-macos-universal.zip"
+          for kind in standalone auv3; do
+            stage="${RUNNER_TEMP}/pkg-$kind"
+            mkdir -p "$stage"
+            if [ "$kind" = standalone ]; then ditto "$STANDALONE_APP" "$stage/ArpSID Standalone.app"
+            else ditto "$AUV3_APP" "$stage/ArpSID.app"; fi
+            scripts/install/stage_installer.sh macos "$stage"
+            ditto -c -k "$stage" "${RUNNER_TEMP}/dist/ArpSID-${v}-${kind}-macos-universal.zip"
+          done
       - uses: actions/upload-artifact@v7
         if: inputs.release
         with: { name: macos-apps, path: "${{ runner.temp }}/dist/*" }

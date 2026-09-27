@@ -20,6 +20,10 @@ Vst3KernelHost* arpsidControllerKernelHost(void* editController) noexcept;
 void arpsidControllerMarkStateDirty(void* editController) noexcept;
 void arpsidControllerSelectFactoryPatch(void* editController, int slot) noexcept;
 int  arpsidControllerLoadedFactorySlot(void* editController) noexcept;
+// Editor size (user zoom, 1.0 = 1200 x 800 at host scale 1) kept by the
+// controller so a reopened editor keeps the size the user chose.
+double arpsidControllerEditorZoom(void* editController) noexcept;
+void arpsidControllerSetEditorZoom(void* editController, double zoom) noexcept;
 void arpsidControllerSendUiMidi(void* editController, unsigned char status, unsigned char data1,
                                 unsigned char data2) noexcept;
 // The cross-platform (VSTGUI) editor view; nullptr where it is not built.

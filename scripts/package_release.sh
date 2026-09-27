@@ -30,6 +30,7 @@ mkdir -p "${tmp}/${RELEASE_NAME}"
 if command -v rsync >/dev/null 2>&1; then
   rsync -a --delete \
     --exclude '/build/' \
+    --exclude '/.deps/' \
     --exclude '/build*/' \
     --exclude '/.build/' \
     --exclude '/dist/' \
@@ -59,6 +60,7 @@ if command -v rsync >/dev/null 2>&1; then
 else
   (cd "${ROOT_DIR}" && tar \
     --exclude='./build' \
+    --exclude='./.deps' \
     --exclude='./build*' \
     --exclude='./.build' \
     --exclude='./dist' \

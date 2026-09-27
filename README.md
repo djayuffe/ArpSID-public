@@ -48,6 +48,24 @@ Regenerate the images with `scripts/update_editor_screenshots.sh build-vst3`.
 
 ---
 
+## Installing
+
+Download a release, or install it with one command. The command downloads
+the build for your machine, verifies it against the release checksums and
+runs the installer.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/djayuffe/ArpSID-public/main/scripts/install/get_arpsid.sh | bash   # Linux, macOS
+```
+```powershell
+irm https://raw.githubusercontent.com/djayuffe/ArpSID-public/main/scripts/install/get_arpsid.ps1 | iex        # Windows
+```
+
+Every release zip also contains its installer (`install_macos.sh`,
+`install.ps1` or `install.sh`). [docs/INSTALL.md](docs/INSTALL.md) covers each
+platform, the installer options, installing by hand, uninstalling and
+troubleshooting.
+
 ## Plug-in formats
 
 | Format | Platforms | Notes |
@@ -187,28 +205,31 @@ ctest --test-dir build-release --output-on-failure
 # AddressSanitizer + UBSan build of the test suite (GCC/Clang)
 ./build.sh --sanitize --build-dir build-asan --config RelWithDebInfo
 
-# VST3 (any platform, full editor everywhere). Needs the Steinberg VST3 SDK
-# and, on Linux, the VSTGUI editor toolkit packages (Debian/Ubuntu):
-#   sudo apt-get install libx11-xcb-dev libxcb-util-dev libxcb-cursor-dev \
-#     libxcb-keysyms1-dev libxcb-xkb-dev libxkbcommon-dev libxkbcommon-x11-dev \
-#     libcairo2-dev libpango1.0-dev libfontconfig1-dev libfreetype-dev \
-#     libwayland-dev wayland-protocols
-git clone --depth 1 --branch v3.8.1_build_84 --recurse-submodules --shallow-submodules \
-    https://github.com/steinbergmedia/vst3sdk.git ~/vst3sdk
-./build.sh --no-tests --build-dir build-vst3 --vst3-sdk ~/vst3sdk --install-vst3
+# VST3 (any platform, full editor everywhere). From scratch on Linux:
+# install the build packages, fetch the pinned Steinberg VST3 SDK into
+# .deps/vst3sdk, build, validate, run the host test and install to ~/.vst3:
+./build.sh --install-deps --fetch-vst3-sdk --install-vst3
+
+# ... or with an SDK checkout of your own, and a release-style zip:
+./build.sh --no-tests --build-dir build-vst3 --vst3-sdk ~/vst3sdk --package-vst3
 ```
 
-`--vst3-sdk` builds `arpsid_vst3` (the build runs the Steinberg validator) and
-the headless host integration test (`arpsid_vst3_host_check`). On Linux and
-Windows, `arpsid_vst3_editor_check` renders every editor tab offscreen to
-`build-vst3/editor-snapshots/*.png` and checks the parameter binding. `--install-vst3`
-copies the bundle to `~/.vst3` on Linux (`arpsid_vst3_install_user`,
-override with `-DARPSID_USER_VST3_DIR=...`) or the user VST3 folder on macOS.
-The equivalent raw CMake steps:
+| `build.sh` option | Effect |
+|---|---|
+| `--vst3-sdk DIR` / `--fetch-vst3-sdk` | Build the VST3 with the SDK in `DIR`, or clone the pinned version (`scripts/fetch_vst3_sdk.sh`). The build runs the Steinberg validator and the host integration test (`arpsid_vst3_host_check`). |
+| `--install-vst3` | Copy the bundle to `~/.vst3` (Linux) or the user VST3 folder (macOS); set another folder with `-DARPSID_USER_VST3_DIR=...`. |
+| `--package-vst3` | Zip the bundle and its installer into `<build-dir>/dist/`. |
+| `--no-vst3-editor` | Windows/Linux VST3 without the editor; hosts show their generic UI, and no X11/cairo/pango packages are needed. |
+| `--install-deps` | Linux: install the build packages first (`scripts/linux/install_build_deps.sh`: apt, dnf, pacman or zypper). |
+
+On Linux and Windows, `arpsid_vst3_editor_check` renders every editor tab
+offscreen to `build-vst3/editor-snapshots/*.png` and checks the parameter
+binding. If an editor package is missing, CMake stops and names every missing
+one. The raw CMake steps are:
 
 ```bash
 cmake -S . -B build-vst3 -G Ninja -DCMAKE_BUILD_TYPE=Release \
-      -DARPSID_BUILD_VST3=ON -Dvst3sdk_SOURCE_DIR=$HOME/vst3sdk
+      -DARPSID_BUILD_VST3=ON -DARPSID_FETCH_VST3SDK=ON   # or -Dvst3sdk_SOURCE_DIR=$HOME/vst3sdk
 cmake --build build-vst3 --target arpsid_vst3 arpsid_vst3_host_check
 cmake --build build-vst3 --target arpsid_vst3_install_user        # ~/.vst3
 sudo cmake --install build-vst3 --prefix /usr                     # /usr/lib/vst3
@@ -277,6 +298,7 @@ everything except the ROM files and runs the same guard before committing.
 | Document | Contents |
 |---|---|
 | [`CHANGELOG.md`](CHANGELOG.md) | Release notes. |
+| [`docs/INSTALL.md`](docs/INSTALL.md) | Installing on macOS, Windows and Linux: one-line installers, installer options, manual steps, checksums, uninstalling, troubleshooting, building from source. |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | System architecture: layers, kernel block pipeline, engines, parameters, state, GUI models and telemetry, wrappers. |
 | [`docs/PARAMETER_REFERENCE.md`](docs/PARAMETER_REFERENCE.md) | Every parameter: ID, default, values, steps and editor tab (generated from the code and checked by a test). |
 | [`docs/VST3_EDITOR.md`](docs/VST3_EDITOR.md) | The Windows/Linux VST3 editor: a screenshot and guide for all 17 tabs, the controls, and how the editor code works. |

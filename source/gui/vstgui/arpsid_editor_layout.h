@@ -242,6 +242,27 @@ inline bool displayEditsParam(Display d, int id) noexcept {
     return false;
 }
 
+// Index (0..16, production tab order) of the first tab that shows a control
+// for the parameter, or -1 for parameters without one (see
+// isEditorExemptParam). The VST3 controller uses it to group parameters into
+// one unit per tab.
+inline int tabIndexForParam(int id) noexcept {
+    const auto& all = tabs();
+    for (std::size_t t = 0; t < all.size(); ++t)
+        for (const auto& row : all[t].rows) {
+            if (row.heightWeight <= 0.f) break;
+            for (const auto& sec : row.sections) {
+                if (!sec.title) break;
+                if (displayEditsParam(sec.display, id)) return static_cast<int>(t);
+                for (int p : sec.params) {
+                    if (p == kEnd) break;
+                    if (p == id) return static_cast<int>(t);
+                }
+            }
+        }
+    return -1;
+}
+
 // Parameters the editor intentionally has no control for: host MIDI
 // controller mirrors (driven by incoming MIDI), read-only telemetry, the
 // program/bank selectors (the preset browser drives them) and legacy mirrors.

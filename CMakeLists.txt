@@ -2,6 +2,12 @@ cmake_minimum_required(VERSION 3.20)
 project(ArpSID VERSION 0.9.7 LANGUAGES CXX)
 include(cmake/ArpSIDSourceTreeGuard.cmake)
 
+# Windows: link the C/C++ runtime statically everywhere (ArpSID, the VST3 SDK
+# and VSTGUI), so the plug-in does not need the Visual C++ Redistributable.
+if(MSVC)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
+
 option(ARPSID_BUILD_ALL "Enable the stable ArpSID product set for the current platform" OFF)
 
 # All build/install/package commands must be path-quoted.  Older RCs rejected
@@ -414,13 +420,35 @@ endif()
 
 # ─── VST3 plugin (official Steinberg SDK CMake integration) ─────────────────
 option(ARPSID_BUILD_VST3 "Build VST3 plugin (needs VSTSDK_PATH or vst3sdk_SOURCE_DIR)" OFF)
+option(ARPSID_FETCH_VST3SDK "Download the pinned Steinberg VST3 SDK when vst3sdk_SOURCE_DIR is not given" OFF)
+option(ARPSID_VST3_EDITOR "Build the VSTGUI editor into the Windows/Linux VST3 (OFF: hosts show their generic UI)" ON)
+# The SDK version ArpSID is built and tested with (CI, scripts/fetch_vst3_sdk.sh).
+set(ARPSID_VST3SDK_TAG "v3.8.1_build_84" CACHE STRING "Steinberg VST3 SDK git tag for ARPSID_FETCH_VST3SDK")
 if(ARPSID_BUILD_VST3)
     if(NOT DEFINED vst3sdk_SOURCE_DIR AND DEFINED VSTSDK_PATH)
         set(vst3sdk_SOURCE_DIR "${VSTSDK_PATH}")
     endif()
 
+    if(NOT DEFINED vst3sdk_SOURCE_DIR AND ARPSID_FETCH_VST3SDK)
+        include(FetchContent)
+        message(STATUS "Fetching the Steinberg VST3 SDK ${ARPSID_VST3SDK_TAG}")
+        FetchContent_Declare(vst3sdk
+            GIT_REPOSITORY https://github.com/steinbergmedia/vst3sdk.git
+            GIT_TAG ${ARPSID_VST3SDK_TAG}
+            GIT_SHALLOW TRUE
+            GIT_SUBMODULES_RECURSE TRUE
+            GIT_PROGRESS TRUE)
+        FetchContent_GetProperties(vst3sdk)
+        if(NOT vst3sdk_POPULATED)
+            FetchContent_Populate(vst3sdk)   # sets vst3sdk_SOURCE_DIR; built below with our options
+        endif()
+    endif()
+
     if(NOT DEFINED vst3sdk_SOURCE_DIR)
-        message(FATAL_ERROR "Set -Dvst3sdk_SOURCE_DIR=/path/to/vst3sdk or -DVSTSDK_PATH=/path/to/vst3sdk")
+        message(FATAL_ERROR "The VST3 build needs the Steinberg VST3 SDK:\n"
+                            "  -Dvst3sdk_SOURCE_DIR=/path/to/vst3sdk (or -DVSTSDK_PATH=...),\n"
+                            "  -DARPSID_FETCH_VST3SDK=ON to download ${ARPSID_VST3SDK_TAG}, or\n"
+                            "  scripts/fetch_vst3_sdk.sh to clone it into .deps/vst3sdk.")
     endif()
 
     if(NOT EXISTS "${vst3sdk_SOURCE_DIR}/CMakeLists.txt" OR NOT EXISTS "${vst3sdk_SOURCE_DIR}/public.sdk")
@@ -449,13 +477,41 @@ if(ARPSID_BUILD_VST3)
         set(SMTG_ENABLE_VSTGUI_SUPPORT OFF CACHE BOOL "" FORCE)
         # - SDK plug-in/hosting examples: not needed, and on Linux the example
         #   editor host requires GTK 3 just to configure.
+        # Static CRT to match CMAKE_MSVC_RUNTIME_LIBRARY above (the SDK
+        # otherwise adds /MD to its own targets).
+        set(SMTG_USE_STATIC_CRT ON CACHE BOOL "" FORCE)
         set(SMTG_ENABLE_VST3_PLUGIN_EXAMPLES  OFF CACHE BOOL "" FORCE)
         set(SMTG_ENABLE_VST3_HOSTING_EXAMPLES OFF CACHE BOOL "" FORCE)
 
         add_subdirectory(${vst3sdk_SOURCE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/vst3sdk EXCLUDE_FROM_ALL)
 
         # Cross-platform editor toolkit (Linux, Windows): VSTGUI core only.
-        if(NOT APPLE)
+        if(NOT APPLE AND ARPSID_VST3_EDITOR AND UNIX)
+            # VSTGUI's Linux backend needs these; name every missing one up
+            # front instead of failing deep inside the VSTGUI configure.
+            find_package(PkgConfig)
+            set(_arpsid_vstgui_pc x11-xcb xcb-util xcb-cursor xcb-keysyms xcb-xkb xkbcommon xkbcommon-x11
+                                  cairo pangocairo fontconfig freetype2 wayland-client)
+            set(_arpsid_missing "")
+            if(PKG_CONFIG_FOUND)
+                foreach(_m IN LISTS _arpsid_vstgui_pc)
+                    pkg_check_modules(_arpsid_pc_${_m} QUIET ${_m})
+                    if(NOT _arpsid_pc_${_m}_FOUND)
+                        list(APPEND _arpsid_missing ${_m})
+                    endif()
+                endforeach()
+            else()
+                set(_arpsid_missing "pkg-config")
+            endif()
+            if(_arpsid_missing)
+                string(REPLACE ";" " " _arpsid_missing_text "${_arpsid_missing}")
+                message(FATAL_ERROR "The Linux VST3 editor needs development packages that are missing: "
+                                    "${_arpsid_missing_text}\n"
+                                    "Install them with scripts/linux/install_build_deps.sh, or configure "
+                                    "with -DARPSID_VST3_EDITOR=OFF for a VST3 without its editor.")
+            endif()
+        endif()
+        if(NOT APPLE AND ARPSID_VST3_EDITOR)
             enable_language(C)   # VSTGUI's Linux platform layer has C sources
             set(VSTGUI_DISABLE_UNITTESTS 1)
             set(VSTGUI_STANDALONE OFF)
@@ -503,6 +559,10 @@ if(ARPSID_BUILD_VST3)
             source/au3/ArpSIDViewController.mm
             source/au3/ArpSIDDigiAudioQueueCapture.mm
             source/au3/ArpSIDFileBankBridge.mm)
+    elseif(NOT ARPSID_VST3_EDITOR)
+        # No editor: the view reports no supported platform, so hosts show
+        # their generic parameter UI (every parameter is still available).
+        set(_arpsid_vst3_gui_sources source/gui/arpsid_vst_headless_bridge.cpp)
     else()
         # Cross-platform VSTGUI editor (same tabs, models and telemetry as the
         # Cocoa editor).
@@ -3820,6 +3880,17 @@ target_compile_features(arpsid_editor_layout_coverage_tests PRIVATE cxx_std_17)
 target_include_directories(arpsid_editor_layout_coverage_tests PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/source)
 add_test(NAME EditorLayoutCoverageTests COMMAND arpsid_editor_layout_coverage_tests)
+
+# The VST3 kernel host is SDK-free, so its state contract (models, C64 tune,
+# subtune, truncation) is tested in every build, not only VST3 builds.
+add_executable(arpsid_vst3_kernel_host_state_tests
+    source/tests/vst3_kernel_host_state_tests.cpp
+    source/vst3/arpsid_vst3_kernel_host.cpp)
+target_compile_features(arpsid_vst3_kernel_host_state_tests PRIVATE cxx_std_17)
+target_include_directories(arpsid_vst3_kernel_host_state_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/source)
+target_link_libraries(arpsid_vst3_kernel_host_state_tests PRIVATE arpsid_core arpsid_forensic_patchbank)
+add_test(NAME Vst3KernelHostStateTests COMMAND arpsid_vst3_kernel_host_state_tests)
 
 # docs/PARAMETER_REFERENCE.md is generated from the parameter table, the
 # presentation laws and the editor layout; the test fails when it is stale.

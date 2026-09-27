@@ -176,6 +176,7 @@ IDs; the VST3 parameter ID equals the AU parameter address.
   block applies it.
 - **Wrapper state.** Each wrapper saves the root plus the GUI models that are
   not parameters: SETTINGS, MIX, KIT, and the DIGI model plus sample bank. The
+  VST3 also saves the loaded C64 tune and its subtune. The
   DIGI model and bank are restored only as a pair. The VST3 layout is in
   [VST3_IMPLEMENTATION.md](VST3_IMPLEMENTATION.md#state-format).
 - **Factory bank.** 180 slots: melodic patches 0–79, DrSID kits 80–119,

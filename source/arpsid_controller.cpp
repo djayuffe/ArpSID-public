@@ -31,6 +31,7 @@
 #include "arpsid/core/sid_parameter_presentation.h"
 #include "gui/arpsid_vstgui_editor.h"
 #include "arpsid_vst_messages.h"
+#include "gui/vstgui/arpsid_editor_layout.h"
 #include "arpsid/core/sid_midi_cc_mapping.h"
 #include "arpsid/core/sid_runtime_state_root_presentation.h"
 #include "au3/ArpSIDStateSerializer.h"
@@ -109,8 +110,13 @@ public:
         if (FIDStringsEqual(name, ViewType::kEditor)) {
 #if defined(ARPSID_VSTGUI_EDITOR)
             IPlugView* view = arpsidCreateCrossPlatformEditor(this);
-#else
+#elif defined(__APPLE__)
             auto* view = new ArpSIDVSTGUIEditor(this);
+#else
+            // Built without the editor (ARPSID_VST3_EDITOR=OFF): no view, so
+            // hosts show their generic parameter UI.
+            IPlugView* view = nullptr;
+            if (!view) return nullptr;
 #endif
             editorView_ = view;
 #if defined(ARPSID_VST_EDITOR_DIAGNOSTICS)
@@ -215,6 +221,8 @@ public:
         endEdit((ParamID)kParamBankSlot);
     }
     int loadedFactorySlot() const noexcept { return loadedFactorySlot_; }
+    double editorZoom() const noexcept { return editorZoom_; }
+    void setEditorZoom(double z) noexcept { editorZoom_ = std::clamp(z, 0.25, 4.0); }
 
     // Editor on-screen keyboard -> processor (see arpsid_vst_messages.h).
     void sendUiMidi(uint8_t status, uint8_t data1, uint8_t data2) {
@@ -357,10 +365,15 @@ public:
         return kResultFalse;
     }
 
-    int32 PLUGIN_API getSelectedUnit() override { return kRootUnitId; }
+    int32 PLUGIN_API getSelectedUnit() override { return selectedUnit_; }
 
-    tresult PLUGIN_API selectUnit(UnitID /*unitId*/) override {
-        return kResultOk;
+    tresult PLUGIN_API selectUnit(UnitID unitId) override {
+        for (const auto& u : units_)
+            if (u.id == unitId) {
+                selectedUnit_ = unitId;
+                return kResultOk;
+            }
+        return kResultFalse;
     }
 
     tresult PLUGIN_API getUnitByBus(MediaType, BusDirection, int32, int32,
@@ -423,19 +436,69 @@ private:
                 (Steinberg::Vst::ParamValue)info.defaultNorm,
                 stepCount,
                 flags,  // no kIsBypass here — bypass is a host-level concept
-                kRootUnitId);
+                unitForParam_(i));
             parameters.addParameter(rp);
         }
     }
 
     // ── Unit / Program-list ─────────────────────────────────────────────────
+    // Units: the root unit owns the factory program list (and the Program /
+    // BankSlot selectors); below it one unit per editor tab, in tab order,
+    // and one for host-driven MIDI mirrors and read-only values. Hosts that
+    // show units group the 512 parameters the way the editor does.
+    static constexpr UnitID kFirstTabUnitId_ = 1;
+    static constexpr UnitID kHostUnitId_ = kFirstTabUnitId_ + (UnitID)ArpSID::GUI::kTabCount;
+    // Sub-units of kHostUnitId_: one per MIDI controller type (16 channels
+    // each), in the order of the kParamHostCtrl*Base blocks.
+    static constexpr int kHostCtrlKinds_ = ((int)kParamHostCtrlLast - (int)kParamHostCtrlModWheelBase + 1) / 16;
+    static constexpr UnitID kFirstHostCtrlUnitId_ = kHostUnitId_ + 1;
+
+    static UnitID unitForParam_(int id) noexcept {
+        if (id == (int)kParamProgram || id == (int)kParamBankSlot) return kRootUnitId;
+        const int tab = ArpSID::GUI::EditorLayout::tabIndexForParam(id);
+        if (tab >= 0) return kFirstTabUnitId_ + (UnitID)tab;
+        if (id >= (int)kParamHostCtrlModWheelBase && id <= (int)kParamHostCtrlLast)
+            return kFirstHostCtrlUnitId_ + (UnitID)((id - (int)kParamHostCtrlModWheelBase) / 16);
+        return kHostUnitId_;
+    }
+
     void buildUnitInfo_() {
         UnitInfo root;
         root.id             = kRootUnitId;
         root.parentUnitId   = kNoParentUnitId;
         root.programListId  = kProgramListId_;
-        utf8ToTChar("Root", root.name, 128);
+        utf8ToTChar("ArpSID", root.name, 128);
         units_.push_back(root);
+        const auto& tabs = ArpSID::GUI::EditorLayout::tabs();
+        for (std::size_t t = 0; t < tabs.size(); ++t) {
+            UnitInfo u;
+            u.id = kFirstTabUnitId_ + (UnitID)t;
+            u.parentUnitId = kRootUnitId;
+            u.programListId = kNoProgramListId;
+            utf8ToTChar(ArpSID::GUI::tabSpec(tabs[t].id).displayName, u.name, 128);
+            units_.push_back(u);
+        }
+        UnitInfo host;
+        host.id = kHostUnitId_;
+        host.parentUnitId = kRootUnitId;
+        host.programListId = kNoProgramListId;
+        utf8ToTChar("Host MIDI / read-only", host.name, 128);
+        units_.push_back(host);
+        static const char* const kCtrlNames[] = {"MIDI Mod Wheel", "MIDI Breath", "MIDI Expression",
+                                                 "MIDI Sustain", "MIDI Sostenuto", "MIDI Channel Pressure",
+                                                 "MIDI Pitch Bend", "MIDI RPN MSB", "MIDI RPN LSB",
+                                                 "MIDI NRPN MSB", "MIDI NRPN LSB", "MIDI Data Entry MSB",
+                                                 "MIDI Data Entry LSB"};
+        static_assert(sizeof(kCtrlNames) / sizeof(kCtrlNames[0]) == (size_t)kHostCtrlKinds_,
+                      "one unit name per host controller block");
+        for (int k = 0; k < kHostCtrlKinds_; ++k) {
+            UnitInfo u;
+            u.id = kFirstHostCtrlUnitId_ + (UnitID)k;
+            u.parentUnitId = kHostUnitId_;
+            u.programListId = kNoProgramListId;
+            utf8ToTChar(kCtrlNames[k], u.name, 128);
+            units_.push_back(u);
+        }
     }
 
     static constexpr ProgramListID kProgramListId_ = 1;
@@ -477,6 +540,8 @@ private:
 #endif
     }
 
+    UnitID selectedUnit_ = kRootUnitId;
+    double editorZoom_ = 1.0;
     bool mirroringState_ = false;
     int loadedFactorySlot_ = -1;
     Vst3KernelHost* kernelHost_ = nullptr;
@@ -516,6 +581,16 @@ void arpsidControllerSendUiMidi(void* editController, unsigned char status, unsi
                                 unsigned char data2) noexcept {
     if (auto* c = static_cast<ArpSIDControllerPhase3*>(static_cast<EditController*>(editController)))
         c->sendUiMidi(status, data1, data2);
+}
+
+double arpsidControllerEditorZoom(void* editController) noexcept {
+    auto* c = static_cast<ArpSIDControllerPhase3*>(static_cast<EditController*>(editController));
+    return c ? c->editorZoom() : 1.0;
+}
+
+void arpsidControllerSetEditorZoom(void* editController, double zoom) noexcept {
+    if (auto* c = static_cast<ArpSIDControllerPhase3*>(static_cast<EditController*>(editController)))
+        c->setEditorZoom(zoom);
 }
 
 } // namespace ArpSID

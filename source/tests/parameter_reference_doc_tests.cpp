@@ -12,10 +12,10 @@
 // Sources of truth
 //   name, unit, default, automatable   kParamInfos (source/parameter_ids.h)
 //   steps (0 = continuous)             normalizedParamStepCount
-//   display text                       choice names from the editor label tables
-//                                      (arpsid_editor_labels.h, engine decode
-//                                      law), else SidParameterPresentation::
-//                                      formatNormalized (the text hosts show)
+//   display text                       the editor's value text (arpsid_editor_labels.h:
+//                                      shared choice names, SID registers as $XX),
+//                                      else SidParameterPresentation::formatNormalized
+//                                      (the text hosts show; same choice names)
 //   editor tab / section               GUI::EditorLayout (VSTGUI editor)
 
 #include "gui/vstgui/arpsid_editor_labels.h"
@@ -106,10 +106,10 @@ std::string generate() {
          "     cmake --build <build-dir> --target arpsid_update_parameter_reference -->\n\n"
          "Every parameter ArpSID exposes to hosts (VST3 parameter ID = AU parameter address =\n"
          "index in `source/parameter_ids.h`). Values are normalized 0..1 on the host side; the\n"
-         "**Values** column shows the display text: choice names from the editor's label\n"
-         "tables (`source/gui/vstgui/arpsid_editor_labels.h`, which decode like the engine),\n"
-         "otherwise the shared presentation layer (`SidParameterPresentation`) that hosts use.\n"
-         "Both follow the laws the engine renders with. **Steps** is the host step count (0 = continuous;\n"
+         "**Values** column shows the display text from the shared presentation layer\n"
+         "(`SidParameterPresentation`, the text hosts show; stepped choices are named after\n"
+         "what the engine plays), with SID registers written as `$XX` like the editor does.\n"
+         "It follows the laws the engine renders with. **Steps** is the host step count (0 = continuous;\n"
          "n = n + 1 discrete values). **Editor** lists where the Windows/Linux VST3 editor\n"
          "places the control (`source/gui/vstgui/arpsid_editor_layout.h`); the macOS editor\n"
          "groups the same parameters on the same tabs.\n\n";

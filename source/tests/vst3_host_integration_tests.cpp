@@ -8,7 +8,8 @@
 //     processor (IMessage, off the audio thread) and mirrors its parameters.
 //   * setComponentState() syncs a fresh controller from processor state.
 //   * IMidiMapping covers the shared realtime CC law on every MIDI channel.
-//   * The MIDI input bus has 16 channels.
+//   * The MIDI input bus has 16 channels; the DIGI capture input is an
+//     auxiliary audio bus, inactive by default.
 //   * IProcessContextRequirements requests tempo/transport/musical time.
 //   * On-screen keyboard notes (UiMidi message) produce audio.
 //   * The processor runs the shared kernel: state carries the GUI models
@@ -28,6 +29,8 @@
 #include "pluginterfaces/vst/ivstmessage.h"
 #include "pluginterfaces/vst/ivstmidicontrollers.h"
 #include "pluginterfaces/vst/ivstprocesscontext.h"
+#include "pluginterfaces/vst/ivstunits.h"
+#include "pluginterfaces/gui/iplugview.h"
 
 #include "parameter_ids.h"
 #include "arpsid_vst_messages.h"
@@ -177,6 +180,11 @@ int main(int argc, char** argv) {
         BusInfo bus{};
         CHECK(component->getBusInfo(kEvent, kInput, 0, bus) == kResultOk, "event bus info");
         CHECK(bus.channelCount == 16, "MIDI input bus has 16 channels");
+        CHECK(component->getBusCount(kAudio, kInput) == 1, "one audio input bus (DIGI capture)");
+        BusInfo in{};
+        CHECK(component->getBusInfo(kAudio, kInput, 0, in) == kResultOk && in.busType == kAux &&
+                  (in.flags & BusInfo::kDefaultActive) == 0,
+              "DIGI capture input is an auxiliary bus, inactive by default");
         FUnknownPtr<IProcessContextRequirements> req(component);
         CHECK(req, "IProcessContextRequirements available");
         if (req) {
@@ -184,6 +192,62 @@ int main(int argc, char** argv) {
             CHECK(f & IProcessContextRequirements::kNeedTempo, "requests tempo");
             CHECK(f & IProcessContextRequirements::kNeedTransportState, "requests transport state");
             CHECK(f & IProcessContextRequirements::kNeedProjectTimeMusic, "requests musical position");
+        }
+    }
+
+#if !defined(__APPLE__)
+    // ── Cross-platform editor sizing (no window needed) ────────────────────
+    {
+        IPlugView* view = controller->createView(ViewType::kEditor);
+        if (!view) std::printf("  no editor in this build (ARPSID_VST3_EDITOR=OFF): sizing checks skipped\n");
+        if (view) {
+            CHECK(view->canResize() == kResultTrue, "editor can resize");
+            ViewRect r(0, 0, 1000, 1000);
+            CHECK(view->checkSizeConstraint(&r) == kResultOk && r.getWidth() == 1000 && r.getHeight() == 667,
+                  "size constraint keeps the 3:2 editor inside the offered rect");
+            ViewRect tiny(0, 0, 100, 100);
+            view->checkSizeConstraint(&tiny);
+            CHECK(tiny.getWidth() == 600 && tiny.getHeight() == 400, "editor is at least half size");
+            ViewRect big(0, 0, 1800, 1200);
+            CHECK(view->onSize(&big) == kResultOk, "onSize without an open window");
+            view->release();
+            IPlugView* again = controller->createView(ViewType::kEditor);
+            ViewRect cur{};
+            CHECK(again && again->getSize(&cur) == kResultOk && cur.getWidth() == 1800 && cur.getHeight() == 1200,
+                  "a reopened editor keeps the chosen size");
+            if (again) again->release();
+        }
+    }
+#endif
+
+    // ── IUnitInfo: parameter groups ────────────────────────────────────────
+    {
+        FUnknownPtr<IUnitInfo> ui(controller);
+        CHECK(ui, "IUnitInfo available");
+        if (ui) {
+            // root + 17 tabs + host MIDI/read-only + 13 host controller kinds
+            CHECK(ui->getUnitCount() == 32, "32 units (root, 17 tabs, host MIDI group and its 13 sub-units)");
+            UnitInfo u{};
+            CHECK(ui->getUnitInfo(1, u) == kResultOk && u.id == 1 && u.parentUnitId == kRootUnitId,
+                  "tab units hang off the root unit");
+            CHECK(ui->selectUnit(3) == kResultOk && ui->getSelectedUnit() == 3, "selectUnit is remembered");
+            ParameterInfo pi{};
+            CHECK(controller->getParameterInfo(ArpSID::kParamMasterVolume, pi) == kResultOk && pi.unitId == 1,
+                  "Master Volume is in the MAIN unit");
+            CHECK(controller->getParameterInfo(ArpSID::kParamProgram, pi) == kResultOk && pi.unitId == kRootUnitId,
+                  "Program stays in the root unit with the program list");
+            CHECK(controller->getParameterInfo(ArpSID::kParamHostCtrlPitchBendBase, pi) == kResultOk && pi.unitId > 19,
+                  "host pitch-bend mirrors are in a MIDI sub-unit");
+            int32 count = controller->getParameterCount();
+            bool allKnown = true;
+            for (int32 i = 0; i < count; ++i) {
+                if (controller->getParameterInfo(i, pi) != kResultOk) continue;
+                bool found = false;
+                for (int32 k = 0; k < ui->getUnitCount() && !found; ++k)
+                    if (ui->getUnitInfo(k, u) == kResultOk && u.id == pi.unitId) found = true;
+                allKnown = allKnown && found;
+            }
+            CHECK(allKnown, "every parameter names an existing unit");
         }
     }
 

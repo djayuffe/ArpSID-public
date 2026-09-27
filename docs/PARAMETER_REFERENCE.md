@@ -5,10 +5,10 @@
 
 Every parameter ArpSID exposes to hosts (VST3 parameter ID = AU parameter address =
 index in `source/parameter_ids.h`). Values are normalized 0..1 on the host side; the
-**Values** column shows the display text: choice names from the editor's label
-tables (`source/gui/vstgui/arpsid_editor_labels.h`, which decode like the engine),
-otherwise the shared presentation layer (`SidParameterPresentation`) that hosts use.
-Both follow the laws the engine renders with. **Steps** is the host step count (0 = continuous;
+**Values** column shows the display text from the shared presentation layer
+(`SidParameterPresentation`, the text hosts show; stepped choices are named after
+what the engine plays), with SID registers written as `$XX` like the editor does.
+It follows the laws the engine renders with. **Steps** is the host step count (0 = continuous;
 n = n + 1 discrete values). **Editor** lists where the Windows/Linux VST3 editor
 places the control (`source/gui/vstgui/arpsid_editor_layout.h`); the macOS editor
 groups the same parameters on the same tabs.

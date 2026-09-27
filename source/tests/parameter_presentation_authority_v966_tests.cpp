@@ -170,6 +170,37 @@ void testRoundtripAllParameters() {
 void testLabelsAndEnums() {
     using namespace ArpSID;
 
+    // Named choices: host text names what the engine plays (engine decode
+    // laws) and parses back, case-insensitively, with '-', '_' and ' '
+    // interchangeable. Numbers still parse through the unit law.
+    require(fmt(kParamVCO1Waveform, 0.42f) == "NOISE", "waveform 0.42 is NOISE (engine floor(0.42*8) = 3)");
+    require(fmt(kParamVCO1Waveform, 1.0f) == "TRI+SAW+PUL", "waveform 1.0 is the last combined wave");
+    require(near(parseOk(kParamVCO2Waveform, "pulse"), 2.0f / 7.0f, 1e-6f), "waveform parses PULSE");
+    require(near(parseOk(kParamVCO3Waveform, "2"), 2.0f / 7.0f, 1e-6f), "waveform still parses an index");
+    require(fmt(kParamFilterMode, 0.26f) == "BAND-PASS", "filter mode 0.26 is BAND-PASS (int(2.08) = 2)");
+    require(near(parseOk(kParamFilterMode, "high_pass"), 4.0f / 7.0f, 1e-6f), "filter mode parses HIGH-PASS");
+    require(fmt(kParamArpOctaves, 1.0f) == "4 OCT" && fmt(kParamArpOctaves, 0.34f) == "2 OCT",
+            "arp octaves follow int(v*3)");
+    require(fmt(kParamVoiceMode, 1.0f) == "UNISON", "voice mode UNISON");
+    require(fmt(kParamPortamentoStyle, 0.0f) == "C64 SLIDE", "glide style name");
+    require(fmt(kParamLFO2Shape, 5.0f / 6.0f) == "S&H", "LFO shape S&H");
+    require(fmt(kParamArpMode, 1.0f) == "CHORD", "arp mode CHORD");
+    require(near(parseOk(kParamSeqMode, "ping pong"), 2.0f / 3.0f, 1e-6f), "seq mode parses 'ping pong'");
+    require(fmt(kParamHiFiQuality, 1.0f) == "TRANSCENDENCE", "Hi-Fi quality name");
+    require(fmt(kParamArpTranspose, 0.5f) == "+0 st" && fmt(kParamArpTranspose, 0.0f) == "-24 st",
+            "arp transpose in semitones");
+    require(near(parseOk(kParamArpTranspose, "+12 st"), 36.0f / 48.0f, 1e-6f), "arp transpose parses semitones");
+    require(fmt(kParamArpPatternLength, 1.0f) == "32 steps", "arp pattern length in steps");
+    require(near(parseOk(kParamArpPatternLength, "16"), 15.0f / 31.0f, 1e-6f), "arp pattern length parses steps");
+    for (int pid = 0; pid < kNumParams; ++pid) {
+        if (!sidParameterHasChoiceNames(pid)) continue;
+        for (int i = 0; i <= normalizedParamStepCount(pid); ++i) {
+            const float norm = sidParameterChoiceNormalized(pid, i);
+            require(sidParameterChoiceIndex(pid, norm) == i, "choice index round-trips its on-grid value");
+            require(near(parseOk(pid, fmt(pid, norm).c_str()), norm, 1e-6f), "choice name round-trips");
+        }
+    }
+
     require(fmt(kParamArpEnable, 1.0f) == "ON" && fmt(kParamArpEnable, 0.0f) == "OFF",
             "booleans display ON/OFF");
     require(parseOk(kParamArpEnable, "on") == 1.0f && parseOk(kParamArpEnable, "OFF") == 0.0f,

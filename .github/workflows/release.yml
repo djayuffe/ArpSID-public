@@ -130,24 +130,33 @@ jobs:
 
           ### Installing
 
-          **macOS.** The bundles are universal, ad-hoc signed and **not notarized**,
-          so clear the download quarantine after unzipping:
+          Each zip contains the bundle and an installer. The full guide, with manual
+          steps, uninstalling and troubleshooting, is
+          [docs/INSTALL.md](https://github.com/djayuffe/ArpSID-public/blob/main/docs/INSTALL.md).
+
+          **One line** (downloads this release for your machine, checks it against
+          `SHA256SUMS.txt`, installs it):
 
           ```bash
-          xattr -dr com.apple.quarantine ArpSID.component "ArpSID Standalone.app" ArpSID.app arpsid_vst3.vst3
-          mv ArpSID.component ~/Library/Audio/Plug-Ins/Components/   # AUv2
-          mv arpsid_vst3.vst3 ~/Library/Audio/Plug-Ins/VST3/          # VST3
-          mv "ArpSID Standalone.app" ArpSID.app /Applications/        # Standalone, AUv3
+          # Linux and macOS
+          curl -fsSL https://raw.githubusercontent.com/djayuffe/ArpSID-public/main/scripts/install/get_arpsid.sh | bash
+          ```
+          ```powershell
+          # Windows (PowerShell; the default install for all users needs Run as administrator)
+          irm https://raw.githubusercontent.com/djayuffe/ArpSID-public/main/scripts/install/get_arpsid.ps1 | iex
           ```
 
-          Open `ArpSID.app` once so macOS registers its AUv3, then rescan in your host
-          (in Logic: restart, or run `killall -9 AudioComponentRegistrar`). Because the
-          AUv3 is ad-hoc signed, some hosts only load it after it is re-signed with a
-          Developer ID; the AUv2 has no such restriction.
-
-          **Windows.** Copy `arpsid_vst3.vst3` to `C:\Program Files\Common Files\VST3\`.
-
-          **Linux.** Copy `arpsid_vst3.vst3` to `~/.vst3/` (or `/usr/lib/vst3/` for all users).
+          **From a downloaded zip:** unzip it and run the installer inside.
+          - **macOS:** `./install_macos.sh`. It installs the plug-ins for you and the
+            apps to /Applications, removes the download quarantine (the bundles are
+            ad-hoc signed, **not notarized**), registers the AUv3 and refreshes the
+            Audio Unit cache. Then restart your host.
+          - **Windows:** `powershell -ExecutionPolicy Bypass -File .\install.ps1`
+            in an elevated PowerShell, installing to `C:\Program Files\Common Files\VST3\`.
+            Add `-Scope User` to install for yourself only.
+          - **Linux:** `./install.sh` installs to `~/.vst3/`; `--system` installs to
+            `/usr/lib/vst3/`. `./install.sh --check` lists any missing desktop
+            libraries.
 
           The VST3 runs the same engine as the AU and Standalone and has the full
           ArpSID editor on every platform (on Linux it needs the usual desktop

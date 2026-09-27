@@ -100,8 +100,15 @@ public:
     void clearDigiD418Telemetry() noexcept;
 
     // ── C64 SID player / chip commands ──────────────────────────────────────
+    // The host keeps a copy of the loaded file so the tune (and its subtune)
+    // is saved with the project (SIDF state chunk) and subtunes can be
+    // switched later, including after a project reload.
     bool loadSidFile(const void* data, std::size_t size, std::uint16_t subtune);
     void unloadSidFile() noexcept;
+    // Re-initialise the loaded tune at <subtune> (0-based); false if none.
+    bool selectSidSubtune(std::uint16_t subtune);
+    std::uint16_t sidSubtune() const noexcept;
+    std::size_t sidFileSize() const noexcept;
     // Same numbering as the AU adapter: 1 boot, 2 start, 3 stop, 4 reset,
     // 5 load projection bootstrap, 6/7 VIC fast on/off, 8/9 CPU fast on/off.
     void c64ControlHubCommand(int command) noexcept;
@@ -110,6 +117,27 @@ public:
     bool c64CpuFast() const noexcept;
     void setPureSid1Q1OutputMode(bool on) noexcept;
     bool pureSid1Q1OutputMode() const noexcept;
+
+    // ── DIGI capture from the "DIGI Capture In" audio input ────────────────
+    // armDigiCapture (UI thread) prepares a mono buffer of up to
+    // GUI::kDigiRecordCaptureMaxFrames and starts recording; the audio thread
+    // feeds the input with captureDigiInput; stopDigiCapture ends the take
+    // and stores it in <slot> (resampled to 8 kHz 4-bit $D418, <= 7.5 s).
+    bool armDigiCapture(int slot);
+    bool stopDigiCapture(const char* name);     // false if nothing was recorded
+    void cancelDigiCapture() noexcept;
+    void captureDigiInput(const float* const* inputs, int numChannels, int frameCount) noexcept; // audio thread
+    void setDigiCaptureInputActive(bool active) noexcept { captureInputActive_.store(active, std::memory_order_relaxed); }
+    struct DigiCaptureStatus {
+        bool armed = false;
+        bool inputActive = false;   // the host feeds the capture input bus
+        int slot = 0;
+        std::uint32_t frames = 0;   // recorded so far (host rate)
+        double seconds = 0.0;
+        float peak = 0.f;           // input peak of the take
+        bool full = false;          // buffer full: stop to keep the take
+    };
+    DigiCaptureStatus digiCaptureStatus() const noexcept;
 
     // ── MIDI from the editor (non-realtime; queued into the kernel) ─────────
     void injectMidi(const std::uint8_t* data, std::uint8_t length) noexcept;
@@ -141,6 +169,20 @@ private:
     std::atomic<std::uint64_t> renderedSeq_{0};
 
     std::unique_ptr<ArpSIDDSPKernel> kernel_;
+    // DIGI capture: buffer owned by the UI side, written by the audio thread
+    // only while captureArmed_; captureBusy_ brackets each audio-thread write
+    // so stop waits for an in-flight block before reading.
+    std::vector<float> captureBuffer_;
+    std::atomic<bool> captureArmed_{false};
+    std::atomic<bool> captureBusy_{false};
+    std::atomic<bool> captureInputActive_{false};
+    std::atomic<std::uint32_t> captureFrames_{0};
+    std::atomic<float> capturePeak_{0.f};
+    int captureSlot_ = 0;
+    // Loaded .sid file (non-realtime only; guarded by sidMutex_).
+    mutable std::mutex sidMutex_;
+    std::vector<std::uint8_t> sidFile_;
+    std::uint16_t sidSubtune_ = 0;
     mutable std::mutex modelMutex_;
     GUI::SettingsPanelModel settings_;
     GUI::MixPanelModel mix_;

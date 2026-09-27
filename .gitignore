@@ -7,6 +7,9 @@ CMakeFiles/
 CMakeCache.txt
 Testing/
 
+# Third-party checkouts (scripts/fetch_vst3_sdk.sh)
+/.deps/
+
 # Release packaging output
 /dist/
 /release-logs/

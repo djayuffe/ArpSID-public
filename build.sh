@@ -10,6 +10,7 @@
 #
 # VST3 (any platform; needs the Steinberg VST3 SDK):
 #   ./build.sh --vst3-sdk ~/vst3sdk --install-vst3
+#   ./build.sh --install-deps --fetch-vst3-sdk --install-vst3   # Linux, from scratch
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -32,6 +33,10 @@ GENERATOR="${ARPSID_CMAKE_GENERATOR:-}"
 BUILD_VST3=0
 INSTALL_VST3=0
 VST3_SDK="${VST3SDK_DIR:-}"
+FETCH_VST3_SDK=0
+VST3_EDITOR=1
+PACKAGE_VST3=0
+INSTALL_DEPS=0
 SANITIZE=0
 
 usage() {
@@ -54,6 +59,14 @@ Options:
   --vst3-sdk DIR        Steinberg VST3 SDK checkout (implies --vst3)
   --install-vst3        Build the VST3 and copy it to the per-user VST3 folder
                         (~/.vst3 on Linux, ~/Library/Audio/Plug-Ins/VST3 on macOS)
+  --fetch-vst3-sdk      Clone the pinned VST3 SDK into .deps/vst3sdk if needed
+                        (implies --vst3; scripts/fetch_vst3_sdk.sh)
+  --no-vst3-editor      Windows/Linux VST3 without its editor (hosts show their
+                        generic UI; no X11/cairo/pango packages needed)
+  --package-vst3        Zip the built VST3 bundle into <build-dir>/dist with the
+                        installer script (implies --vst3)
+  --install-deps        Linux: install the build packages first
+                        (scripts/linux/install_build_deps.sh; uses sudo)
   --sanitize            Build with AddressSanitizer + UBSan (GCC/Clang)
   --install-auv2        macOS only: install built ArpSID.component after build
   --clear-au-cache      macOS only: clear AudioComponent registrar cache after install
@@ -70,6 +83,8 @@ Examples:
   ./build.sh --build-dir build-release --parallel 8
   ./build.sh --test-filter 'Auv2Version|VersionCoherence'
   ./build.sh --vst3-sdk ~/vst3sdk --install-vst3
+  ./build.sh --install-deps --fetch-vst3-sdk --install-vst3
+  ./build.sh --fetch-vst3-sdk --package-vst3 --no-tests
   ./build.sh --sanitize --build-dir build-asan
   ./build.sh --install-auv2 --clear-au-cache
   ./build.sh --release-check
@@ -109,6 +124,14 @@ while [ "$#" -gt 0 ]; do
       VST3_SDK="$2"; BUILD_VST3=1; shift 2 ;;
     --install-vst3)
       BUILD_VST3=1; INSTALL_VST3=1; shift ;;
+    --fetch-vst3-sdk)
+      FETCH_VST3_SDK=1; BUILD_VST3=1; shift ;;
+    --no-vst3-editor)
+      VST3_EDITOR=0; shift ;;
+    --package-vst3)
+      PACKAGE_VST3=1; BUILD_VST3=1; shift ;;
+    --install-deps)
+      INSTALL_DEPS=1; shift ;;
     --sanitize)
       SANITIZE=1; shift ;;
     --install-auv2)
@@ -137,7 +160,23 @@ while [ "$#" -gt 0 ]; do
   esac
 done
 
-command -v cmake >/dev/null 2>&1 || { echo "cmake not found in PATH" >&2; exit 127; }
+if [ "$INSTALL_DEPS" -eq 1 ]; then
+  if [ "$(uname -s)" != "Linux" ]; then
+    echo "--install-deps is Linux-only (macOS: Xcode + CMake; Windows: Visual Studio + CMake)" >&2
+    exit 11
+  fi
+  if [ "$VST3_EDITOR" -eq 1 ]; then
+    "$ROOT/scripts/linux/install_build_deps.sh"
+  else
+    "$ROOT/scripts/linux/install_build_deps.sh" --no-editor
+  fi
+fi
+
+command -v cmake >/dev/null 2>&1 || { echo "cmake not found in PATH (Linux: ./build.sh --install-deps)" >&2; exit 127; }
+
+if [ "$FETCH_VST3_SDK" -eq 1 ] && { [ -z "$VST3_SDK" ] || [ ! -f "$VST3_SDK/CMakeLists.txt" ]; }; then
+  VST3_SDK="$("$ROOT/scripts/fetch_vst3_sdk.sh" ${VST3_SDK:+"$VST3_SDK"})"
+fi
 
 if [ "$MACOS_CLOSURE" -eq 1 ] && [ "$(uname -s)" != "Darwin" ]; then
   echo "--macos-closure is macOS-only" >&2
@@ -170,13 +209,17 @@ fi
 CMAKE_CONFIGURE_ARGS+=(-DCMAKE_BUILD_TYPE="$CONFIG")
 if [ "$BUILD_VST3" -eq 1 ]; then
   if [ -z "$VST3_SDK" ] || [ ! -f "$VST3_SDK/CMakeLists.txt" ]; then
-    echo "VST3 build needs the Steinberg VST3 SDK: pass --vst3-sdk DIR or set VST3SDK_DIR." >&2
-    echo "  git clone --depth 1 --branch v3.8.1_build_84 --recurse-submodules --shallow-submodules \\" >&2
-    echo "    https://github.com/steinbergmedia/vst3sdk.git ~/vst3sdk" >&2
+    echo "VST3 build needs the Steinberg VST3 SDK: pass --vst3-sdk DIR, set VST3SDK_DIR," >&2
+    echo "or add --fetch-vst3-sdk to clone the pinned version into .deps/vst3sdk." >&2
     exit 10
   fi
   VST3_SDK="$(cd "$VST3_SDK" && pwd)"
   CMAKE_CONFIGURE_ARGS+=(-DARPSID_BUILD_VST3=ON -Dvst3sdk_SOURCE_DIR="$VST3_SDK")
+  if [ "$VST3_EDITOR" -eq 1 ]; then
+    CMAKE_CONFIGURE_ARGS+=(-DARPSID_VST3_EDITOR=ON)
+  else
+    CMAKE_CONFIGURE_ARGS+=(-DARPSID_VST3_EDITOR=OFF)
+  fi
 fi
 if [ "$SANITIZE" -eq 1 ]; then
   CMAKE_CONFIGURE_ARGS+=(-DARPSID_ENABLE_SANITIZERS=ON)
@@ -218,6 +261,24 @@ if [ "$BUILD_VST3" -eq 1 ]; then
     else
       cmake --build "$BUILD_DIR" --config "$CONFIG" --target arpsid_vst3_install_user
     fi
+  fi
+  if [ "$PACKAGE_VST3" -eq 1 ]; then
+    VST3_BUNDLE="$(find "$BUILD_DIR/VST3" -maxdepth 3 -type d -name arpsid_vst3.vst3 -print -quit)"
+    [ -n "$VST3_BUNDLE" ] || { echo "arpsid_vst3.vst3 not found under $BUILD_DIR/VST3" >&2; exit 12; }
+    VERSION="$(tr -d '[:space:]' < "$ROOT/VERSION.txt")"
+    case "$(uname -s)" in
+      Linux) PLATFORM="linux-$(uname -m)" ;;
+      Darwin) PLATFORM="macos" ;;
+      *) PLATFORM="$(uname -s | tr 'A-Z' 'a-z')" ;;
+    esac
+    DIST="$BUILD_DIR/dist"
+    STAGE="$DIST/ArpSID-$VERSION-vst3-$PLATFORM"
+    rm -rf "$STAGE" && mkdir -p "$STAGE"
+    cp -R "$VST3_BUNDLE" "$STAGE/"
+    "$ROOT/scripts/install/stage_installer.sh" vst3 "$STAGE"
+    # Same layout as the release zips: the bundle at the root, the installer next to it.
+    (cd "$STAGE" && rm -f "../$(basename "$STAGE").zip" && zip -qr "../$(basename "$STAGE").zip" .)
+    echo "[ArpSID] packaged $DIST/$(basename "$STAGE").zip"
   fi
 fi
 

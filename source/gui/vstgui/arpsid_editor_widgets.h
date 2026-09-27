@@ -140,7 +140,12 @@ private:
 class ActionButton : public VSTGUI::CView {
 public:
     ActionButton(const CRect& r, std::string text, const Theme& theme, std::function<void()> onClick);
-    void setText(std::string t) { text_ = std::move(t); invalid(); }
+    void setText(std::string t) {
+        if (t != text_) {
+            text_ = std::move(t);
+            invalid();
+        }
+    }
     void setLit(bool lit) { if (lit_ != lit) { lit_ = lit; invalid(); } }
     void draw(CDrawContext* ctx) override;
     void onMouseDownEvent(VSTGUI::MouseDownEvent& e) override;

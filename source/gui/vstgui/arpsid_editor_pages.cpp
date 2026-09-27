@@ -1040,7 +1040,10 @@ public:
         }
         const CCoord rx = 8 * 74 + 10;
         addView(new ActionButton(CRect(rx, 0, rx + 130, 44), "IMPORT WAV...", ctx.theme, [this]() { importWav(); }));
-        scope_ = new ScopeView(CRect(rx + 140, 0, w, 44), ctx.theme, 1);
+        // REC records the "DIGI Capture In" side-chain into the active slot.
+        rec_ = new ActionButton(CRect(rx + 136, 0, rx + 216, 44), "REC", ctx.theme, [this]() { toggleCapture(); });
+        addView(rec_);
+        scope_ = new ScopeView(CRect(rx + 224, 0, w, 44), ctx.theme, 1);
         addView(scope_);
 
         steps_ = new CellGrid(CRect(0, 52, w, 52 + 8 * 18), ctx.theme, GUI::kDigiStepCount, GUI::kDigiActiveSlotCount,
@@ -1213,6 +1216,16 @@ public:
         slotTitle_->setText(fmt("SLOT %d  -  %s", model_.activeSlot + 1, src.c_str()));
         loop_->setLit(s.flags & GUI::kDigiFlagLoop);
         reverse_->setLit(s.flags & GUI::kDigiFlagReverse);
+        // Capture status; a full buffer ends the take automatically.
+        const auto cap = h->digiCaptureStatus();
+        if (cap.armed && cap.full) toggleCapture();
+        rec_->setText(cap.armed ? "STOP" : "REC");
+        rec_->setLit(cap.armed);
+        if (cap.armed)
+            captureLine_ = cap.inputActive
+                ? fmt("REC slot %d  %.1f s  peak %.0f dB", cap.slot + 1, cap.seconds,
+                      cap.peak > 1e-5f ? 20.0 * std::log10(static_cast<double>(cap.peak)) : -99.0)
+                : std::string("REC armed: route audio to the plug-in's 'DIGI Capture In' input");
         if (ctx_.telemetry) {
             const auto& t = *ctx_.telemetry;
             scope_->setTrace(0, t.digiScope, 128, ctx_.theme.accent);
@@ -1222,7 +1235,7 @@ public:
                                  t.digiD418SidAcceptedWriteCount, t.digiD418WritesBlockedByIo),
                              fmt("last nibble %X   last $D418 %02X   io %s", t.digiD418LastNibble, t.digiD418LastD418,
                                  t.digiD418LastIoVisible ? "visible" : "banked"),
-                             statusLine_});
+                             captureLine_, statusLine_});
         }
         forEachChild([](CView* v) {
             if (auto* c = dynamic_cast<ChoiceMenu*>(v)) c->refresh();
@@ -1240,6 +1253,23 @@ private:
         h->setDigi(model_, *bank_);
         ctx_.backend.markStateDirty();
         invalid();
+    }
+
+    void toggleCapture() {
+        Vst3KernelHost* h = host();
+        if (!h) return;
+        if (!h->digiCaptureStatus().armed) {
+            captureLine_ = h->armDigiCapture(model_.activeSlot) ? "REC armed" : "cannot record into this slot";
+            return;
+        }
+        const auto cap = h->digiCaptureStatus();
+        const std::string name = fmt("capture %d", ++takeCount_);
+        if (h->stopDigiCapture(name.c_str())) {
+            captureLine_ = fmt("recorded %.1f s into slot %d", cap.seconds, cap.slot + 1);
+            ctx_.backend.markStateDirty();
+        } else {
+            captureLine_ = cap.inputActive ? "nothing recorded" : "nothing recorded: the capture input got no audio";
+        }
     }
 
     void importWav() {
@@ -1268,7 +1298,10 @@ private:
     ActionButton* loop_ = nullptr;
     ActionButton* reverse_ = nullptr;
     TextGrid* info_ = nullptr;
+    ActionButton* rec_ = nullptr;
     std::string statusLine_;
+    std::string captureLine_;
+    int takeCount_ = 0;
     GUI::DigiPanelModel model_ = GUI::makeDefaultDigiPanelModel();
     std::unique_ptr<GUI::DigiSampleBankBlob> bank_ = std::make_unique<GUI::DigiSampleBankBlob>();
 };
@@ -1328,32 +1361,31 @@ private:
                 chooseFile(this, false, "Load C64 SID tune", "C64 SID tune", "sid", {}, [this](std::string p) {
                     Vst3KernelHost* hh = host();
                     if (!hh) return;
-                    auto bytes = readFileBytes(p, 1u << 20);
+                    const auto bytes = readFileBytes(p, 1u << 20);
                     if (bytes.empty()) {
                         status_ = "could not read " + p;
                         return;
                     }
-                    sidFile_ = std::move(bytes);
-                    subtune_ = 0;
-                    status_ = hh->loadSidFile(sidFile_.data(), sidFile_.size(), 0) ? "loaded" : "not a valid PSID/RSID file";
+                    status_ = hh->loadSidFile(bytes.data(), bytes.size(), 0) ? "loaded" : "not a valid PSID/RSID file";
+                    if (status_ == "loaded") ctx_.backend.markStateDirty();
                 });
                 break;
             case 1:
                 h->unloadSidFile();
-                sidFile_.clear();
+                ctx_.backend.markStateDirty();
                 status_ = "ejected";
                 break;
             case 2:
             case 3: {
-                if (sidFile_.empty()) {
-                    // A tune restored with the project was not loaded through
-                    // this editor, so its bytes are not here to re-init.
-                    status_ = h->isSidFileLoaded() ? "load the .sid again to change the subtune" : "no .sid loaded";
+                // The kernel host keeps the loaded file (also for a tune
+                // restored with the project), so any tune can switch subtune.
+                if (h->sidFileSize() == 0) {
+                    status_ = "no .sid loaded";
                     break;
                 }
                 const int songs = std::max<int>(1, ctx_.telemetry ? ctx_.telemetry->psidSongs : 1);
-                subtune_ = (subtune_ + (i == 3 ? 1 : songs - 1)) % songs;
-                h->loadSidFile(sidFile_.data(), sidFile_.size(), static_cast<uint16_t>(subtune_));
+                const int next = (h->sidSubtune() + (i == 3 ? 1 : songs - 1)) % songs;
+                if (h->selectSidSubtune(static_cast<uint16_t>(next))) ctx_.backend.markStateDirty();
                 break;
             }
             default:
@@ -1365,8 +1397,6 @@ private:
     ActionButton* vicFast_ = nullptr;
     ActionButton* cpuFast_ = nullptr;
     TextGrid* info_ = nullptr;
-    std::vector<uint8_t> sidFile_;
-    int subtune_ = 0;
     std::string status_;
 };
 

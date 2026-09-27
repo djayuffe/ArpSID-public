@@ -37,6 +37,8 @@ constexpr std::uint32_t kTagDigi     = fourcc('D', 'I', 'G', 'M'); // DigiPanelM
 constexpr std::uint32_t kTagDigiBank = fourcc('D', 'I', 'G', 'B'); // DigiSampleBankBlob
 constexpr std::uint32_t kTagDigiRt   = fourcc('D', 'I', 'G', 'R'); // D418 mode + rate + pad map
 constexpr std::uint32_t kTagOutput   = fourcc('O', 'U', 'T', 'M'); // pure SID 1Q1 output mode
+constexpr std::uint32_t kTagSidFile  = fourcc('S', 'I', 'D', 'F'); // u16 subtune + loaded .sid file
+constexpr std::size_t kMaxSidFileBytes = 1u << 20;                    // PSID/RSID files are far smaller
 
 void putU32(std::vector<std::uint8_t>& out, std::uint32_t v) {
     for (int i = 0; i < 4; ++i) out.push_back(static_cast<std::uint8_t>(v >> (8 * i)));
@@ -220,6 +222,17 @@ std::vector<std::uint8_t> Vst3KernelHost::saveState() const {
     putChunk(out, kTagDigiRt, digiRt, sizeof(digiRt));
     const std::uint8_t pure = kernel_->pureSid1Q1OutputModeEnabled() ? 1u : 0u;
     putChunk(out, kTagOutput, &pure, 1);
+    {
+        std::lock_guard<std::mutex> sidLock(sidMutex_);
+        if (!sidFile_.empty() && kernel_->isPsidLoaded()) {
+            std::vector<std::uint8_t> payload;
+            payload.reserve(2 + sidFile_.size());
+            payload.push_back(static_cast<std::uint8_t>(sidSubtune_ & 0xFFu));
+            payload.push_back(static_cast<std::uint8_t>(sidSubtune_ >> 8));
+            payload.insert(payload.end(), sidFile_.begin(), sidFile_.end());
+            putChunk(out, kTagSidFile, payload.data(), payload.size());
+        }
+    }
     return out;
 }
 
@@ -253,15 +266,17 @@ bool Vst3KernelHost::loadState(const std::uint8_t* data, std::size_t size) {
 
     bool haveRoot = false;
     bool haveDigiModel = false, haveDigiBank = false;
+    std::vector<std::uint8_t> sidBytes;
+    std::uint16_t sidSubtune = 0;
     GUI::DigiPanelModel digiModel{};
     std::unique_ptr<GUI::DigiSampleBankBlob> digiBank;
-    std::lock_guard<std::mutex> lock(modelMutex_);
+    std::unique_lock<std::mutex> lock(modelMutex_);
     std::size_t pos = 4;
     while (pos + 8 <= size) {
         const std::uint32_t tag = getU32(data + pos);
         const std::uint32_t len = getU32(data + pos + 4);
         pos += 8;
-        if (len > size - pos) return haveRoot; // truncated: keep what was applied
+        if (len > size - pos) break; // truncated: keep what was applied
         const std::uint8_t* p = data + pos;
         pos += len;
         switch (tag) {
@@ -316,6 +331,12 @@ bool Vst3KernelHost::loadState(const std::uint8_t* data, std::size_t size) {
             case kTagOutput:
                 if (len >= 1) kernel_->setPureSid1Q1OutputMode(p[0] != 0);
                 break;
+            case kTagSidFile:
+                if (len > 2 && len - 2 <= kMaxSidFileBytes) {
+                    sidSubtune = static_cast<std::uint16_t>(p[0] | (p[1] << 8));
+                    sidBytes.assign(p + 2, p + len);
+                }
+                break;
             default:
                 break; // forward compatibility: skip unknown chunks
         }
@@ -329,6 +350,14 @@ bool Vst3KernelHost::loadState(const std::uint8_t* data, std::size_t size) {
         GUI::digiRepairUserSampleReferences(digiModel_, *digiBank_);
     }
     publishModelsLocked_(true);
+    lock.unlock();
+    // The C64 tune saved with the project; a state without one unloads any
+    // tune left from before, so a restore is deterministic.
+    if (!sidBytes.empty()) {
+        if (!loadSidFile(sidBytes.data(), sidBytes.size(), sidSubtune)) unloadSidFile();
+    } else if (sidFileSize() > 0 || kernel_->isPsidLoaded()) {
+        unloadSidFile();
+    }
     return haveRoot;
 }
 
@@ -435,12 +464,115 @@ void Vst3KernelHost::triggerDigiPad(std::uint8_t slot, std::uint8_t velocity) no
 
 void Vst3KernelHost::clearDigiD418Telemetry() noexcept { kernel_->clearDigiD418RuntimeTelemetryForGui(); }
 
-bool Vst3KernelHost::loadSidFile(const void* data, std::size_t size, std::uint16_t subtune) {
-    if (!data || size == 0) return false;
-    return kernel_->loadPsidData(data, size, subtune);
+// ── DIGI capture ────────────────────────────────────────────────────────────
+
+bool Vst3KernelHost::armDigiCapture(int slot) {
+    if (slot < 0 || slot >= GUI::kDigiActiveSlotCount) return false;
+    cancelDigiCapture();
+    if (captureBuffer_.size() != GUI::kDigiRecordCaptureMaxFrames)
+        captureBuffer_.assign(GUI::kDigiRecordCaptureMaxFrames, 0.0f); // allocated here, never on the audio thread
+    captureSlot_ = slot;
+    captureFrames_.store(0, std::memory_order_relaxed);
+    capturePeak_.store(0.f, std::memory_order_relaxed);
+    captureArmed_.store(true, std::memory_order_release);
+    return true;
 }
 
-void Vst3KernelHost::unloadSidFile() noexcept { kernel_->unloadPsid(); }
+void Vst3KernelHost::cancelDigiCapture() noexcept {
+    // Store-then-check pairs with captureDigiInput's busy-then-check (both
+    // seq_cst): either the audio block sees disarmed, or we see it busy.
+    captureArmed_.store(false);
+    while (captureBusy_.load()) {
+        // an audio block is writing; it finishes within one block
+    }
+}
+
+bool Vst3KernelHost::stopDigiCapture(const char* name) {
+    const bool wasArmed = captureArmed_.load(std::memory_order_acquire);
+    cancelDigiCapture();
+    const std::uint32_t frames = captureFrames_.load(std::memory_order_acquire);
+    if (!wasArmed || frames == 0) return false;
+    // Normalise the take so quiet inputs still use the 4-bit range.
+    const float peak = capturePeak_.load(std::memory_order_relaxed);
+    if (peak > 1e-4f && peak < 0.99f) {
+        const float g = 0.99f / peak;
+        for (std::uint32_t i = 0; i < frames; ++i) captureBuffer_[i] *= g;
+    }
+    return setDigiUserSample(captureSlot_, captureBuffer_.data(), frames, sampleRate_, name ? name : "capture");
+}
+
+void Vst3KernelHost::captureDigiInput(const float* const* inputs, int numChannels, int frameCount) noexcept {
+    if (!captureArmed_.load(std::memory_order_acquire) || !inputs || numChannels <= 0 || frameCount <= 0) return;
+    captureBusy_.store(true);
+    if (captureArmed_.load()) {
+        const std::uint32_t cap = static_cast<std::uint32_t>(captureBuffer_.size());
+        std::uint32_t pos = captureFrames_.load(std::memory_order_relaxed);
+        float peak = capturePeak_.load(std::memory_order_relaxed);
+        const float scale = 1.0f / static_cast<float>(std::min(numChannels, 2));
+        for (int i = 0; i < frameCount && pos < cap; ++i, ++pos) {
+            float v = 0.f;
+            for (int c = 0; c < std::min(numChannels, 2); ++c)
+                if (inputs[c]) v += inputs[c][i];
+            v *= scale;
+            if (!std::isfinite(v)) v = 0.f;
+            peak = std::max(peak, std::fabs(v));
+            captureBuffer_[pos] = v;
+        }
+        capturePeak_.store(peak, std::memory_order_relaxed);
+        captureFrames_.store(pos, std::memory_order_release);
+    }
+    captureBusy_.store(false, std::memory_order_release);
+}
+
+Vst3KernelHost::DigiCaptureStatus Vst3KernelHost::digiCaptureStatus() const noexcept {
+    DigiCaptureStatus s;
+    s.armed = captureArmed_.load(std::memory_order_acquire);
+    s.inputActive = captureInputActive_.load(std::memory_order_relaxed);
+    s.slot = captureSlot_;
+    s.frames = captureFrames_.load(std::memory_order_acquire);
+    s.seconds = sampleRate_ > 0.0 ? s.frames / sampleRate_ : 0.0;
+    s.peak = capturePeak_.load(std::memory_order_relaxed);
+    s.full = !captureBuffer_.empty() && s.frames >= captureBuffer_.size();
+    return s;
+}
+
+bool Vst3KernelHost::loadSidFile(const void* data, std::size_t size, std::uint16_t subtune) {
+    if (!data || size == 0 || size > kMaxSidFileBytes) return false;
+    if (!kernel_->loadPsidData(data, size, subtune)) return false;
+    std::lock_guard<std::mutex> lock(sidMutex_);
+    const auto* b = static_cast<const std::uint8_t*>(data);
+    sidFile_.assign(b, b + size);
+    sidSubtune_ = subtune;
+    return true;
+}
+
+void Vst3KernelHost::unloadSidFile() noexcept {
+    kernel_->unloadPsid();
+    std::lock_guard<std::mutex> lock(sidMutex_);
+    sidFile_.clear();
+    sidFile_.shrink_to_fit();
+    sidSubtune_ = 0;
+}
+
+bool Vst3KernelHost::selectSidSubtune(std::uint16_t subtune) {
+    std::vector<std::uint8_t> bytes;
+    {
+        std::lock_guard<std::mutex> lock(sidMutex_);
+        if (sidFile_.empty()) return false;
+        bytes = sidFile_;
+    }
+    return loadSidFile(bytes.data(), bytes.size(), subtune);
+}
+
+std::uint16_t Vst3KernelHost::sidSubtune() const noexcept {
+    std::lock_guard<std::mutex> lock(sidMutex_);
+    return sidSubtune_;
+}
+
+std::size_t Vst3KernelHost::sidFileSize() const noexcept {
+    std::lock_guard<std::mutex> lock(sidMutex_);
+    return sidFile_.size();
+}
 
 void Vst3KernelHost::c64ControlHubCommand(int command) noexcept {
     using Cmd = ArpSIDDSPKernel::C64ControlHubCommand;

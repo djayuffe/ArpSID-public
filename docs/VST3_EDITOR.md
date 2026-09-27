@@ -30,8 +30,14 @@ Every parameter, its ID, default, range and tab is listed in
 
 ## The editor window
 
-The window is 1200 × 800 logical pixels. On HiDPI screens the host's content
-scale factor zooms the whole frame, and the host window is resized to match.
+The editor is designed at 1200 × 800 and scales as one piece.
+
+- **Resizing.** Drag the host window's corner to resize it, from half size
+  (600 × 400) to three times (3600 × 2400); the 3:2 shape is kept.
+- **HiDPI.** The host's content scale factor multiplies your chosen size, so
+  the editor keeps its size relative to the screen.
+- **Remembered size.** The plug-in instance remembers the size while it is
+  loaded, so a reopened editor opens at the same size.
 
 **Header**
 
@@ -239,7 +245,10 @@ A read-only view of the SID as the engine drives it.
 - **SID PLAYER**
   - **LOAD .SID...** opens a PSID or RSID file (up to 1 MB) and starts
     subtune 1. **EJECT** unloads it.
-  - **< SONG** and **SONG >** step through the subtunes.
+  - The loaded tune and the current subtune are saved with the project and
+    come back when it is opened.
+  - **< SONG** and **SONG >** step through the subtunes, also for a tune
+    restored with a project.
   - **BOOT**, **START**, **STOP** and **RESET** drive the emulated C64.
   - **VIC-II FAST** and **6510 FAST** switch the VIC-II and CPU fast paths.
 
@@ -373,6 +382,17 @@ The DIGI sampler. It plays 4-bit samples through the SID's `$D418` volume
 register, the way C64 digis do.
 
 - **PAD 1–8**: click to audition a slot (velocity 110); this also selects it.
+- **REC**: record into the selected slot from the plug-in's audio input
+  `DIGI Capture In`, a side-chain bus. Route a track or input to it in your
+  host; hosts keep it off until you do.
+  - Press **REC** to start and **STOP** to keep the take.
+  - The line below the info panel shows the take's length and peak level, or
+    a reminder when the input receives no audio.
+  - The take is normalised, resampled to the canonical 8 kHz 4-bit `$D418`
+    stream, cut at 7.5 s, and becomes the slot's source ("capture 1",
+    "capture 2", …).
+  - Up to about 22 s at 48 kHz can be recorded; a full buffer ends the take by
+    itself.
 - **IMPORT WAV...**: load a WAV file into the selected slot. It accepts PCM 8,
   16, 24 and 32-bit and float 32/64-bit, including WAVE_FORMAT_EXTENSIBLE,
   mixes it to mono, and converts it to the canonical 8 kHz 4-bit `$D418`
@@ -527,12 +547,10 @@ because the engine computes floor(3.36) = 3.
 
 ## Limits
 
-- The editor has a fixed size (1200 × 800, zoomable by the host's content scale).
-  It does not offer free resizing.
+- The layout is fixed and scales as a whole (0.5× to 3×). Resizing does not
+  reflow the controls.
 - The language setting applies to the SETTINGS strings only; tab and control
   captions are English.
-- SONG < / > re-initialises the tune from the bytes loaded through this editor.
-  A tune restored with a project keeps playing, but you must load the `.sid`
-  again to change its subtune.
-- DIGI recording from an audio input (available in the macOS editor) is not
-  offered. WAV import covers loading samples.
+- DIGI recording needs the host to route audio to `DIGI Capture In`. Hosts
+  differ in how they expose instrument side-chain inputs. In REAPER, use the
+  track's plug-in pin connector; in Bitwig, the device's side-chain selector.

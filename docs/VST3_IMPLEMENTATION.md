@@ -52,7 +52,8 @@ has three parts:
 |---|---|
 | Processor class | `ArpSID`, FUID `A1B2C3D4-E5F60718-9A0B1C2D-3E4F5A6B`, category `ARPSID_PLUGIN_CATEGORY` (`include/arpsid/version.h`) |
 | Controller class | `ArpSID Controller`, FUID `B2C3D4E5-F6071829-A0B1C2D3-E4F5A6B7` |
-| Audio | no inputs; one output bus, stereo (mono accepted) |
+| Audio out | one main output bus, stereo (mono accepted) |
+| Audio in | `DIGI Capture In`: auxiliary (side-chain), stereo or mono, **inactive by default**. It is only read while a DIGI recording is armed. |
 | Events | one input bus, `MIDI In`, 16 channels |
 | Sample size | 32-bit float |
 | Tail | `kInfiniteTail` (release, reverb and delay can ring on) |
@@ -95,12 +96,15 @@ the kernel (voices, effect tails).
    - Poly pressure becomes `PolyPressure`.
    - Events are clamped to the block, given a monotonic arrival order, and
      stable-sorted by offset.
-3. **Transport** (`readTransport_`) maps `ProcessContext` to the kernel's
+3. **DIGI capture input.** If the host feeds `DIGI Capture In`, the processor
+   reports that the input is active and passes the block to
+   `captureDigiInput`. That call writes only while a recording is armed.
+4. **Transport** (`readTransport_`) maps `ProcessContext` to the kernel's
    `TransportState`: tempo, musical position, playing, cycle active, and loop
    start/end. The render sample rate always comes from `setupProcessing`.
-4. **Render.** The output buffers are cleared, then `Vst3KernelHost::render`
+5. **Render.** The output buffers are cleared, then `Vst3KernelHost::render`
    runs.
-5. **Silence flags.** A channel that is exactly zero for the whole block is
+6. **Silence flags.** A channel that is exactly zero for the whole block is
    flagged silent, so hosts can skip downstream processing.
 
 ### `getState` / `setState`
@@ -165,12 +169,32 @@ stopped therefore saves the new patch.
 | `settings/mix/kit/digi` and their setters | Read and replace a model (then publish). |
 | `setDigiUserSample(slot, samples, frames, rate, name)` | Store an imported mono sample in a DIGI slot: resampled to 8 kHz (nearest sample), quantized to 4-bit `$D418` nibbles, and cut at 60 000 frames (7.5 s) (`digiBuildUserSampleClipFromFloatMono`). |
 | `setDigiD418RuntimeMode`, `setDigiMidiPadMapping`, `triggerDigiPad` | DIGI runtime policy (0 = AUTH C64-bus `$D418`, 1 = FAST private `$D418`; rate 1–32 kHz), the pad root note and channel, and pad audition. |
-| `loadSidFile`, `unloadSidFile`, `isSidFileLoaded` | The PSID/RSID player. |
+| `loadSidFile`, `unloadSidFile`, `isSidFileLoaded`, `selectSidSubtune`, `sidSubtune` | The PSID/RSID player. The host keeps a copy of the file (at most 1 MB), so the tune and its subtune are saved with the project (`SIDF` chunk) and the subtune can change at any time. |
+| `armDigiCapture(slot)`, `stopDigiCapture(name)`, `cancelDigiCapture`, `captureDigiInput`, `digiCaptureStatus` | DIGI recording from `DIGI Capture In` (see [DIGI capture](#digi-capture)). |
 | `c64ControlHubCommand(n)` | 1 boot, 2 start, 3 stop, 4 reset, 5 load projection bootstrap, 6/7 VIC-II fast on/off, 8/9 CPU fast on/off. |
 | `setPureSid1Q1OutputMode` | Pure-SID output mode (saved in the `OUTM` chunk). |
 | `injectMidi` | Queue a MIDI message from the editor keyboard. |
 | `readTelemetry(out, scopes, c64)` | Fill `ArpSIDTelemetry`. The scope and C64 snapshot sections are copied only on request. |
 | `pollNonRealtime` | Perform drum-bridge factory-slot loads that render deferred (called from the editor timer). |
+
+### DIGI capture
+
+1. **Arm.** `armDigiCapture(slot)` runs on the UI thread. It allocates a mono
+   buffer of `GUI::kDigiRecordCaptureMaxFrames` (1 048 576) samples,
+   allocating only if it does not have one yet. Then it clears the counters
+   and sets `captureArmed_`.
+2. **Record.** On the audio thread, `captureDigiInput` mixes the input to mono
+   and appends it to the buffer. It never allocates, and stops at the end of
+   the buffer.
+3. **Stop.** `stopDigiCapture` clears `captureArmed_`, then waits while
+   `captureBusy_` is set. The audio thread sets `captureBusy_` around each
+   write and checks the armed flag again after setting it. All four accesses
+   are `seq_cst`, so either the audio block sees the capture disarmed, or the
+   UI thread sees the block busy and waits for it (at most one block). Stop
+   then normalises the take and hands it to `setDigiUserSample`: it is
+   resampled to 8 kHz 4-bit `$D418` and becomes the slot's source.
+
+The editor stops a take on its own when the buffer is full.
 
 ---
 
@@ -190,11 +214,12 @@ versions can add chunks without breaking older readers.
 | `DIGB` | `DigiSampleBankBlob` (480 392 B) | Restored only together with `DIGM`, the same rule as the AU. |
 | `DIGR` | 6 bytes: `$D418` mode, rate (24-bit), pad root note, pad channel | |
 | `OUTM` | 1 byte: pure-SID 1Q1 output mode | |
+| `SIDF` | `u16` subtune (little-endian) + the loaded `.sid` file | Written only while a tune is loaded. Loading a state without it unloads any tune left from before, so a restore is deterministic. Added in 0.9.8; older versions skip it. |
 
 **Reading.**
 
-- A truncated chunk stops reading. Whatever was already applied is kept, and
-  the load succeeds if a root was found.
+- A truncated chunk stops reading. The chunks read before the cut are kept
+  and published, and the load succeeds if a root was found.
 - Versions 1–4 are the pre-0.9.5 Phase2 layout: a `u32` version followed by
   one state-root blob. Version 4 uses the state magic; 1–3 use the patch magic.
   They load as a root only; the models keep their defaults.
@@ -216,6 +241,24 @@ The controller registers all 512 parameters (`kNumParams`) as `RangeParameter`
   `getParamStringByValue` formats and `getParamValueByString` parses, with the
   same laws the engine uses (exponential LFO rate, quadratic portamento,
   limiter ms laws, sequencer tempo 20 + 280 × norm, enum and boolean labels).
+- **Named values.** Stepped parameters show names, e.g. waveform `PULSE`,
+  filter `LOW-PASS`, voice `UNISON`, LFO `S&H`, arp `UP/DOWN`, `2 OCT`, seq
+  `PING-PONG`, Hi-Fi `TRANSCENDENCE`. Arp transpose reads `+3 st` and pattern
+  length `16 steps`. Hosts accept these names when you type a value. The
+  names follow the engine's decode laws (see
+  [VST3_EDITOR.md](VST3_EDITOR.md#stepped-values-and-the-decode-law)).
+- **Units (groups).**
+  - The root unit `ArpSID` holds the factory program list and the Program and
+    BankSlot selectors.
+  - Below it there is one unit per editor tab (`MAIN` … `DIGI`), in tab order.
+    A parameter goes into the first tab that shows it.
+  - Last comes `Host MIDI / read-only`, with 13 sub-units, one per MIDI
+    controller kind (mod wheel, breath, expression, sustain, sostenuto,
+    channel pressure, pitch bend, RPN/NRPN and data entry MSB/LSB), each with
+    16 channels.
+
+  That is 32 units in all. Hosts that show units group the parameters the way
+  the editor does.
 - **Flags**:
   - Program is `kIsProgramChange | kIsList`.
   - Panic, Virtual Gate and Bank Command are hidden.
@@ -299,6 +342,15 @@ on parameters only, and says so on the panels that need the engine.
 - **Windows and Linux** (`ARPSID_VSTGUI_EDITOR=1`):
   `arpsidCreateCrossPlatformEditor` (`source/gui/vstgui/arpsid_vstgui_plugview.cpp`)
   creates the VSTGUI editor described in [VST3_EDITOR.md](VST3_EDITOR.md).
+  - **Sizing.** `canResize` is true. `checkSizeConstraint` fits the largest
+    3:2 size into the offered rect, clamped to 0.5×–3× of 1200 × 800.
+    `onSize` sets the frame zoom. The host's content scale multiplies the
+    user's size.
+  - **Remembered size.** The controller keeps the size
+    (`arpsidControllerEditorZoom`), so a reopened editor opens at the same
+    size.
+- **Windows and Linux without the editor** (`-DARPSID_VST3_EDITOR=OFF`):
+  `createView` returns no view, and hosts show their generic parameter UI.
   `source/gui/arpsid_vst_headless_bridge.cpp` provides the Cocoa entry points
   as stubs on those platforms.
 
@@ -331,9 +383,22 @@ cmake --build build-vst3 --target arpsid_vst3_host_check     # host integration 
 cmake --build build-vst3 --target arpsid_vst3_editor_check   # render every editor tab (Windows/Linux)
 cmake --build build-vst3 --target arpsid_vst3_install_user   # copy to ~/.vst3 (Linux) or the user VST3 folder
 sudo cmake --install build-vst3 --prefix /usr                # /usr/lib/vst3 (Linux)
+./build.sh --fetch-vst3-sdk --package-vst3 --no-tests         # release-style zip + installer
 ```
 
-- The VST3 SDK is v3.8.1 (tag `v3.8.1_build_84`).
+Installing released builds: [INSTALL.md](INSTALL.md).
+
+- The VST3 SDK is v3.8.1 (tag `v3.8.1_build_84`). `scripts/fetch_vst3_sdk.sh`
+  or `-DARPSID_FETCH_VST3SDK=ON` (CMake FetchContent) gets that version;
+  `ARPSID_VST3SDK_TAG` overrides it.
+- `-DARPSID_VST3_EDITOR=OFF` builds the Windows/Linux VST3 without VSTGUI.
+- **Linux.** Before VSTGUI is configured, CMake checks every editor package
+  with pkg-config and names the missing ones.
+  `scripts/linux/install_build_deps.sh` installs them with apt, dnf, pacman or
+  zypper.
+- **Windows.** The C/C++ runtime is linked statically everywhere: ArpSID, the
+  SDK (`SMTG_USE_STATIC_CRT`) and VSTGUI (`CMAKE_MSVC_RUNTIME_LIBRARY`). CI
+  checks that the module does not import `VCRUNTIME140`/`MSVCP140`.
 - VSTGUI is built from the SDK's `vstgui4` without its standalone, tools,
   uidescription scripting, OpenGL or Wayland parts. See
   [VST3_EDITOR.md](VST3_EDITOR.md#platform-notes).
@@ -346,8 +411,9 @@ sudo cmake --install build-vst3 --prefix /usr                # /usr/lib/vst3 (Li
 | Test | Checks |
 |---|---|
 | Steinberg `validator` (runs during every `arpsid_vst3` build) | 47 SDK conformance tests: buses, state, parameters, process formats, flush, variable block size, and more. |
-| `arpsid_vst3_host_check` / `Vst3HostIntegrationTests` (`source/tests/vst3_host_integration_tests.cpp`) | Loads the built bundle like a host and checks each of these: <ul><li>both classes instantiate and connect;</li><li>Program is a 180-entry program-change list;</li><li>the MIDI bus has 16 channels;</li><li>tempo, transport and musical position are requested;</li><li>the MIDI mapping leaves unmapped CCs alone;</li><li>selecting a program refreshes the host and the controller mirror matches the processor state;</li><li>editor-keyboard (UiMidi) and host note-ons produce audio, and Master Volume automation reaches the engine;</li><li>a v5 state loads into a second instance;</li><li>a legacy v4 state is accepted by processor and controller.</li></ul> |
+| `arpsid_vst3_host_check` / `Vst3HostIntegrationTests` (`source/tests/vst3_host_integration_tests.cpp`) | Loads the built bundle like a host and checks each of these: <ul><li>both classes instantiate and connect;</li><li>Program is a 180-entry program-change list;</li><li>the MIDI bus has 16 channels, and the DIGI capture input is an auxiliary bus, inactive by default;</li><li>units: 32 units, each parameter in an existing unit, Program in the root, and <code>selectUnit</code> remembered;</li><li>on Windows and Linux, editor sizing: the 3:2 constraint, the minimum size, and a reopened view keeping its size;</li><li>tempo, transport and musical position are requested;</li><li>the MIDI mapping leaves unmapped CCs alone;</li><li>selecting a program refreshes the host and the controller mirror matches the processor state;</li><li>editor-keyboard (UiMidi) and host note-ons produce audio, and Master Volume automation reaches the engine;</li><li>a v5 state loads into a second instance;</li><li>a legacy v4 state is accepted by processor and controller.</li></ul> |
 | `arpsid_vst3_editor_check` | The offscreen editor render ([VST3_EDITOR.md](VST3_EDITOR.md#tests)). |
+| `Vst3KernelHostStateTests` (`source/tests/vst3_kernel_host_state_tests.cpp`, SDK-free, runs in every build) | The v5 state keeps the models, the C64 tune and its subtune. A tune-less state unloads a tune. A restored tune can switch subtune. A truncated state keeps what came before the cut. A DIGI capture round trip works (arm, feed, stop, then the slot plays the take). |
 | `EditorLayoutCoverageTests`, `ParameterReferenceDocTests` | Editor coverage and the decode law, and that the parameter reference is up to date. |
 
 CI runs all of these on Linux x86_64/aarch64 and Windows x64/arm64. On macOS

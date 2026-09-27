@@ -43,6 +43,10 @@ tresult PLUGIN_API ArpSIDVst3Processor::initialize(FUnknown* context) {
     if (result != kResultOk) return result;
 
     addAudioOutput(STR16("Stereo Out"), SpeakerArr::kStereo);
+    // Optional side-chain input for DIGI sample capture (the DIGI tab's REC).
+    // Auxiliary and inactive by default, so hosts treat ArpSID as a plain
+    // instrument until the user routes audio into it.
+    addAudioInput(STR16("DIGI Capture In"), SpeakerArr::kStereo, BusTypes::kAux, 0);
     // All 16 MIDI channels: ArpSID is multi-channel (GM channel-10 drums,
     // per-channel host controllers).
     addEventInput(STR16("MIDI In"), 16);
@@ -108,12 +112,13 @@ tresult PLUGIN_API ArpSIDVst3Processor::notify(IMessage* message) {
 
 tresult PLUGIN_API ArpSIDVst3Processor::setBusArrangements(SpeakerArrangement* inputs, int32 numIns,
                                                            SpeakerArrangement* outputs, int32 numOuts) {
-    // Instrument: no audio inputs, one stereo (or mono) output.
-    if (numIns != 0 || numOuts != 1 || !outputs) return kResultFalse;
-    (void)inputs;
-    if (outputs[0] == SpeakerArr::kStereo || outputs[0] == SpeakerArr::kMono)
-        return AudioEffect::setBusArrangements(inputs, numIns, outputs, numOuts);
-    return kResultFalse;
+    // One stereo (or mono) output; the optional DIGI capture input may be
+    // mono or stereo. Hosts that pass no input arrangement keep the default.
+    if (numOuts != 1 || !outputs || numIns < 0 || numIns > 1) return kResultFalse;
+    const auto monoOrStereo = [](SpeakerArrangement a) { return a == SpeakerArr::kStereo || a == SpeakerArr::kMono; };
+    if (!monoOrStereo(outputs[0])) return kResultFalse;
+    if (numIns == 1 && (!inputs || !monoOrStereo(inputs[0]))) return kResultFalse;
+    return AudioEffect::setBusArrangements(inputs, numIns, outputs, numOuts);
 }
 
 tresult PLUGIN_API ArpSIDVst3Processor::setupProcessing(ProcessSetup& setup) {
@@ -256,6 +261,13 @@ tresult PLUGIN_API ArpSIDVst3Processor::process(ProcessData& data) {
     }
 
     collectEvents_(data, frames);
+
+    // DIGI capture input (side-chain). Only read while a capture is armed.
+    const bool captureIn = data.numInputs > 0 && data.inputs && data.inputs[0].numChannels > 0 &&
+                           data.inputs[0].channelBuffers32 && data.inputs[0].channelBuffers32[0];
+    host_->setDigiCaptureInputActive(captureIn);
+    if (captureIn)
+        host_->captureDigiInput(data.inputs[0].channelBuffers32, data.inputs[0].numChannels, frames);
     TransportState transport{};
     readTransport_(data.processContext, sampleRate_, frames, transport);
 

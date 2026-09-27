@@ -5,6 +5,63 @@ All notable changes to ArpSID are documented here. The project uses
 version is `VERSION.txt`, mirrored by `project(VERSION)` in `CMakeLists.txt`
 and `include/arpsid/version.h`.
 
+## [Unreleased]
+
+### Added (VST3)
+
+- **Named values in hosts.** Automation lanes, generic editors and typed
+  entry show and accept names instead of indices or 0..1 values: waveform
+  `PULSE`, filter `LOW-PASS`, voice `UNISON`, glide `C64 SLIDE`, LFO `S&H`,
+  arp `UP/DOWN` and `2 OCT`, seq `PING-PONG`, Hi-Fi `TRANSCENDENCE`, arp
+  transpose `+3 st`, pattern length `16 steps`. One shared table serves
+  hosts, both editors and the parameter reference, following the engine's
+  decode laws. AU parameter units are unchanged.
+- **The C64 tune is saved with the project.** The loaded `.sid` and its
+  subtune come back when the project opens (new `SIDF` state chunk; older
+  versions skip it). SONG < / > now works on a restored tune.
+- **Parameter groups.** Parameters sit in one VST3 unit per editor tab, plus
+  a host-MIDI group with a sub-unit per controller type, so hosts that show
+  units no longer list 512 parameters flat.
+- **Resizable editor** (Windows/Linux): it scales from 0.5× to 3× with the
+  window, keeps its 3:2 shape, and reopens at the size you chose.
+- **DIGI recording** (Windows/Linux): the new `DIGI Capture In` side-chain
+  input (off until a host routes audio to it) and REC/STOP in the DIGI tab
+  record a take into the selected slot.
+
+### Fixed (VST3)
+
+- A truncated saved state now keeps and publishes the chunks read before
+  the cut.
+- Windows: the C/C++ runtime is linked statically, so the plug-in no longer
+  needs the Visual C++ Redistributable (CI checks the module's imports).
+- A Windows/Linux build without the editor returns no editor view (hosts
+  show their generic UI) instead of a macOS-only view.
+
+### Linux build
+
+- `scripts/linux/install_build_deps.sh` installs the build packages with
+  apt, dnf, pacman or zypper (`--dry-run`, `--no-editor`).
+- `scripts/fetch_vst3_sdk.sh` and CMake `-DARPSID_FETCH_VST3SDK=ON` fetch the
+  pinned Steinberg SDK.
+- CMake checks the editor packages with pkg-config and names every missing
+  one.
+- `-DARPSID_VST3_EDITOR=OFF` builds a VST3 without the editor.
+- `build.sh --install-deps --fetch-vst3-sdk --install-vst3` goes from a bare
+  system to an installed plug-in. `--package-vst3` makes a release-style zip,
+  and `--no-vst3-editor` skips the editor.
+
+### Installers
+
+- Every release zip contains its installer: `install.sh` (Linux: user or
+  system install, uninstall, a missing-library check), `install.ps1`
+  (Windows: all users or per-user, unblock, uninstall), and
+  `install_macos.sh` (all macOS products, quarantine removal, AUv3
+  registration, AU cache refresh, optional auval, uninstall).
+- One-line installers `get_arpsid.sh` / `get_arpsid.ps1` download the build
+  for your machine, verify it against `SHA256SUMS.txt` and install it.
+- New [docs/INSTALL.md](docs/INSTALL.md); the README and release notes point
+  to it. CI smoke-tests the Linux and Windows installers on every build.
+
 ## [0.9.7] — 2026-09-27
 
 ### Fixed (VST3 editor, Windows and Linux)

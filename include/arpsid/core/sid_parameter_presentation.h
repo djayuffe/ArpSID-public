@@ -289,6 +289,109 @@ inline bool copyLabel(const char* label, char* dst, std::size_t dstSize) noexcep
 
 } // namespace detail_presentation
 
+// ─── Named choices for stepped parameters ────────────────────────────────────
+// One authority for the names of stepped parameters' values, shared by host
+// text (VST3 getParamStringByValue, AU string-from-value), the VSTGUI editor
+// and the generated parameter reference. Each index follows the engine's own
+// decoder, so a name always says what the engine plays:
+//   waveform        bitperfect_engine.h valueToWaveform  floor(min(v,0.999999) * 8)
+//   filter mode     bitperfect_engine.h setFilterMode    int(v * 8), index = SID LP|BP|HP bits
+//   arp octaves     arpeggiator.h setOctaves             int(v * 3)  (1 + index octaves)
+//   everything else                                      round(v * steps)
+// The unit descriptor (and so the AU unit) is unchanged by naming.
+
+inline int sidParameterChoiceIndex(int paramId, float normalized) noexcept {
+    const int steps = normalizedParamStepCount(paramId);
+    if (steps <= 0) return 0;
+    const float v = ArpSID_sanitize01(normalized);
+    int idx;
+    switch (static_cast<ParamID>(paramId)) {
+        case kParamVCO1Waveform: case kParamVCO2Waveform: case kParamVCO3Waveform:
+        case kParamFilterMode:
+            idx = static_cast<int>(std::floor(std::min(v, 0.999999f) * static_cast<float>(steps + 1)));
+            break;
+        case kParamArpOctaves:
+            idx = static_cast<int>(v * static_cast<float>(steps));
+            break;
+        default:
+            idx = static_cast<int>(std::lround(v * static_cast<float>(steps)));
+            break;
+    }
+    return std::clamp(idx, 0, steps);
+}
+
+// On-grid normalized value for a choice index (decodes back to the same index
+// under every law above).
+inline float sidParameterChoiceNormalized(int paramId, int index) noexcept {
+    const int steps = normalizedParamStepCount(paramId);
+    if (steps <= 0) return 0.0f;
+    return static_cast<float>(std::clamp(index, 0, steps)) / static_cast<float>(steps);
+}
+
+// Name of choice <index>, or nullptr when the parameter has no name table.
+inline const char* sidParameterChoiceName(int paramId, int index) noexcept {
+    static const char* const kWave[] = {"TRI", "SAW", "PULSE", "NOISE", "TRI+SAW", "TRI+PUL", "SAW+PUL", "TRI+SAW+PUL"};
+    static const char* const kFilter[] = {"OFF", "LOW-PASS", "BAND-PASS", "LP+BP", "HIGH-PASS", "NOTCH", "BP+HP", "ALL"};
+    static const char* const kVoice[] = {"POLY", "MONO", "LEGATO", "UNISON"};
+    static const char* const kGlide[] = {"C64 SLIDE", "C64 FIXED", "LINEAR", "SMOOTH"};
+    static const char* const kLfo[] = {"SINE", "TRIANGLE", "SAW", "RAMP DOWN", "SQUARE", "S&H", "RANDOM"};
+    static const char* const kArpMode[] = {"UP", "DOWN", "UP/DOWN", "DOWN/UP", "RANDOM", "PATTERN", "CHORD"};
+    static const char* const kOct[] = {"1 OCT", "2 OCT", "3 OCT", "4 OCT"};
+    static const char* const kSeq[] = {"FORWARD", "REVERSE", "PING-PONG", "RANDOM"};
+    static const char* const kHiFi[] = {"PURE", "HI-FI", "TRANSCENDENCE"};
+    auto pick = [index](const char* const* table, int n) -> const char* {
+        return (index >= 0 && index < n) ? table[index] : nullptr;
+    };
+    switch (static_cast<ParamID>(paramId)) {
+        case kParamVCO1Waveform: case kParamVCO2Waveform: case kParamVCO3Waveform: return pick(kWave, 8);
+        case kParamFilterMode: return pick(kFilter, 8);
+        case kParamVoiceMode: return pick(kVoice, 4);
+        case kParamPortamentoStyle: return pick(kGlide, 4);
+        case kParamLFOShape: case kParamLFO2Shape: case kParamLFO3Shape: case kParamLFO4Shape: return pick(kLfo, 7);
+        case kParamArpMode: return pick(kArpMode, 7);
+        case kParamArpOctaves: return pick(kOct, 4);
+        case kParamSeqMode: return pick(kSeq, 4);
+        case kParamHiFiQuality: return pick(kHiFi, 3);
+        default: return nullptr;
+    }
+}
+
+inline bool sidParameterHasChoiceNames(int paramId) noexcept {
+    return sidParameterChoiceName(paramId, 0) != nullptr;
+}
+
+// Name for a normalized value, or nullptr when the parameter has no names.
+inline const char* sidParameterChoiceNameForNormalized(int paramId, float normalized) noexcept {
+    if (!sidParameterHasChoiceNames(paramId)) return nullptr;
+    return sidParameterChoiceName(paramId, sidParameterChoiceIndex(paramId, normalized));
+}
+
+// Parses a choice name (case-insensitive, surrounding spaces ignored; '-',
+// '_' and ' ' are interchangeable, so "ping pong" and "Low_Pass" match).
+// Returns false when the text names no choice.
+inline bool sidParameterChoiceFromName(int paramId, const char* text, float& normalizedOut) noexcept {
+    if (!text || !sidParameterHasChoiceNames(paramId)) return false;
+    auto norm = [](char c) -> char {
+        if (c == '-' || c == '_') return ' ';
+        return (c >= 'a' && c <= 'z') ? static_cast<char>(c - 'a' + 'A') : c;
+    };
+    while (*text == ' ' || *text == '\t') ++text;
+    std::size_t len = std::strlen(text);
+    while (len > 0 && (text[len - 1] == ' ' || text[len - 1] == '\t')) --len;
+    for (int i = 0;; ++i) {
+        const char* name = sidParameterChoiceName(paramId, i);
+        if (!name) return false;
+        const std::size_t n = std::strlen(name);
+        if (n != len) continue;
+        bool same = true;
+        for (std::size_t k = 0; k < n && same; ++k) same = norm(name[k]) == norm(text[k]);
+        if (same) {
+            normalizedOut = sidParameterChoiceNormalized(paramId, i);
+            return true;
+        }
+    }
+}
+
 // ─── Unit descriptor ─────────────────────────────────────────────────────────
 
 inline ParameterUnitDescriptor sidParameterUnitDescriptor(int paramId) noexcept {
@@ -366,6 +469,19 @@ struct SidParameterPresentation {
         const ParameterUnitDescriptor d = sidParameterUnitDescriptor(paramId);
         char buf[64] = {};
 
+        if (const char* name = sidParameterChoiceNameForNormalized(paramId, v))
+            return copyLabel(name, dst, dstSize);
+        // Arpeggiator laws (arpeggiator.h): transpose round((v - 0.5) * 48)
+        // semitones, pattern length 1 + round(v * 31) steps.
+        if (paramId == (int)kParamArpTranspose) {
+            std::snprintf(buf, sizeof(buf), "%+d st", (int)std::lround((v - 0.5f) * 48.0f));
+            return copyLabel(buf, dst, dstSize);
+        }
+        if (paramId == (int)kParamArpPatternLength) {
+            std::snprintf(buf, sizeof(buf), "%d steps", 1 + (int)std::lround(v * 31.0f));
+            return copyLabel(buf, dst, dstSize);
+        }
+
         switch (d.unit) {
             case SidParameterUnit::Boolean:
                 return copyLabel(v > 0.5f ? "ON" : "OFF", dst, dstSize);
@@ -431,6 +547,22 @@ struct SidParameterPresentation {
 
         const ParameterUnitDescriptor d = sidParameterUnitDescriptor(paramId);
         float parsed = 0.0f;
+
+        // Named choices first ("PULSE", "ping-pong"); numbers still parse
+        // through the unit law below.
+        if (sidParameterChoiceFromName(paramId, text, parsed)) {
+            normalizedOut = sanitizeNormalizedParamValue(paramId, parsed, defaultNormalizedParamValue(paramId));
+            return true;
+        }
+        if (paramId == (int)kParamArpTranspose || paramId == (int)kParamArpPatternLength) {
+            double raw = 0.0;
+            if (!parseDouble(text, raw)) return false;
+            parsed = paramId == (int)kParamArpTranspose
+                         ? (float)std::clamp((raw + 24.0) / 48.0, 0.0, 1.0)
+                         : (float)std::clamp((raw - 1.0) / 31.0, 0.0, 1.0);
+            normalizedOut = sanitizeNormalizedParamValue(paramId, parsed, defaultNormalizedParamValue(paramId));
+            return true;
+        }
 
         switch (d.unit) {
             case SidParameterUnit::Boolean: {
