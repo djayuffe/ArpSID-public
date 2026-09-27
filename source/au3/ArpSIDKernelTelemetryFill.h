@@ -16,6 +16,18 @@
 
 namespace ArpSID::TelemetryFill {
 
+// Copies a fixed-size, possibly unterminated char array into a C string
+// field, stopping at the first NUL and always terminating the destination.
+template <std::size_t N, typename Src>
+inline void arpsidCopyFixedString(char (&dst)[N], const Src& src) {
+    static_assert(N > 0, "destination must hold the terminator");
+    const std::size_t limit = std::min<std::size_t>(src.size(), N - 1u);
+    std::size_t n = 0;
+    while (n < limit && src[n] != '\0') ++n;
+    if (n > 0) std::memcpy(dst, src.data(), n);
+    dst[n] = '\0';
+}
+
 inline float ArpSIDSanitizeUnitFloat(float v, int pid = -1) noexcept {
     return ArpSID::sanitizeNormalizedParamValue(pid, v, ArpSID::defaultNormalizedParamValue(pid));
 }
@@ -406,12 +418,9 @@ inline void fillTelemetryFromKernel(ArpSID::ArpSIDDSPKernel& k,
         out->c64MemoryWindowDirtyMask = c64Snapshot.memoryWindowDirtyMask;
         out->c64MemoryWindowChangedMask = c64Snapshot.memoryWindowChangedMask;
         out->c64MemoryCombinedHash = c64Snapshot.memoryWindowCombinedHash;
-        std::strncpy(out->psidTitle, c64Snapshot.psidTitle.data(), sizeof(out->psidTitle) - 1u);
-        out->psidTitle[sizeof(out->psidTitle) - 1u] = '\0';
-        std::strncpy(out->psidAuthor, c64Snapshot.psidAuthor.data(), sizeof(out->psidAuthor) - 1u);
-        out->psidAuthor[sizeof(out->psidAuthor) - 1u] = '\0';
-        std::strncpy(out->psidReleased, c64Snapshot.psidReleased.data(), sizeof(out->psidReleased) - 1u);
-        out->psidReleased[sizeof(out->psidReleased) - 1u] = '\0';
+        arpsidCopyFixedString(out->psidTitle, c64Snapshot.psidTitle);
+        arpsidCopyFixedString(out->psidAuthor, c64Snapshot.psidAuthor);
+        arpsidCopyFixedString(out->psidReleased, c64Snapshot.psidReleased);
         out->psidSongs = c64Snapshot.psidSongs;
         out->psidCurrentSubtune = c64Snapshot.psidCurrentSubtune;
         out->psidLoadAddress = c64Snapshot.sidLoadAddress;
