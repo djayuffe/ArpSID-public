@@ -744,8 +744,10 @@ static void ArpSIDMIDINotifyProc(const MIDINotification* msg, void* refCon) {
     _midiChannelParent.submenu = chMenu;
 
     [_midiMenu addItem:[NSMenuItem separatorItem]];
-    [_midiMenu addItemWithTitle:@"Reconnect All Sources"
-                         action:@selector(_menuReconnectMIDI:) keyEquivalent:@"r"];
+    // Shift-Cmd-R: Cmd-R is Random Patch in the ArpSID menu.
+    NSMenuItem* reconnectItem = [_midiMenu addItemWithTitle:@"Reconnect All Sources"
+                                                     action:@selector(_menuReconnectMIDI:) keyEquivalent:@"r"];
+    reconnectItem.keyEquivalentModifierMask = NSEventModifierFlagCommand | NSEventModifierFlagShift;
     midiItem.submenu = _midiMenu;
     [menuBar addItem:midiItem];
 

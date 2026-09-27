@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Regenerates docs/screenshots/au-editor-<tab>.png (every tab of the native
+# Regenerates docs/screenshots/au-editor-<tab>.jpg (every tab of the native
 # Cocoa editor used by AUv2, AUv3, the Standalone app and the macOS VST3) and
-# docs/screenshots/au-flavor-<name>.png (the landing page of each AU flavor).
+# docs/screenshots/au-flavor-<name>.jpg (the landing page of each AU flavor).
 #
 # macOS only. Builds the AUv2, installs it for the current user, then renders
 # with the real engine running (factory patch 001, a C3-G3-C4-E4 chord held).
@@ -30,8 +30,10 @@ trap 'rm -rf "$tmp"' EXIT
 
 out="$ROOT/docs/screenshots"
 mkdir -p "$out"
+# Retina captures are 2x: scale to the 1280-pixel design width and store as
+# JPEG (the textured editor background compresses poorly as PNG).
 for f in "$tmp"/au-*.png; do
-  sips --resampleWidth 1280 "$f" >/dev/null   # Retina captures are 2x
-  cp "$f" "$out/"
-  echo "  $out/$(basename "$f")"
+  jpg="$out/$(basename "$f" .png).jpg"
+  sips --resampleWidth 1280 -s format jpeg -s formatOptions 85 "$f" --out "$jpg" >/dev/null
+  echo "  $jpg"
 done

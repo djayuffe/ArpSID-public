@@ -5,6 +5,34 @@ All notable changes to ArpSID are documented here. The project uses
 version is `VERSION.txt`, mirrored by `project(VERSION)` in `CMakeLists.txt`
 and `include/arpsid/version.h`.
 
+## [Unreleased]
+
+### Fixed (macOS editor: AUv2, AUv3, Standalone, macOS VST3)
+
+- Knob captions were cut to nine characters ("Master Vo", "Voice Mod"); they
+  now shrink to fit and only then end in "…".
+- Knob values showed raw 0–1 numbers ("0.780"); they now show the same text as
+  the host (`+0.0 ct`, `POLY`, `SAW`, `LOW-PASS`, `1.60 ms`).
+- In macOS Light Mode, standard controls (BANK slots, preset and transport
+  buttons, pop-ups, the MIX strips) turned light with pale, unreadable text.
+  Controls now follow the editor theme (dark, or light for the Light theme).
+- The tab strip clipped names to "◈ MA…"; it now picks a font size at which
+  all 17 names fit and sizes each tab from its label.
+- Standalone: **Reconnect All Sources** moved to ⇧⌘R; it shared ⌘R with
+  **Random Patch**.
+
+### Added
+
+- `arpsid_au_editor_snapshot` renders every tab of the Cocoa editor and the
+  landing page of each AU flavor from the installed AUv2
+  (`scripts/update_au_screenshots.sh`, and the manual **Screenshots**
+  workflow, which publishes to the `ci-screenshots` branch).
+- `docs/AU_EDITOR.md`: the macOS editor tab by tab, with a screenshot of every
+  tab and flavor, controls, shortcuts, the Standalone menus and how the editor
+  works.
+- README: a complete feature list and screenshot galleries of all 17 tabs in
+  both editors and the five AU flavors.
+
 ## [0.9.9] — 2026-09-27
 
 ### Added (VST3)
