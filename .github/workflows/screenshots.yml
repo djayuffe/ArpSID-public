@@ -1,0 +1,53 @@
+# Renders the native Cocoa (AU) editor, every tab plus each AU flavor's
+# landing page, with the engine running, and publishes the PNGs and the tool
+# log to the `ci-screenshots` branch (one orphan commit, replaced each run).
+# Copy them into docs/screenshots/ from there; scripts/update_au_screenshots.sh
+# does the same on a Mac. Manual only: it is the one workflow that writes.
+name: Screenshots
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  au-editor:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Build AUv2 and the snapshot tool
+        run: |
+          set -o pipefail
+          cmake -S . -B build-auv2 -DCMAKE_BUILD_TYPE=Release -DCMAKE_OSX_ARCHITECTURES=arm64 \
+            -DARPSID_BUILD_AUV2=ON -DARPSID_CODESIGN_IDENTITY=-
+          cmake --build build-auv2 --target arpsid_auv2 arpsid_au_editor_snapshot --parallel "$(sysctl -n hw.ncpu)"
+      - name: Install and register the AUv2
+        run: |
+          comp="$(find build-auv2 -maxdepth 4 -type d -name ArpSID.component -print -quit)"
+          sh scripts/macos/install_auv2_component.sh "$comp" "$HOME/Library/Audio/Plug-Ins/Components" -
+          ARPSID_AUVAL_RETRIES=4 ARPSID_AUVAL_RETRY_DELAY=3 \
+            sh scripts/macos/verify_auv2_component.sh "$HOME/Library/Audio/Plug-Ins/Components/ArpSID.component" \
+            > "${RUNNER_TEMP}/auval.log" 2>&1 || { tail -40 "${RUNNER_TEMP}/auval.log"; exit 1; }
+      - name: Render every tab
+        run: |
+          out="${RUNNER_TEMP}/shots"
+          mkdir -p "$out"
+          tool="$(find build-auv2 -type f -name arpsid_au_editor_snapshot -perm -u+x -print -quit)"
+          set +e
+          "$tool" "$out" --flavors > "$out/snapshot.log" 2>&1
+          echo "exit $?" >> "$out/snapshot.log"
+          cat "$out/snapshot.log"
+          sw_vers > "$out/runner.txt"
+      - name: Publish to the ci-screenshots branch
+        run: |
+          out="${RUNNER_TEMP}/shots"
+          pub="${RUNNER_TEMP}/pub"
+          git init -q "$pub"
+          cp -R "$out"/. "$pub"/
+          cd "$pub"
+          git checkout -q -b ci-screenshots
+          git add -A
+          git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -q -m "AU editor screenshots for ${GITHUB_SHA}"
+          git push -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" HEAD:refs/heads/ci-screenshots
