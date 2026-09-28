@@ -996,9 +996,8 @@ public:
 
         for (int ai = 0; ai < activeCount; ++ai) {
             const int voiceIndex = activeVoices[ai];
-            const auto& state = (voiceMode == 0) ? voiceManager.getVoiceState(voiceIndex) : forcedState(voiceIndex);
             auto& chip = sidChips[voiceIndex];
-            
+
             // Handle portamento — moved into per-sample loop below (FIX Bug#12).
 
             // Pre-compute static parameters for the entire block.
