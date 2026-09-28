@@ -36,6 +36,20 @@ static constexpr uint32_t kSidBinaryPatchStateMagic   = 0x41535043u;  // "ASPC"
 static constexpr uint32_t kSidBinaryProjectStateMagic = 0x41535052u;  // "ASPR"
 static constexpr uint32_t kSidBinaryStateMaxParamCount    = 4096u;
 static constexpr uint32_t kSidBinaryStateMaxSemanticCount = 4096u;
+
+// State-law revision marker (see sid_runtime_state_root_presentation.h). It is
+// written as one extra semantic entry after the real parameters. Its id is far
+// outside the parameter range, so pre-0.9.10 decoders keep it in the entry list
+// and the canonicalizer drops it: no format bump, fully forward compatible.
+// value = revision / 256.
+static constexpr uint32_t kSidStateLawMarkerParamId = 0x7FFF4C41u; // "..LA"
+inline constexpr float sidStateLawMarkerValue(uint32_t revision) noexcept {
+    return static_cast<float>(revision) / 256.0f;
+}
+inline uint32_t sidStateLawRevisionFromMarkerValue(float v) noexcept {
+    if (!std::isfinite(v) || v <= 0.0f) return 0u;
+    return static_cast<uint32_t>(std::lround(std::clamp(v, 0.0f, 1.0f) * 256.0f));
+}
 static constexpr uint32_t kSidBinaryStateMaxRouteCount    = 512u;
 // Per-field string caps — tight to prevent large allocation from crafted blobs.
 // A malformed blob with a 3x1MB string fields previously forced ~3 MB before rejection.
@@ -79,7 +93,7 @@ inline size_t encodedSidStateRootBinarySize(const SidStateRootV1& root) noexcept
     const uint32_t semanticCount = (uint32_t)root.patch.parameters.semantic_entries.size();
     const size_t extBytes =
         2u * sizeof(uint32_t) + /* EXT tag + version */
-        sizeof(uint32_t) + static_cast<size_t>(semanticCount) * (sizeof(uint32_t) + sizeof(float)) + /* semantic params */
+        sizeof(uint32_t) + static_cast<size_t>(semanticCount + 1u) * (sizeof(uint32_t) + sizeof(float)) + /* semantic params + state-law marker */
         5u * sizeof(uint32_t) + 2u * sizeof(float) + 1u + /* variant profile */
         10u * sizeof(float) + 2u * sizeof(uint32_t) + /* measured posterior */
         sizeof(uint32_t) + static_cast<size_t>(routeCount) * (2u + sizeof(float) + 3u) + /* mod routes */
@@ -108,7 +122,7 @@ inline size_t encodeSidStateRootBinary(const SidStateRootV1& root,
     const uint32_t semanticCount = (uint32_t)root.patch.parameters.semantic_entries.size();
     const size_t extBytes =
         2u * sizeof(uint32_t) + /* EXT tag + version */
-        sizeof(uint32_t) + static_cast<size_t>(semanticCount) * (sizeof(uint32_t) + sizeof(float)) + /* semantic params */
+        sizeof(uint32_t) + static_cast<size_t>(semanticCount + 1u) * (sizeof(uint32_t) + sizeof(float)) + /* semantic params + state-law marker */
         5u * sizeof(uint32_t) + 2u * sizeof(float) + 1u + /* variant profile */
         10u * sizeof(float) + 2u * sizeof(uint32_t) + /* measured posterior */
         sizeof(uint32_t) + static_cast<size_t>(routeCount) * (2u + sizeof(float) + 3u) + /* mod routes */
@@ -141,12 +155,15 @@ inline size_t encodeSidStateRootBinary(const SidStateRootV1& root,
 
     put32(extTag);
     put32(extVersion);
-    put32(semanticCount);
+    put32(semanticCount + 1u);
     for (uint32_t i = 0; i < semanticCount; ++i) {
         const auto& e = root.patch.parameters.semantic_entries[(size_t)i];
         put32(e.param_id);
         putFloat(std::isfinite(e.value) ? std::clamp(e.value, 0.0f, 1.0f) : 0.0f);
     }
+    // State-law revision marker: this state was authored against the current laws.
+    put32(kSidStateLawMarkerParamId);
+    putFloat(sidStateLawMarkerValue(kSidStateLawRevisionCurrent));
     put32((uint32_t)root.patch.variant_profile.family);
     put32(root.patch.variant_profile.chip_revision_code);
     put32((uint32_t)root.patch.variant_profile.video_standard);
@@ -288,6 +305,7 @@ inline bool decodeSidStateRootBinary(const uint8_t* blob,
     if (!takeString(root.document.editor_layout_blob, layoutLen)) return false;
 
     bool hasForensicExtension = false;
+    uint32_t stateLawRevision = kSidStateLawRevisionLegacy;
     if ((size_t)(blob + blobSize - pcur) > 0) {
         uint32_t extTag = 0, extVersion = 0;
         if (!get32(extTag) || !get32(extVersion)) return false;
@@ -303,6 +321,10 @@ inline bool decodeSidStateRootBinary(const uint8_t* blob,
                 float val = 0.0f;
                 if (!get32(pid) || !getFloat(val)) return false;
                 if (!std::isfinite(val)) val = 0.0f;
+                if (pid == kSidStateLawMarkerParamId) {
+                    stateLawRevision = sidStateLawRevisionFromMarkerValue(val);
+                    continue;
+                }
                 root.patch.parameters.semantic_entries.push_back(SidSemanticParamEntry{pid, std::clamp(val, 0.0f, 1.0f)});
             }
         }
@@ -426,6 +448,12 @@ inline bool decodeSidStateRootBinary(const uint8_t* blob,
         root.patch.parameters.semantic_entries.reserve((size_t)kNumParams);
         for (uint32_t i = 0; i < legacyValues.size() && i < (uint32_t)kNumParams; ++i)
             root.patch.parameters.semantic_entries.push_back(SidSemanticParamEntry{i, legacyValues[(size_t)i]});
+    }
+    // Migrate values whose meaning changed since the state was written, so a
+    // saved project keeps sounding exactly as it did (0.9.10: SYNTH filter mode
+    // and per-VCO sync).
+    if (stateLawRevision < kSidStateLawRevisionCanonicalSynthLaws) {
+        (void)sidMigrateLegacySynthModeLaws(root);
     }
     if (hasForensicExtension) {
         sidSetStateRootParamValue(root, kParamForensicTemp, sidForensicTemperatureToNormalized(root.patch.forensic_temperature_celsius));

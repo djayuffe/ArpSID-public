@@ -617,6 +617,7 @@ everything except the ROM files and runs the same guard before committing.
 | Document | Contents |
 |---|---|
 | [`CHANGELOG.md`](CHANGELOG.md) | Release notes. |
+| [`docs/SYNTH_GUIDE.md`](docs/SYNTH_GUIDE.md) | Playing and programming CLASSIC, SYNTH / SID REG and DR SID: which mode to use, every control per mode, voice modes, filter, pitch and glide, register editing, recipes, troubleshooting. |
 | [`docs/FEATURES.md`](docs/FEATURES.md) | Complete feature reference: every engine, control, range and behaviour, area by area. |
 | [`docs/TECHNICAL_SPECIFICATIONS.md`](docs/TECHNICAL_SPECIFICATIONS.md) | Every number and limit: formats, I/O, SID and C64 timing, capacities, modulation, drums, DIGI, mixer, forensic ranges, state formats, editors. |
 | [`docs/internals/`](docs/internals/README.md) | Low-level references: [SID chip core](docs/internals/SID_CHIP.md), [C64 machine](docs/internals/C64_MACHINE.md), [runtime and kernel](docs/internals/RUNTIME.md), [sound engines](docs/internals/ENGINES.md), [render modes, synth modes and projection engines](docs/internals/SYNTH_MODES.md). |

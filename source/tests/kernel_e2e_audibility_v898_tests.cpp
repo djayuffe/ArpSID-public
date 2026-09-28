@@ -44,7 +44,12 @@ static float renderPeak(SidRuntimeRenderMode mode, int blocks, bool synthEnable)
     snap[(size_t)kParamVCO1Level] = 1.0f;
     snap[(size_t)kParamVCO1PulseWidth] = 0.5f;
     snap[(size_t)kParamFilterCutoff] = 1.0f;
-    snap[(size_t)kParamFilterMode] = 0.0f;
+    // LowPass (choice 1 of 8). The zeroed snapshot keeps the default filter
+    // routing (all voices), and since 0.9.10 every render mode decodes Filter
+    // Mode with the same 8-way law: OFF (0.0) silences routed voices, exactly
+    // as on the chip and as CLASSIC always did (see v953). Before 0.9.10 SYNTH
+    // ignored OFF and played low-pass, which this baseline used to rely on.
+    snap[(size_t)kParamFilterMode] = 1.0f / 7.0f;
     snap[(size_t)kParamVirtualGate] = 1.0f;
     if (mode == SidRuntimeRenderMode::DrSid) {
         snap[(size_t)kParamDrSidEnable] = 1.0f;

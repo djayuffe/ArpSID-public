@@ -103,10 +103,11 @@ int main() {
     }
 
     // ── Part 2: kernel render — non-poly arp at slow rate holds full level.
-    auto renderPeak = [](float voiceModeNorm, bool arpOn, float rateNorm) {
+    auto renderPeak = [](float voiceModeNorm, bool arpOn, float rateNorm, float voiceSpread = 0.0f) {
         auto k = std::make_unique<ArpSIDDSPKernel>();
         k->setup(48000.0, 512);
         k->setParameter((int)kParamVoiceMode, voiceModeNorm);
+        k->setParameter((int)kParamVoiceSpread, voiceSpread);
         k->setParameter((int)kParamArpEnable, arpOn ? 1.0f : 0.0f);
         k->setParameter((int)kParamArpRate, rateNorm);
         constexpr int F = 512;
@@ -133,7 +134,10 @@ int main() {
     const float MONO = 1.0f / 3.0f, UNISON = 1.0f;
     const float monoNoArp  = renderPeak(MONO, false, 0.5f);
     const float monoSlow   = renderPeak(MONO, true, 0.0f);
-    const float unisonSlow = renderPeak(UNISON, true, 0.0f);
+    // Voice Spread sets the Unison stack size (1 + int(spread × 7)); 3/7 gives
+    // the 4-voice stack this level check was written for (it was the fixed
+    // count before 0.9.10).
+    const float unisonSlow = renderPeak(UNISON, true, 0.0f, 3.0f / 7.0f);
     std::printf("mono noArp=%.3f monoSlowArp=%.3f unisonSlowArp=%.3f\n", monoNoArp, monoSlow, unisonSlow);
     require(monoSlow > monoNoArp * 0.85f,
             "mono slow-rate arp must hold full level (was chopped to ~10ms ticks)");

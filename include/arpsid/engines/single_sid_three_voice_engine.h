@@ -99,7 +99,8 @@ public:
 
     void setGlobalPitchBendSemis(float semis) noexcept {
         globalPitchBendSemis_ =
-            std::clamp(std::isfinite(semis) ? semis : 0.0f, -24.0f, 24.0f);
+            std::clamp(std::isfinite(semis) ? semis : 0.0f,
+                       -ArpSID_kMaxPitchBendRangeSemis, ArpSID_kMaxPitchBendRangeSemis);
         retuneActiveVoices_();
     }
 
@@ -117,7 +118,7 @@ public:
     }
 
     void setPitchBendRangeSemis(int channel, float range) noexcept {
-        const float clean = std::clamp(std::isfinite(range) ? range : 2.0f, 0.0f, 24.0f);
+        const float clean = std::clamp(std::isfinite(range) ? range : 2.0f, 0.0f, ArpSID_kMaxPitchBendRangeSemis);
         if (channel >= 0 && channel < 16) {
             pitchBendRangeByChannel_[static_cast<std::size_t>(channel)] = clean;
         } else {

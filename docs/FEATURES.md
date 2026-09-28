@@ -5,6 +5,7 @@ how it behaves, which controls drive it and their ranges, and where it lives in 
 
 - Every parameter ID, default and step count: [PARAMETER_REFERENCE.md](PARAMETER_REFERENCE.md)
 - Numbers and limits: [TECHNICAL_SPECIFICATIONS.md](TECHNICAL_SPECIFICATIONS.md)
+- Playing the synth modes, with recipes: [SYNTH_GUIDE.md](SYNTH_GUIDE.md)
 - The editors tab by tab: [AU_EDITOR.md](AU_EDITOR.md) (macOS) and
   [VST3_EDITOR.md](VST3_EDITOR.md) (Windows/Linux)
 - How each feature is implemented: [internals/](internals/README.md)
@@ -113,9 +114,9 @@ shows flavor-specific tab names.
   | Mode | Behaviour |
   |---|---|
   | `POLY` | 8 voices; stealing when all are busy; release tails keep sounding after note-off |
-  | `MONO` | last-note priority; every new note retriggers the envelope |
+  | `MONO` | last-note priority; every new note retriggers the envelope; the release tail sounds after note-off |
   | `LEGATO` | overlapping notes glide without retriggering |
-  | `UNISON` | voices stacked on the top note, detuned symmetrically up to ±24 cents by **Voice Spread**. CLASSIC stacks 4 voices; SYNTH mode stacks 1–3 (from Voice Spread). |
+  | `UNISON` | voices stacked on the top note. **Voice Spread** sets both the count (`1 + int(spread × 7)`: 1–8 in CLASSIC, capped to 3 in SYNTH) and the symmetric detune (up to ±24 cents) |
 
   Switching mode never leaves stuck notes or stale glides behind: the held keys are carried
   across, and the old mode's voices are silenced first.
@@ -135,7 +136,7 @@ shows flavor-specific tab names.
 - **Tuning:**
   - Master Tune ±100 cents;
   - per-oscillator Detune ±100 cents;
-  - pitch bend per channel (14-bit) with a per-channel bend range of 0–24 semitones via RPN
+  - pitch bend per channel (14-bit) with a per-channel bend range of 0–48 semitones via RPN
     0, default 2.
 - **Expression:** velocity → loudness with a square-root curve; per-channel aftertouch,
   poly pressure, mod wheel, breath and expression as mod sources.
@@ -397,7 +398,7 @@ tab, with a compact mirror in OPTIONS.
 ## 18. Mixer, effects and output
 
 - **MIX tab:**
-  - 16 channel strips: enable, solo, mute, volume (−inf to +6 dB), pan, delay send and
+  - 16 channel strips: enable, solo, mute, volume (gain = value/200: −inf, unity at 200, +2.1 dB at 255), pan, delay send and
     reverb send;
   - **five insert slots** per strip, 8 parameters each:
 

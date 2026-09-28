@@ -225,11 +225,38 @@ values:
 `Δ = clamp(source_bipolar × depth × scale, −1, 1)`. The depth is 0..1, and the source
 comes from the canonical mod-source values (LFOs, velocity, wheel, and so on).
 
-**Unison.** In CLASSIC, Unison stacks the engine's `unisonCount` voices. The projection
-code that should derive the count from Voice Spread compares the *normalized* voice-mode
-value against 2.5 and never runs. In practice the count stays at the engine default of
-**4**, and Voice Spread sets only the ±24-cent detune. (SYNTH mode derives its count from
-spread; see §7.2.)
+**Unison.** Voice Spread is the single Unison law. `BitPerfectEngine::setVoiceSpread(s)`
+sets both:
+
+| Quantity | Law | Examples |
+|---|---|---|
+| Stacked voices | `1 + int(s × 7)`, 1–8 (`canonicalUnisonCountFromNormalizedSpread`) | s = 0 → 1, 0.2 → 2, 0.5 → 4, 0.75 → 6, 1 → 8 |
+| Detune of slot *i* of *n* | `(2i/(n−1) − 1) × 24 × s` cents | at s = 0.5 with 4 voices: −12, −4, +4, +12 ct |
+
+SYNTH mode uses the same count law, capped to its 3 hardware voices (§7.2). Both the full
+projection and the incremental parameter path call `setVoiceSpread`, so the count follows
+the knob immediately.
+
+*History:* before 0.9.10 the projection compared the normalized voice-mode value against
+2.5, which is never true. The count stayed at the engine default of 4 and Voice Spread
+changed only the detune.
+
+**Release tails in Mono, Legato and Unison.** When a forced slot is released, its chip
+keeps sounding the SID release phase:
+
+- The live, interval-accurate render (`gatherRenderableVoices_`) advances every chip whose
+  envelope is still running, as the block path always did. This covers release tails and
+  the power-on envelope residue.
+- A released slot keeps the velocity of its last note for its tail (`forcedTailVel_`,
+  read through `slotVelocity_`).
+- `applyOscFrequencies` leaves a released slot's frequency registers untouched, so the tail
+  keeps its pitch.
+
+The tail level matches Poly, apart from Poly's fixed 1.12 output gain.
+
+*History:* before 0.9.10 all three were missing. Mono, Legato and Unison notes were cut
+dead at note-off whatever the Release setting. Idle chips were also never advanced, so
+`getActiveVoiceCount()` reported 8 with no notes playing.
 
 ---
 
@@ -357,7 +384,9 @@ register writes, as a C64 player routine would produce.
 
 - **Waveform:** `idx = int(n × 8)` → `{$10 TRI, $20 SAW, $40 PUL, $80 NOI, $30 TRI+SAW,
   $50 TRI+PUL, $60 SAW+PUL, $70 TRI+SAW+PUL}`. If no waveform bit results, TRI is used.
-- **Sync** (`$02`): set **only for voice 2** (index 1), from *VCO2 Sync*.
+- **Sync** (`$02`): per voice, from that voice's own *VCO1/2/3 Sync*. The SID wires the
+  sync source cyclically (V1←V3, V2←V1, V3←V2), exactly as in CLASSIC. Before 0.9.10 only
+  VCO2 Sync reached the chip.
 - **Ring** (`$04`): per voice, from *VCO1/2/3 Ring*.
 - **Gate** (`$01`): set only when `gate` is true.
 - **TEST** is never inherited. The control law is parameter-authoritative, and TEST is set
@@ -393,7 +422,7 @@ voice's tracking. It is also the sustain-release callback of the allocator.
 
 | Input | Register effect |
 |---|---|
-| Pitch bend (per channel) | For every active voice on the channel: FREQ = f(`midiNote + bend`). Only `currentSidFreqReg` changes, so a running glide keeps its destination and bend layers on top of portamento. Range: per-channel RPN 0, 0–48 semitones in the runtime model. |
+| Pitch bend (per channel) | For every active voice on the channel: FREQ = f(`midiNote + bend`). Only `currentSidFreqReg` changes, so a running glide keeps its destination and bend layers on top of portamento. Range: per-channel RPN 0 (Pitch Bend Sensitivity), 0–48 semitones. `ArpSID_kMaxPitchBendRangeSemis` = 48 (the MPE standard) is the one limit shared by the runtime model, BitPerfect and the single-SID engine; before 0.9.10 the engines stopped at 24. |
 | Channel pressure | For every active voice on the channel: `$D40x+6` SR = `(round(S × (0.25 + 0.75·p)) << 4) \| R`. Pressure scales the sustain level. Duplicate values are not rewritten. |
 | Poly pressure | The same law, but only for voices whose token matches the note's token. Unison voices sharing a token all get it. |
 | Sustain (CC64) | on: active voices on the channel are marked sustained. off: sustained voices whose key is up are hard-gated off. |
@@ -410,12 +439,28 @@ only registers whose value changed (§10.2):
 | `$D415` FC LO | `fc & 7`, where `fc = round(cutoff × 2047)` |
 | `$D416` FC HI | `fc >> 3` |
 | `$D417` RES/FILT | `(round(res × 15) << 4) \| route`. The route is the low 3 bits of the runtime's synth filter-route state (V1, V2, V3). |
-| `$D418` MODE/VOL | `modeBits \| round(masterVolume × 15)`, with `modeBits` from `round(filterModeNorm × 2)` → `$10` LP, `$20` BP, `$40` HP |
+| `$D418` MODE/VOL | `modeBits \| round(masterVolume × 15)`, with `modeBits = sidD418FilterModeBitsFromNormalized(filterMode)`: the canonical 8-way choice index shifted into bits 4–6 |
 
-**Known discrepancy.** The `$D418` mode law has only three outcomes. The 8-way Filter Mode
-choice (OFF, LP, BP, LP+BP, HP, NOTCH, BP+HP, ALL) is therefore collapsed: for example HP
-selects BP, and OFF still sets the LP bit. CLASSIC decodes all eight modes. In SYNTH mode,
-the filter type you hear may differ from the one the Filter Mode control shows.
+**One filter-mode law everywhere.** `sidFilterModeFromNormalized(n) = clamp(int(n × 8), 0, 7)`
+(in `sid_chip.h`) is used by CLASSIC (`BitPerfectEngine::setFilterMode`), by SYNTH
+(`$D418`), by the factory register mirror and, through the same binning, by the editors
+(`sidParameterChoiceIndex`). The index value *is* the SID bit pattern, so every choice maps
+directly to `$D418` bits 4–6:
+
+| Choice | Index | Normalized value | `$D418` bits 6–4 | Filter output |
+|---|---|---|---|---|
+| OFF | 0 | 0 | `000` | none: routed voices are silent, as on the chip |
+| LOW-PASS | 1 | 1/7 | `001` | LP |
+| BAND-PASS | 2 | 2/7 | `010` | BP |
+| LP+BP | 3 | 3/7 | `011` | LP + BP |
+| HIGH-PASS | 4 | 4/7 | `100` | HP |
+| NOTCH | 5 | 5/7 | `101` | LP + HP |
+| BP+HP | 6 | 6/7 | `110` | BP + HP |
+| ALL | 7 | 1 | `111` | LP + BP + HP |
+
+*History:* before 0.9.10 SYNTH used `round(n × 2)` → LP/BP/HP. HIGH-PASS played band-pass,
+and OFF still set the low-pass bit. Saved projects are migrated so they keep their sound
+(§7.14).
 
 The system byte (pseudo-register `$D41D`, with model and ADSR-bug bits) is derived from the
 chip-revision selector. A 6581 selection implies the ADSR bug. The byte is kept in the
@@ -508,14 +553,67 @@ Before v898 they did not, and every host-started SYNTH voice was treated as an o
 | Max voices | 8 (× 3 oscillators) | 3 |
 | Oscillators per note | 3 (VCO 1–3 layered) | 1 (one SID voice per note) |
 | How parameters reach the chip | engine setters on every chip | timed register writes |
-| Unison | fixed 4 voices, ±24 ct spread | 1–3 voices (from spread), same pitch |
-| Filter modes | all 8 | LP / BP / HP (see §7.7) |
-| Hard sync source | all three VCOs selectable | VCO2 only |
+| Unison | 1–8 voices (`1 + int(spread × 7)`), ±24 ct × spread | 1–3 voices (same law, capped), same pitch |
+| Filter modes | all 8 | all 8 (same decode, §7.7) |
+| Hard sync | per VCO | per voice (same cyclic sources) |
 | Velocity | `sqrt(v)` gain | no velocity gain; the SID envelope sets the level |
 | Mod matrix | 9 slots applied | not applied to registers |
 | ARP / SEQ | both | neither (forced off) |
 | Pressure | mod-matrix source | scales the sustain nibble |
 | Output | stereo, Poly gain × 1.12 | mono duplicated, through the register-engine output stage and limiter |
+
+
+### 7.14 Saved-state migration (state-law revisions)
+
+The 0.9.10 fixes change what some saved values *sound like* in SYNTH mode. A saved Filter
+Mode of 0 (OFF) used to play low-pass. With every voice routed to the filter, OFF now
+silences them, exactly as the chip does. To keep every existing project sounding exactly
+as it did, saved states carry a **state-law revision**:
+
+| Revision | Meaning |
+|---|---|
+| 0 | legacy: any state written before 0.9.10, or without a marker |
+| 1 | 0.9.10: SYNTH uses the 8-way filter law and per-voice sync |
+
+**Marker.** `encodeSidStateRootBinary` appends one extra semantic entry with id
+`kSidStateLawMarkerParamId` (`$7FFF4C41`) and value `revision / 256`.
+
+- **Forward compatibility.** Pre-0.9.10 builds read the entry but drop it during
+  canonicalization, because the id is outside the parameter range. A project saved by
+  0.9.10 therefore still opens in 0.9.9. The container format is unchanged (extension
+  version 7).
+- **Decoding.** `decodeSidStateRootBinary` removes the marker from the entry list. If the
+  revision is below 1, it runs `sidMigrateLegacySynthModeLaws(root)`. The legacy
+  flat-parameter path in `ArpSIDStateSerializer.h` always migrates.
+
+**What the migration does.** Only states that render in SYNTH mode (Synth on, DrSID off)
+are changed:
+
+| Saved value | Old SYNTH sound | Rewritten to |
+|---|---|---|
+| Filter Mode *n* with `round(2n)` = 0 | low-pass | LOW-PASS (1/7) |
+| … = 1 | band-pass | BAND-PASS (2/7) |
+| … = 2 | high-pass | HIGH-PASS (4/7) |
+| VCO1 Sync, VCO3 Sync | never reached the chip | off |
+| VCO2 Sync | audible | unchanged |
+
+CLASSIC and DrSID states are not touched: CLASSIC always used the 8-way law and per-VCO
+sync.
+
+**Factory patches.** The factory bank authors `filterModeNorm` on the historical 4-band
+law (< 0.25 LP, < 0.5 BP, < 0.75 HP, else ALL; the law the factory `$D418` register mirror
+always used). `canonicalFactoryFilterModeNorm` converts it to the canonical choice value,
+and the register mirror is computed from the canonical decode. Parameter, mirror, editor
+and sound therefore agree for every slot, and no factory patch selects OFF.
+
+**JSON sound import** (macOS editor). The `filter.mode` string maps to the canonical value:
+`lp`/`low`, `bp`/`band`, `hp`/`high` combine as bits, `notch` = LP+HP, `all` = all three,
+`off`/`none` = OFF, and the default is LP. The old 0.25/0.50/0.75 values decoded as
+BP/HP/BP+HP.
+
+**CLASSIC Unison.** No migration. The voice count now follows Voice Spread as documented
+(§6). A project saved with Unison at Voice Spread 0 now plays one voice instead of the old
+fixed four (−12 dB). Raise Voice Spread to stack more voices. No factory patch uses Unison.
 
 ---
 
@@ -784,6 +882,10 @@ A related **REC capture**:
 - ARP is only effective in CLASSIC. SEQ is only effective in CLASSIC and DrSID.
 - In SYNTH mode, the register engine and its timed queue are the only register authority.
   Register parameters seed it once on entry and are then only mirrors.
+- One Filter Mode decode (`sidFilterModeFromNormalized`) serves CLASSIC, SYNTH, the factory
+  mirror and the editors.
+- Saved states carry a state-law revision; legacy SYNTH states are migrated on load so they
+  sound unchanged.
 - Every SYNTH write is stamped `(sample, cycle)`. The unresolved sentinel means cycle 0.
   Hard-restart gate-ons land exactly 46 SID cycles later.
 - Note-offs resolve by token first. An anonymous note-off never releases a noteId voice.

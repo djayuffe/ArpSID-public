@@ -269,6 +269,30 @@ string is capped before allocation (4096 parameters, 4096 semantic entries,
 512 routes; name 512 B, ref 1 KB, layout 64 KB), so a crafted blob cannot force
 a large allocation.
 
+**Layout.** After the 20-byte header (magic, major/minor version, param count, feature
+flags, Adler-32 checksum of the payload), the payload holds:
+
+1. the root magic and schema;
+2. the three document strings;
+3. an `EXT1` extension block, version 7:
+   - the semantic parameter entries (`u32` id + `f32` value each);
+   - the variant profile and measured posterior;
+   - the mod routes and macros;
+   - ARP/SEQ summaries;
+   - the start policy;
+   - the envelope runtime counters;
+   - the forensic analogue state.
+
+Older extension versions (1–6) and pre-schema flat-parameter blobs still decode.
+
+**State-law revision.** The encoder appends one extra semantic entry,
+`kSidStateLawMarkerParamId` (`$7FFF4C41`), with value `revision / 256`, where revision =
+`kSidStateLawRevisionCurrent`. The decoder removes it from the entry list, and runs
+`sidMigrateLegacySynthModeLaws` when the revision is below 1, i.e. for any pre-0.9.10
+state. Older builds keep the entry until canonicalization drops it (its id is outside the
+parameter range), so the marker needs no format bump and is forward compatible. The
+migration rules are in SYNTH_MODES.md §7.14.
+
 ### 6.3 Applying a root
 
 `schedulePendingStateRestore(root)` prepares the root off the audio thread

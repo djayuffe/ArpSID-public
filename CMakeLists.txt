@@ -5581,6 +5581,23 @@ if(TARGET arpsid_release_closure_suite)
   add_dependencies(arpsid_release_closure_suite DefaultPatchClassicAudibilityV953Tests)
 endif()
 
+# 0.9.10 render-mode law fixes: SYNTH 8-way $D418 filter mode, per-voice SYNTH
+# sync, CLASSIC Unison count from Voice Spread, 48-semitone bend range limit,
+# forward-compatible state-law marker + legacy SYNTH state migration.
+add_executable(SynthModeLawFixesV0910Tests
+               source/tests/synth_mode_law_fixes_v0910_tests.cpp
+               source/forensic_patch_bank.cpp)
+target_compile_features(SynthModeLawFixesV0910Tests PRIVATE cxx_std_17)
+target_include_directories(SynthModeLawFixesV0910Tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/source)
+target_link_libraries(SynthModeLawFixesV0910Tests PRIVATE arpsid_core)
+add_test(NAME SynthModeLawFixesV0910Tests COMMAND SynthModeLawFixesV0910Tests)
+if(TARGET arpsid_release_closure_suite)
+  add_dependencies(arpsid_release_closure_suite SynthModeLawFixesV0910Tests)
+endif()
+
 add_executable(ArpAudioRenderV954Tests
                source/tests/arp_audio_render_v954_tests.cpp
                source/forensic_patch_bank.cpp)

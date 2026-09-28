@@ -21,6 +21,7 @@ Related documents one level up:
 | [../ARCHITECTURE.md](../ARCHITECTURE.md) | The system at a glance: layers, pipeline, engines, parameters, state, GUI models, wrappers. |
 | [../TECHNICAL_SPECIFICATIONS.md](../TECHNICAL_SPECIFICATIONS.md) | Every number and limit in one place. |
 | [../FEATURES.md](../FEATURES.md) | What ArpSID does, feature by feature. |
+| [../SYNTH_GUIDE.md](../SYNTH_GUIDE.md) | The synth modes from the player's side: controls per mode, recipes, troubleshooting. |
 | [../PARAMETER_REFERENCE.md](../PARAMETER_REFERENCE.md) | All 512 parameters (generated and checked by a test). |
 | [../VST3_IMPLEMENTATION.md](../VST3_IMPLEMENTATION.md) | The VST3 wrapper: processor, kernel host, state v5, controller, units, messages. |
 | [../REALTIME_OWNERSHIP.md](../REALTIME_OWNERSHIP.md), [../REALTIME_ROLLBACK_JOURNAL.md](../REALTIME_ROLLBACK_JOURNAL.md) | Thread ownership and rollback journal details. |

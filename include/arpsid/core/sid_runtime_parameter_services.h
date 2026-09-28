@@ -69,7 +69,7 @@ inline bool runtimeApplyProjectedRpnBendRange(Target& target, uint32_t targetId)
     if (rpnMsb != 0 || rpnLsb != 0) return false;
     const int dataMsb = std::clamp(static_cast<int>(std::lround(canonicalClampedNormalizedValue(params[(size_t)kParamHostCtrlDataEntryMsbBase + (size_t)ch]) * 127.0f)), 0, 127);
     const int dataLsb = std::clamp(static_cast<int>(std::lround(canonicalClampedNormalizedValue(params[(size_t)kParamHostCtrlDataEntryLsbBase + (size_t)ch]) * 127.0f)), 0, 127);
-    const float semis = std::clamp(static_cast<float>(dataMsb) + static_cast<float>(dataLsb) / 100.0f, 0.0f, 48.0f);
+    const float semis = std::clamp(static_cast<float>(dataMsb) + static_cast<float>(dataLsb) / 100.0f, 0.0f, ArpSID_kMaxPitchBendRangeSemis);
     target.runtimeSetPitchBendRangeSemis(ch, semis);
     return true;
 }

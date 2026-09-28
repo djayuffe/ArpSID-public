@@ -7,6 +7,51 @@ and `include/arpsid/version.h`.
 
 ## [Unreleased]
 
+### Fixed (engine, every format)
+
+- **CLASSIC Unison voice count.** Voice Spread now sets the number of stacked
+  voices, `1 + int(spread × 7)` (1–8), as well as the detune, as documented. The
+  count was never applied and Unison always stacked 4 voices. No factory patch
+  uses Unison. A project saved with Unison at Voice Spread 0 now plays one voice.
+- **CLASSIC Mono, Legato and Unison release tails.** The release phase now sounds
+  after note-off, at the same level as Poly. The live render skipped released
+  voices, and their velocity and pitch were cleared, so notes were cut dead
+  whatever the Release setting. The active-voice count now drops to 0 when idle;
+  it used to report 8 with no notes playing.
+- **SYNTH / SID REG filter mode.** `$D418` now gets all eight Filter Mode choices
+  (OFF, LP, BP, LP+BP, HP, NOTCH, BP+HP, ALL) from the same decode as CLASSIC and
+  the editors. Before, the choices were collapsed onto LP, BP and HP: HIGH-PASS
+  played band-pass, and OFF still filtered low-pass.
+- **SYNTH / SID REG hard sync.** VCO1 Sync and VCO3 Sync now reach the chip; only
+  VCO2 Sync did.
+- **Pitch-bend range.** One 0–48 semitone limit (RPN 0, the MPE standard) in
+  every engine. CLASSIC and the single-SID engine stopped at 24.
+- **Factory filter modes.** The factory bank's filter types are stored as
+  canonical Filter Mode values. Parameter, editor, `$D418` register mirror and
+  sound now agree for every slot, and no factory patch selects OFF.
+- **macOS JSON sound import.** `filter.mode` strings (`lp`, `bp`, `hp`,
+  combinations, `notch`, `all`, `off`) now map to the right Filter Mode. Before,
+  low-pass imported as band-pass.
+
+### Compatibility
+
+- Saved states now carry a **state-law revision** marker: an extra semantic entry
+  that older versions ignore, so 0.9.10 projects still open in 0.9.9. A project
+  saved before 0.9.10 that plays in SYNTH mode is migrated on load so it sounds
+  exactly as before: its filter mode is set to the type it actually played, and
+  the never-audible VCO1/VCO3 Sync is cleared. CLASSIC and DrSID projects are not
+  changed.
+
+### Documentation
+
+- `docs/internals/SYNTH_MODES.md`: render modes, flavors, the SYNTH / SID REG
+  mode in full, and the projection engines. `docs/FEATURES.md`,
+  `docs/TECHNICAL_SPECIFICATIONS.md` and `docs/internals/` (SID chip, C64
+  machine, runtime, engines) complete the reference set.
+- The MIX channel volume law is now documented as the code implements it:
+  gain = value / 200, so 200 is unity and 255 is +2.1 dB. The old comment said
+  +6 dB.
+
 ### Fixed (macOS editor: AUv2, AUv3, Standalone, macOS VST3)
 
 - Knob captions were cut to nine characters ("Master Vo", "Voice Mod"); they

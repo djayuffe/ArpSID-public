@@ -186,7 +186,7 @@ public:
                 }
             }
 
-            const float vv = (voiceMode == 0) ? voiceManager.getVoiceState(vi).velocity : forcedVel[vi];
+            const float vv = slotVelocity_(vi);
             const float velGain = velocityGainForVoice_(vv);
             const float invSteps = (accumSteps > 0) ? (1.0f / static_cast<float>(accumSteps)) : 0.0f;
             outL += accumL * invSteps * velGain;
@@ -259,17 +259,53 @@ public:
     const SidRegisterEngine& rawSidRegisterEngine() const noexcept { return sidRegisterEngine_; }
     const std::array<uint8_t, 0x20>& getPrimaryRegImage() const noexcept { return sidRegShadow_; }
 
+    // Voices the interval-accurate (live) path must advance: the allocated
+    // voices, PLUS every chip whose SID envelope is still running (a release
+    // tail, or the power-on envelope residue). This is the same set the block
+    // path (processBlock) renders. Before 0.9.10 the live path skipped tails, so
+    // Mono/Legato/Unison notes were cut dead at note-off and idle chips never
+    // settled (getActiveVoiceCount() stayed at 8).
     int gatherRenderableVoices_(int (&activeVoices)[MAX_POLYPHONY]) noexcept {
-        if (voiceMode == 0) {
-            return voiceManager.getActiveVoicesInto(activeVoices, MAX_POLYPHONY);
-        }
         int count = 0;
-        for (int i = 0; i < MAX_POLYPHONY; ++i) {
-            if (!forcedActive[i]) continue;
-            activeVoices[count++] = i;
-            if (count >= MAX_POLYPHONY) break;
+        if (voiceMode == 0) {
+            count = voiceManager.getActiveVoicesInto(activeVoices, MAX_POLYPHONY);
+        } else {
+            for (int i = 0; i < MAX_POLYPHONY; ++i) {
+                if (!forcedActive[i]) continue;
+                activeVoices[count++] = i;
+                if (count >= MAX_POLYPHONY) break;
+            }
+        }
+        uint16_t included = 0;
+        for (int ai = 0; ai < count; ++ai) included |= (uint16_t)(1u << activeVoices[ai]);
+        for (int i = 0; i < MAX_POLYPHONY && count < MAX_POLYPHONY; ++i) {
+            if (included & (1u << i)) continue;
+            // A chip already advanced earlier in this host sample must also be
+            // finalized in it, even if its envelope reached 0 mid-sample, so its
+            // planned-sample accumulation never leaks into a later sample.
+            if (fractionalSamplePrepared_[(size_t)i]) {
+                activeVoices[count++] = i;
+                included |= (uint16_t)(1u << i);
+                continue;
+            }
+            for (int osc = 0; osc < 3; ++osc) {
+                if (sidChips[(size_t)i].isVoiceActive(osc)) {
+                    activeVoices[count++] = i;
+                    included |= (uint16_t)(1u << i);
+                    break;
+                }
+            }
         }
         return count;
+    }
+
+    // Velocity that scales voice slot i. A forced (Mono/Legato/Unison) slot that
+    // was released keeps the velocity of its last note for the release tail;
+    // before 0.9.10 the slot's velocity was zeroed on release, so the tail was
+    // multiplied by sqrt(0) and cut to silence.
+    float slotVelocity_(int i) const noexcept {
+        if (voiceMode == 0) return voiceManager.getVoiceState(i).velocity;
+        return forcedActive[(size_t)i] ? forcedVel[(size_t)i] : forcedTailVel_[(size_t)i];
     }
 
     void prepareFractionalVoiceSample_(int voiceIndex) noexcept {
@@ -335,7 +371,7 @@ public:
             prepareFractionalVoiceSample_(voiceIndex);
             float l = 0.0f, r = 0.0f;
             sidChips[voiceIndex].renderCycleWindowContribution(cycleStart, cycleEnd, l, r);
-            const float vv = (voiceMode == 0) ? voiceManager.getVoiceState(voiceIndex).velocity : forcedVel[voiceIndex];
+            const float vv = slotVelocity_(voiceIndex);
             const float velocityGain = velocityGainForVoice_(vv);
             outL += l * velocityGain;
             outR += r * velocityGain;
@@ -354,7 +390,7 @@ public:
             prepareFractionalVoiceSample_(voiceIndex);
             float l = 0.0f, r = 0.0f;
             sidChips[voiceIndex].renderSubCyclePhaseContribution(cycleIndex, subphaseStart, subphaseEnd, l, r);
-            const float vv = (voiceMode == 0) ? voiceManager.getVoiceState(voiceIndex).velocity : forcedVel[voiceIndex];
+            const float vv = slotVelocity_(voiceIndex);
             const float velocityGain = velocityGainForVoice_(vv);
             outL += l * velocityGain; outR += r * velocityGain;
         }
@@ -372,7 +408,7 @@ public:
             prepareFractionalVoiceSample_(voiceIndex);
             float l = 0.0f, r = 0.0f;
             sidChips[voiceIndex].finalizePlannedSample(l, r);
-            const float vv = (voiceMode == 0) ? voiceManager.getVoiceState(voiceIndex).velocity : forcedVel[voiceIndex];
+            const float vv = slotVelocity_(voiceIndex);
             const float velocityGain = velocityGainForVoice_(vv);
             outL += l * velocityGain;
             outR += r * velocityGain;
@@ -622,6 +658,7 @@ public:
             forcedActive[i] = false;
             forcedMidi[i] = -1;
             forcedVel[i] = 0.0f;
+            forcedTailVel_[(size_t)i] = 0.0f;
             voiceDetuneRatio[i] = 1.0f;
         }
         forcedSustainDown_ = false;
@@ -972,7 +1009,7 @@ public:
                 applyOscFrequencies(voiceIndex);
             }
 
-            const float vv = (voiceMode == 0) ? state.velocity : forcedVel[voiceIndex];
+            const float vv = slotVelocity_(voiceIndex);
             const float velocityGain = velocityGainForVoice_(vv);
 
             // Render the block sample by sample into the mix.
@@ -1149,7 +1186,7 @@ public:
     }
 
     void setPitchBendRangeSemis(int channel, float range) {
-        const float clean = std::clamp(std::isfinite(range) ? range : 2.0f, 0.0f, 24.0f);
+        const float clean = std::clamp(std::isfinite(range) ? range : 2.0f, 0.0f, ArpSID_kMaxPitchBendRangeSemis);
         if (channel >= 0 && channel < 16) {
             if (std::fabs(bendRangeSemisByChannel_[(size_t)channel] - clean) < 1e-6f) return;
             bendRangeSemisByChannel_[(size_t)channel] = clean;
@@ -1447,23 +1484,10 @@ public:
     }
     
     void setFilterMode(float value) {
-        // ISSUE-08 FIX: Map all 8 FilterMode values (None through LpBpHp) using
-        // equal-width segments over [0,1]. The previous 4-segment map silently
-        // collapsed LpBp, BpHp, LpBpHp, and None into the adjacent primary modes,
-        // making combined filter modes unreachable from the parameter.
-        FilterMode mode;
-        const int idx = static_cast<int>(ArpSID_sanitize01(value) * 8.0f);
-        switch (std::clamp(idx, 0, 7)) {
-            case 0:  mode = FilterMode::None;    break;
-            case 1:  mode = FilterMode::LowPass; break;
-            case 2:  mode = FilterMode::BandPass; break;
-            case 3:  mode = FilterMode::LpBp;    break;
-            case 4:  mode = FilterMode::HighPass; break;
-            case 5:  mode = FilterMode::Notch;   break;
-            case 6:  mode = FilterMode::BpHp;    break;
-            case 7:  // fall-through
-            default: mode = FilterMode::LpBpHp;  break;
-        }
+        // Canonical 8-way decode (sid_chip.h): None, LP, BP, LP+BP, HP,
+        // Notch (LP+HP), BP+HP, LP+BP+HP — equal-width bins over [0,1].
+        // SYNTH / SID REG mode uses the same helper for $D418 bits 4..6.
+        const FilterMode mode = sidFilterModeFromNormalized(value);
         for (auto& chip : sidChips) {
             chip.setFilterMode(mode);
         }
@@ -1601,10 +1625,17 @@ public:
             updateForcedModeFromHeld(true);
         }
     }
+    // Voice Spread is the single Unison law: it sets both the symmetric detune
+    // (±24 cents at full spread) and the stacked voice count, 1 + int(spread × 7)
+    // → 1..8 (canonicalUnisonCountFromNormalizedSpread, the same law SYNTH mode
+    // uses before projecting to its 3 hardware voices). Before this the count was
+    // never projected and CLASSIC unison stayed at a fixed 4 voices.
     void setVoiceSpread(float norm) {
         voiceSpread = ArpSID_sanitize01(norm);
+        unisonCount = std::clamp(1 + static_cast<int>(voiceSpread * 7.0f), 1, MAX_POLYPHONY);
         if (voiceMode == 3) updateForcedModeFromHeld(false);
     }
+    int unisonCountForTesting() const noexcept { return unisonCount; }
     void setPortamentoStyle(ArpSID::PortamentoStyle s) noexcept { portamentoStyle_ = s; }
     ArpSID::PortamentoStyle portamentoStyle() const noexcept { return portamentoStyle_; }
     void setC64FixedGlideDelta(float norm) noexcept {
@@ -1819,6 +1850,7 @@ private:
     std::array<bool, MAX_POLYPHONY> forcedActive{};
     std::array<int, MAX_POLYPHONY> forcedMidi{};
     std::array<float, MAX_POLYPHONY> forcedVel{};
+    std::array<float, MAX_POLYPHONY> forcedTailVel_{};  // velocity of a released forced slot's tail
     std::array<int, MAX_POLYPHONY> forcedVoiceChannel_{};
     std::array<int, MAX_POLYPHONY> forcedVoiceNoteId_{};
     std::array<bool, MAX_POLYPHONY> fractionalSamplePrepared_{};
@@ -2070,6 +2102,7 @@ private:
 
     void clearForcedVoiceSlot(int voiceIndex, bool gateOffVoices) noexcept {
         if (voiceIndex < 0 || voiceIndex >= MAX_POLYPHONY) return;
+        if (forcedActive[voiceIndex]) forcedTailVel_[(size_t)voiceIndex] = forcedVel[voiceIndex];
         forcedActive[voiceIndex] = false;
         forcedMidi[voiceIndex] = -1;
         forcedVel[voiceIndex] = 0.0f;
@@ -2247,6 +2280,12 @@ private:
 
     void applyOscFrequencies(int voiceIndex) {
         auto& chip = sidChips[voiceIndex];
+        // A released slot has no pitch of its own any more (currentFrequency 0),
+        // but its chip may still be sounding a release tail. Leave the chip's
+        // frequency registers as they are so the tail keeps its pitch: writing 0
+        // would freeze the oscillators and silence the tail. A played note's
+        // register value is never 0 (MIDI 0 at PAL is $008B).
+        if (currentFrequency[voiceIndex] == 0) return;
         float base = static_cast<float>(currentFrequency[voiceIndex]);
 
         // Unison spread detune (per voice)

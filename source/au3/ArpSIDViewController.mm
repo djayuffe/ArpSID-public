@@ -2517,7 +2517,19 @@ static BOOL ArpSIDParseExternalC64ClassicBankDocument(NSDictionary* doc,
             if ([filter[@"cutoff"] respondsToSelector:@selector(doubleValue)]) ArpSID::sidSetStateRootParamValue(root, (int)ArpSID::kParamFilterCutoff, ArpSIDJSONClamp01([filter[@"cutoff"] doubleValue] / 16383.0, 0.6));
             if ([filter[@"res"] respondsToSelector:@selector(doubleValue)]) ArpSID::sidSetStateRootParamValue(root, (int)ArpSID::kParamFilterResonance, ArpSIDJSONClamp01([filter[@"res"] doubleValue] / 15.0, 0.2));
             NSString* mode = [filter[@"mode"] isKindOfClass:[NSString class]] ? [filter[@"mode"] lowercaseString] : @"lp";
-            float modeNorm = [mode containsString:@"hp"] ? 0.75f : ([mode containsString:@"bp"] ? 0.50f : 0.25f);
+            // Canonical 8-way Filter Mode value (choice index / 7): the SID
+            // $D418 bits LP=1, BP=2, HP=4 combine, "notch" = LP+HP, "off" = 0.
+            // The old 0.25/0.50/0.75 values decoded as BP/HP/BP+HP.
+            int modeBits = 0;
+            if ([mode containsString:@"notch"]) modeBits = 0x5;
+            else {
+                if ([mode containsString:@"lp"] || [mode containsString:@"low"]) modeBits |= 0x1;
+                if ([mode containsString:@"bp"] || [mode containsString:@"band"]) modeBits |= 0x2;
+                if ([mode containsString:@"hp"] || [mode containsString:@"high"]) modeBits |= 0x4;
+                if ([mode containsString:@"all"]) modeBits = 0x7;
+                if (modeBits == 0 && !([mode containsString:@"off"] || [mode containsString:@"none"])) modeBits = 0x1;
+            }
+            float modeNorm = ArpSID::sidFilterModeNormForIndex(modeBits);
             ArpSID::sidSetStateRootParamValue(root, (int)ArpSID::kParamFilterMode, modeNorm);
         }
         NSDictionary* extra = [jp[@"extra"] isKindOfClass:[NSDictionary class]] ? jp[@"extra"] : nil;

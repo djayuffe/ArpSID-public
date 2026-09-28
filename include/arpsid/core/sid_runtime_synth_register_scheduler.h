@@ -140,10 +140,13 @@ inline uint8_t synthModeControlNoGateFromParams(const float* paramValues,
     static constexpr uint8_t kWaveformBits[8] = {0x10u, 0x20u, 0x40u, 0x80u, 0x30u, 0x50u, 0x60u, 0x70u};
     uint8_t ctrl = kWaveformBits[wvIdx] & 0xFEu;
     if ((ctrl & 0xF0u) == 0u) ctrl = 0x10u;
-    if (voiceIndex == 1 && paramValues[(size_t)kParamVCO2SyncEnable] > 0.5f) ctrl |= 0x02u;
-    if (voiceIndex == 0 && paramValues[(size_t)kParamVCO1RingModEnable] > 0.5f) ctrl |= 0x04u;
-    if (voiceIndex == 1 && paramValues[(size_t)kParamVCO2RingModEnable] > 0.5f) ctrl |= 0x04u;
-    if (voiceIndex == 2 && paramValues[(size_t)kParamVCO3RingModEnable] > 0.5f) ctrl |= 0x04u;
+    // Hard sync ($02) and ring mod ($04) per voice, from that voice's own VCO
+    // switches. The SID wires the sources cyclically (V1←V3, V2←V1, V3←V2),
+    // exactly like CLASSIC. Before 0.9.10 only VCO2 Sync reached the chip.
+    static constexpr int kSyncPid[3] = {kParamVCO1SyncEnable, kParamVCO2SyncEnable, kParamVCO3SyncEnable};
+    static constexpr int kRingPid[3] = {kParamVCO1RingModEnable, kParamVCO2RingModEnable, kParamVCO3RingModEnable};
+    if (paramValues[(size_t)kSyncPid[voiceIndex]] > 0.5f) ctrl |= 0x02u;
+    if (paramValues[(size_t)kRingPid[voiceIndex]] > 0.5f) ctrl |= 0x04u;
     return static_cast<uint8_t>((ctrl & 0xFEu) ? (ctrl & 0xFEu) : 0x10u);
 }
 

@@ -147,12 +147,8 @@ inline void projectRuntimeStateToBackends(SidRuntimeModel& runtimeModel,
         const int uniCount = ArpSID::sidRegProjectedUnisonCountFromNormalizedSpread(params[(size_t)kParamVoiceSpread]);
         voicePolicy->setUnisonCount(uniCount);
     }
+    // setVoiceSpread() also sets the Unison voice count (1 + int(spread × 7)).
     bpe->setVoiceSpread(params[(size_t)kParamVoiceSpread]);
-    if (voiceMode > 2.5f) {
-        const float spread = params[(size_t)kParamVoiceSpread];
-        const int uniCount = ArpSID::canonicalUnisonCountFromNormalizedSpread(spread);
-        bpe->setUnisonCount(std::clamp(uniCount, 1, 8));
-    }
 
     {
         const float a = params[(size_t)kParamAttack];

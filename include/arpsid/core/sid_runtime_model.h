@@ -463,7 +463,7 @@ public:
     }
     void setBendRangeSemis(int channel, float semis) noexcept {
         if (channel < 0 || channel >= 16) return;
-        dynamic_state_.bend_range_semis[(size_t)channel] = std::clamp(std::isfinite(semis) ? semis : 2.0f, 0.0f, 96.0f);
+        dynamic_state_.bend_range_semis[(size_t)channel] = std::clamp(std::isfinite(semis) ? semis : 2.0f, 0.0f, ArpSID_kMaxPitchBendRangeSemis);
     }
     float bendRangeSemis(int channel) const noexcept {
         if (channel < 0 || channel >= 16) return 2.0f;

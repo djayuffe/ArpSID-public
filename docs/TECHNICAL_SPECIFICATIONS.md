@@ -103,9 +103,9 @@ extended mode). Strict `auval` passes on all five AU flavors.
 |---|---|
 | Poly voices (BitPerfect) | 8 (`VoiceManager::MAX_VOICES`) × 3 oscillators |
 | Authentic topology | 1 chip × 3 voices; stealing policies StealOldest, StealQuietest, StealReleasingFirst, Refuse |
-| Voice modes | Poly, Mono, Legato, Unison (CLASSIC: 4 voices, ±24 cents spread; SYNTH: 1–3 voices) |
+| Voice modes | Poly, Mono, Legato, Unison (`1 + int(Voice Spread × 7)` voices: CLASSIC 1–8, SYNTH capped to 3; detune ±24 cents × spread) |
 | Held-note tracking | per-channel sustain (CC64) and sostenuto (CC66); host note IDs kept |
-| Pitch bend | 14-bit, per channel, range 0–24 semitones (default 2) |
+| Pitch bend | 14-bit, per channel, range 0–48 semitones via RPN 0 (default 2; one limit in every engine) |
 | Master tune | ±100 cents |
 | VCO detune | ±100 cents per oscillator |
 | Portamento | 0–5 s (`n² × 5`), 4 styles (C64 SLIDE, C64 FIXED, LINEAR, SMOOTH); C64 glide delta 1–255 register units per frame (50 Hz PAL / 60 Hz NTSC) |

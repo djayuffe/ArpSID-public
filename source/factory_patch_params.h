@@ -9,6 +9,7 @@
 #include "arpsid/core/sid_variant_profile.h"
 #include "arpsid/core/sid_variant_ops.h"
 #include "arpsid/core/sid_runtime_state_root_presentation.h"
+#include "arpsid/core/sid_chip.h"
 #include "arpsid/core/drum_context.h"
 #include "arpsid/patchbank/factory_sid808_param_bridge.h"
 #include "arpsid/patchbank/factory_digi_param_bridge.h"
@@ -915,11 +916,10 @@ inline void applyFactorySidRegisterMirrors(const PatchDefinition& def,
     sp(kParamSidRegD417, static_cast<float>(resFilt) / 255.0f);
     const int volNib = std::clamp<int>(std::lround(params[static_cast<size_t>(kParamMasterVolume)] * 15.0f),0,15);
     uint8_t modeVol = static_cast<uint8_t>(volNib & 0x0Fu);
-    const float mode = params[static_cast<size_t>(kParamFilterMode)];
-    if (mode < 0.25f) modeVol |= 0x10u;
-    else if (mode < 0.50f) modeVol |= 0x20u;
-    else if (mode < 0.75f) modeVol |= 0x40u;
-    else modeVol |= 0x70u;
+    // The Filter Mode parameter is already canonical here (see
+    // canonicalFactoryFilterModeNorm), so the register mirror uses the same
+    // 8-way decode as CLASSIC and SYNTH: mirror, UI and sound always agree.
+    modeVol |= sidD418FilterModeBitsFromNormalized(params[static_cast<size_t>(kParamFilterMode)]);
     if (params[static_cast<size_t>(kParamVCO3Level)] <= 0.0001f) modeVol |= 0x80u;
     sp(kParamSidRegD418, static_cast<float>(modeVol) / 255.0f);
     sp(kParamSidRegD419, 0.0f); sp(kParamSidRegD41A, 0.0f); sp(kParamSidRegD41B, 0.0f); sp(kParamSidRegD41C, 0.0f);
@@ -956,6 +956,20 @@ inline bool isCanonicalDrumFactorySlotForRoot(int slot) noexcept {
 inline int canonicalFactorySlotForRoot(int slot) noexcept {
     if (isCanonicalDrumFactorySlotForRoot(slot)) return slot;
     return normalizeFactoryPatchSlot(slot);
+}
+
+// Factory patches author PatchStaticState::filterModeNorm on the historical
+// 4-band law (the same one the factory $D418 register mirror used):
+// < 0.25 LP, < 0.50 BP, < 0.75 HP, else LP+BP+HP. Convert it to the canonical
+// 8-way Filter Mode value (choice index / 7) so the parameter, the editor, the
+// register mirror and every render mode agree on one filter type.
+inline float canonicalFactoryFilterModeNorm(double authored) noexcept {
+    const double a = std::isfinite(authored) ? std::clamp(authored, 0.0, 1.0) : 0.0;
+    const int index = (a < 0.25) ? 1   // LP
+                    : (a < 0.50) ? 2   // BP
+                    : (a < 0.75) ? 4   // HP
+                    : 7;               // LP+BP+HP
+    return sidFilterModeNormForIndex(index);
 }
 
 inline float normalizedFactoryVoiceMode(const PatchUsageMetadata& usage, const PatchMotionPolicy& motion) noexcept {
@@ -1106,7 +1120,7 @@ inline void applyFactoryPatchDefinitionToNormalizedParams(const PatchDefinition&
     sp(kParamRelease,           static_cast<float>(s.releaseNorm));
     sp(kParamFilterCutoff,      static_cast<float>(s.filterCutoffNorm));
     sp(kParamFilterResonance,   static_cast<float>(s.filterResNorm));
-    sp(kParamFilterMode,        static_cast<float>(s.filterModeNorm));
+    sp(kParamFilterMode,        canonicalFactoryFilterModeNorm(s.filterModeNorm));
     sp(kParamFilterEnvAmount,   static_cast<float>(s.filterEnvAmountNorm));
     sp(kParamFilterDrive,       static_cast<float>(s.filterDriveNorm));
     // Legacy model/clock mirror params intentionally not populated here.

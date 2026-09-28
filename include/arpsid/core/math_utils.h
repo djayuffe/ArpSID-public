@@ -200,6 +200,10 @@ static inline uint32_t ArpSID_sampleForAbsoluteCycleQ32(uint64_t absoluteCycle,
 // lockstep so the same normalized value means the same real-world quantity
 // everywhere in the code base.
 static constexpr float ArpSID_kPortamentoMaxSeconds = 5.0f;
+// Maximum per-channel pitch-bend range (RPN 0 / Pitch Bend Sensitivity), in
+// semitones. 48 is the MPE standard. Every engine and the runtime model clamp
+// to this one value so CLASSIC, SYNTH and single-SID bend identically.
+static constexpr float ArpSID_kMaxPitchBendRangeSemis = 48.0f;
 static constexpr float ArpSID_kDetuneMaxCents = 100.0f;
 
 static inline float ArpSID_normToPortamentoSeconds(float norm) noexcept {

@@ -3291,8 +3291,11 @@ private:
         const uint8_t resNib = (uint8_t)std::clamp((int)std::lround(resNorm * 15.f), 0, 15);
         pushSidWriteTimedIfChanged_(0x17u, (uint8_t)((resNib << 4) | computeSynthModeFilterRouteLowNibble_()), (uint16_t)sampleOffset, cycleOffset);
         const uint8_t volNib = (uint8_t)std::clamp((int)std::lround(volNorm * 15.f), 0, 15);
-        const int modeIdx = (int)std::lround(modNorm * 2.f);
-        const uint8_t modeBits = (modeIdx == 0) ? 0x10u : (modeIdx == 1) ? 0x20u : 0x40u;
+        // Canonical 8-way Filter Mode decode shared with CLASSIC: OFF, LP, BP,
+        // LP+BP, HP, NOTCH (LP+HP), BP+HP, ALL → $D418 bits 4..6. The old
+        // round(n × 2) law collapsed the 8 choices onto LP/BP/HP (HP played BP,
+        // OFF still set LP).
+        const uint8_t modeBits = ArpSID::sidD418FilterModeBitsFromNormalized(modNorm);
         pushSidWriteTimedIfChanged_(0x18u, (uint8_t)(modeBits | volNib), (uint16_t)sampleOffset, cycleOffset);
     }
     void reseedSynthModeRealtimeState_(int sampleOffset, uint16_t cycleOffset, bool activeOnly) noexcept {
@@ -4939,7 +4942,7 @@ public:
 
     void runtimeSetPitchBendRangeSemis(int ch, float semis) noexcept {
         const int c = std::clamp(ch, 0, 15);
-        const float s = std::clamp(semis, 0.0f, 48.0f);
+        const float s = std::clamp(semis, 0.0f, ArpSID_kMaxPitchBendRangeSemis);
         // P1 FIX: Keep the runtime model in sync with the engine. handlePitchBend()
         // computes bendSemis from runtimeModel_.bendRangeSemis(c), so a stale model
         // value causes synth-mode voices to bend with the wrong range even when the

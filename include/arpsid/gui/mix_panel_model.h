@@ -101,7 +101,7 @@ struct MixChannel {
     std::uint8_t  mute;          ///< 1 = muted (silenced)
     std::uint8_t  reserved0;
     // [4..7]: volume + pan
-    std::uint8_t  volume;        ///< 0..255 → -inf..+6 dB
+    std::uint8_t  volume;        ///< gain = volume / 200: 0 = -inf, 200 = 0 dB (unity), 255 ≈ +2.1 dB (guiMixVolumeGain)
     std::uint8_t  pan;           ///< 0..255 → -100%..+100% (128 = center)
     std::uint8_t  sendToDelay;   ///< 0..255 → 0..100% send level
     std::uint8_t  sendToReverb;  ///< 0..255 → 0..100% send level

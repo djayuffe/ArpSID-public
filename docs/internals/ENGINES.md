@@ -67,7 +67,7 @@ the single-SID engine, which keeps both topologies in sync.
 | 0 | Poly | `VoiceManager` (8 slots, stealing, sustain/sostenuto per channel) |
 | 1 | Mono | forced-voice plane: last-pressed held note on voice 0, envelope retriggers |
 | 2 | Legato | forced plane, no envelope retrigger while a note is held; the pitch is retargeted instead |
-| 3 | Unison | forced plane on `unisonCount` voices, all playing the top held note. The engine accepts 1–8; the parameter projection currently never sets it, so it stays at the default of **4** (see SYNTH_MODES.md §6). |
+| 3 | Unison | forced plane on `unisonCount = 1 + int(Voice Spread × 7)` voices (1–8), all playing the top held note |
 
 Switching modes is a hard safety barrier:
 
@@ -98,7 +98,8 @@ per osc     : reg × voiceDetuneRatio × (1 + vcoNDetune) × 2^(pitchModSemis/12
 
 - `masterTune`: `(norm − 0.5) × 2` semitones, i.e. ±100 cents.
 - Pitch bend is 14-bit per channel: `(raw − 8192) / 8191` (or `/8192` below centre) ×
-  the range. The range is 0–24 semitones per channel, default 2.
+  the range. The range is 0–48 semitones per channel (`ArpSID_kMaxPitchBendRangeSemis`),
+  default 2.
 - `activeClockFreq` follows the PAL or NTSC selection. Earlier builds always used the PAL
   clock, which made NTSC 3.8 cents sharp; this is fixed.
 - VCO detune: `ArpSID_normToDetuneCents(norm) = (norm − 0.5) × 200` → ±100 cents, applied
@@ -150,6 +151,9 @@ low.
      silent are garbage-collected (`releaseFinished`).
    - Voices that are still sounding a release tail are added, so poly release is never cut.
    - Forced modes add the forced voices plus any tails.
+   - A released forced slot keeps its last note's velocity for its tail (`slotVelocity_`),
+     and `applyOscFrequencies` never writes a released slot's zero frequency to the chip,
+     so the tail keeps its pitch.
 3. **Per-voice loop.**
    - When no pitch modulation is active, `applyOscFrequencies` runs once per block;
      otherwise it runs per sample.
@@ -177,7 +181,11 @@ the chip in three phases:
 2. whole cycles;
 3. trailing sub-cycle phases.
 
-It averages by the actual subphase width. At the host-sample boundary it applies velocity
+It averages by the actual subphase width. The voices it advances come from `gatherRenderableVoices_`: the
+allocated voices plus every chip whose envelope is still running (release tails and the
+power-on residue). This is the same set the block path renders. A chip already advanced earlier in the host sample is always finalized in the same
+sample, so a tail that ends mid-sample cannot leak its partial accumulation into a later
+sample. At the host-sample boundary it applies velocity
 gain and the smoothed master gain, which slews at most 1/64 per fractional sample.
 
 ### 1.7 Forensic wiring
@@ -215,7 +223,7 @@ allocation target.
 - **Master volume:** `round(norm × 15)` is written to the chip's `$D418` volume nibble.
   This is the real DAC, not a float gain.
 - **Voice level:** `level × velocity/127` per voice.
-- Master tune and global bend are clamped to ±24 semitones. Per-channel 14-bit bend and
+- Master tune is clamped to ±24 semitones; the global bend to ±48 (`ArpSID_kMaxPitchBendRangeSemis`). Per-channel 14-bit bend and
   range work exactly as in §1.3.
 
 ---
@@ -857,7 +865,7 @@ nibble and last `$D418`, scope peak.
 
 | Part | Contents | Size |
 |---|---|---|
-| 16 × `MixChannel` | enabled, solo, mute; volume (−inf..+6 dB); pan (128 = centre); delay send; reverb send; 5 FX slots | 72 B each |
+| 16 × `MixChannel` | enabled, solo, mute; volume (gain = value/200: −inf, unity at 200, +2.1 dB at 255); pan (128 = centre); delay send; reverb send; 5 FX slots | 72 B each |
 | 2 × `MixSendBus` | enabled, return level, 2 FX slots | 32 B each |
 | `MixMaster` | volume (255 = unity); limiter on, threshold (−24..0 dB), release (10–500 ms); stereo width (0–200 %, 128 = unity); dim (−10 dB) | 32 B |
 

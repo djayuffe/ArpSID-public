@@ -129,6 +129,8 @@ inline bool decodeStateRootCanonical(const uint8_t* blob,
         if (!decodeNormalizedStateLegacyInternal(blob, blobSize, legacyParams, kNumParams, expectedMagic)) return false;
         root = importPresentationParamsToStateRootForSchema(legacyParams, kNumParams,
                                                        FactorySlotSchema::Legacy128);
+        // Pre-schema blobs are always legacy law: keep their SYNTH sound.
+        (void)sidMigrateLegacySynthModeLaws(root);
         sanitizePersistentStateRootForSerialization(root);
         return root.valid();
     }

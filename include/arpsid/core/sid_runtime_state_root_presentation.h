@@ -92,6 +92,69 @@ inline void sidSetStateRootParamValue(SidStateRootV1& root, int paramId, float v
     if (!updated) root.patch.parameters.semantic_entries.push_back(SidSemanticParamEntry{static_cast<uint32_t>(paramId), v});
 }
 
+// ─── Persisted state-law revisions ──────────────────────────────────────────
+// A state-law revision records which parameter → sound laws a saved state was
+// authored against, so a load can migrate values whose meaning changed and the
+// saved project keeps sounding exactly as it did. The binary codec persists the
+// revision as a marker semantic entry (kSidStateLawMarkerParamId, see
+// sid_state_codec.h); older builds skip that entry because its id is outside the
+// parameter range, so the marker is forward compatible.
+//
+//   0  legacy (any state written before 0.9.10, or without a marker)
+//   1  (0.9.10) SYNTH / SID REG mode:
+//      - $D418 filter mode uses the canonical 8-way Filter Mode decode
+//        (sidD418FilterModeBitsFromNormalized) instead of round(n × 2);
+//      - VCO1 Sync and VCO3 Sync reach the chip (before, only VCO2 Sync did).
+inline constexpr uint32_t kSidStateLawRevisionLegacy = 0u;
+inline constexpr uint32_t kSidStateLawRevisionCanonicalSynthLaws = 1u;
+inline constexpr uint32_t kSidStateLawRevisionCurrent = kSidStateLawRevisionCanonicalSynthLaws;
+
+// Filter Mode choice index k (0..7) as a normalized parameter value. The
+// canonical decode floor(n × 8) maps k/7 back to k for every k.
+inline constexpr float sidFilterModeNormForIndex(int index) noexcept {
+    return static_cast<float>(index < 0 ? 0 : (index > 7 ? 7 : index)) / 7.0f;
+}
+
+// Legacy SYNTH law: $D418 mode = {LP, BP, HP}[round(n × 2)]. Return the
+// canonical Filter Mode value that produces the same $D418 bits.
+inline float sidCanonicalFilterModeNormFromLegacySynthLaw(float legacyNorm) noexcept {
+    const float n = std::isfinite(legacyNorm) ? std::clamp(legacyNorm, 0.0f, 1.0f) : 0.0f;
+    const int legacyIdx = std::clamp(static_cast<int>(std::lround(n * 2.0f)), 0, 2);
+    static constexpr int kLegacyToCanonicalIndex[3] = {1 /*LP*/, 2 /*BP*/, 4 /*HP*/};
+    return sidFilterModeNormForIndex(kLegacyToCanonicalIndex[legacyIdx]);
+}
+
+// Non-RT only (may allocate). Migrates a legacy (revision 0) state that renders
+// in SYNTH / SID REG mode so it keeps sounding exactly as it did:
+//   * Filter Mode is rewritten to the canonical value that produces the same
+//     $D418 bits the old round(n × 2) law produced;
+//   * VCO1 Sync and VCO3 Sync are cleared, because the old SYNTH control law
+//     never sent them to the chip (only VCO2 Sync was audible).
+// CLASSIC and DrSID states are untouched: CLASSIC always used the 8-way filter
+// law and per-VCO sync, and DrSID does not use these parameters.
+// Returns true when the state renders in SYNTH mode and was migrated.
+inline bool sidMigrateLegacySynthModeLaws(SidStateRootV1& root) {
+    const auto rawValue = [&root](int pid, float& out) noexcept -> bool {
+        for (const auto& e : root.patch.parameters.semantic_entries) {
+            if (e.param_id != static_cast<uint32_t>(pid)) continue;
+            out = std::isfinite(e.value) ? e.value : 0.0f;
+            return true;
+        }
+        return false;
+    };
+    float drSid = kParamInfos[(size_t)kParamDrSidEnable].defaultNorm;
+    float synth = kParamInfos[(size_t)kParamSynthModeEnable].defaultNorm;
+    (void)rawValue(kParamDrSidEnable, drSid);
+    (void)rawValue(kParamSynthModeEnable, synth);
+    if (drSid > 0.5f || synth <= 0.5f) return false;
+    float filterMode = kParamInfos[(size_t)kParamFilterMode].defaultNorm;
+    (void)rawValue(kParamFilterMode, filterMode);
+    sidSetStateRootParamValue(root, kParamFilterMode, sidCanonicalFilterModeNormFromLegacySynthLaw(filterMode));
+    sidSetStateRootParamValue(root, kParamVCO1SyncEnable, 0.0f);
+    sidSetStateRootParamValue(root, kParamVCO3SyncEnable, 0.0f);
+    return true;
+}
+
 // Non-RT only: calls sidSetStateRootParamValue which may allocate.
 // Strict rule: exactly one of {BitPerfect, SidRegister, DrSid} must win.
 // Priority matches sidResolveRenderModeFromLiveParams: DrSid > SidRegister > BitPerfect.
