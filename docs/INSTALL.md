@@ -267,7 +267,7 @@ Projects keep their ArpSID settings. Installing ArpSID again restores them.
 | Windows: the host skips ArpSID | Check the host's VST3 folder list, and check the files are unblocked (run `install.ps1` again). Use the zip that matches your PC: x64 or arm64. |
 | Linux: the host skips ArpSID, or the editor window is empty | Run `./install.sh --check` and install the listed libraries. Check that your host scans `~/.vst3` (or `/usr/lib/vst3`). |
 | Linux: no editor, only a list of parameters | The plug-in was built with `ARPSID_VST3_EDITOR=OFF`. Release builds always include the editor. |
-| Linux: the host crashed when opening the editor (0.9.9 and earlier) | Fixed after 0.9.9: the editor did not connect VSTGUI to the host's event loop and crashed on the first X11 call, and reopening it could crash in cairo. Update ArpSID. |
+| Linux: the host crashed when opening the editor (0.9.9 and earlier) | Fixed in 0.9.10: the editor did not connect VSTGUI to the host's event loop and crashed on the first X11 call, and reopening it could crash in cairo. Update ArpSID. |
 | Linux: the editor does not open and the host reports an error | The host gave the editor no event loop (`Linux::IRunLoop`). ArpSID then refuses to open instead of crashing. Every mainstream Linux host provides one; update the host. |
 | The factory patches are missing from the host's preset browser | Install the presets (run the installer again, or copy `VST3 Presets` by hand, see [Factory presets](#factory-presets-vst3)) and let the host rescan its preset folders. The program list works without them. |
 | RSID tunes do not play in the C64 player | RSID tunes need your own KERNAL/BASIC/CHARGEN ROM dumps; none are bundled. PSID tunes play without them. |

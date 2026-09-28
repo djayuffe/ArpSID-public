@@ -243,7 +243,7 @@ versions can add chunks without breaking older readers.
 | `OUTM` | 1 byte: pure-SID 1Q1 output mode | |
 | `SIDF` | `u16` subtune (little-endian) + the loaded `.sid` file | Written only while a tune is loaded. Loading a state without it unloads any tune left from before, so a restore is deterministic. Added in 0.9.8; older versions skip it. |
 | `BYPS` | 1 byte: host bypass | Always written. A state without it loads un-bypassed. Added in 0.9.9; older versions skip it. |
-| `PRST` | none (length 0) | Never written by `getState`. It marks a **patch-only state**, the kind stored in the factory `.vstpreset` files: `PRST` + `ROOT` and nothing else. See [Preset states](#preset-states). Added after 0.9.9; older versions skip it. |
+| `PRST` | none (length 0) | Never written by `getState`. It marks a **patch-only state**, the kind stored in the factory `.vstpreset` files: `PRST` + `ROOT` and nothing else. See [Preset states](#preset-states). Added in 0.9.10; older versions skip it. |
 
 **Reading.**
 

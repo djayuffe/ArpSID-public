@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(ArpSID VERSION 0.9.9 LANGUAGES CXX)
+project(ArpSID VERSION 0.9.10 LANGUAGES CXX)
 include(cmake/ArpSIDSourceTreeGuard.cmake)
 
 # Windows: link the C/C++ runtime statically everywhere (ArpSID, the VST3 SDK
