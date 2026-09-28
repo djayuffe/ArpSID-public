@@ -21,12 +21,16 @@ case "$KIND" in
     cat >"$STAGE/INSTALL.txt" <<EOF
 ArpSID VST3 for Linux
 
-  ./install.sh            install for you (~/.vst3)
-  ./install.sh --system   install for all users (/usr/lib/vst3, uses sudo)
+  ./install.sh            install for you (~/.vst3, presets in ~/.vst3/presets)
+  ./install.sh --system   install for all users (/usr/lib/vst3 and
+                          /usr/share/vst3/presets, uses sudo)
   ./install.sh --check    check that the libraries ArpSID needs are present
   ./install.sh --uninstall
 
-Or copy arpsid_vst3.vst3 into ~/.vst3 yourself. Then rescan plug-ins in your host.
+Or copy arpsid_vst3.vst3 into ~/.vst3 and the contents of "VST3 Presets" into
+~/.vst3/presets yourself. Then rescan plug-ins in your host. The 180 factory
+patches appear in the host's preset browser under ArpSID (Bass, Drums, Keys,
+Lead, Pad, ...) and in the plug-in's program list.
 Full guide: $DOC
 EOF
     ;;
@@ -41,8 +45,10 @@ Only for you (no admin rights):
   powershell -ExecutionPolicy Bypass -File .\\install.ps1 -Scope User
 Remove:  ... install.ps1 -Uninstall
 
-Or copy arpsid_vst3.vst3 into C:\\Program Files\\Common Files\\VST3 yourself.
-Then rescan plug-ins in your host.
+Or copy arpsid_vst3.vst3 into C:\\Program Files\\Common Files\\VST3 and the
+contents of "VST3 Presets" into Documents\\VST3 Presets yourself. Then rescan
+plug-ins in your host. The 180 factory patches appear in the host's preset
+browser under ArpSID and in the plug-in's program list.
 Full guide: $DOC
 EOF
     ;;
@@ -54,7 +60,8 @@ ArpSID for macOS
 
 In Terminal, in this folder:
   ./install_macos.sh              install what is in this folder (plug-ins for you,
-                                  apps to /Applications), clear the download
+                                  apps to /Applications, VST3 factory presets to
+                                  ~/Library/Audio/Presets), clear the download
                                   quarantine and refresh the Audio Unit cache
   ./install_macos.sh --system     plug-ins for all users
   ./install_macos.sh --validate   also run auval on the AU

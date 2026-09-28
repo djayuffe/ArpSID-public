@@ -552,7 +552,12 @@ because the engine computes floor(3.36) = 3.
 ### Platform notes
 
 - **Linux.** VSTGUI draws with cairo and pango on X11/xcb and uses the host's
-  `IRunLoop` for timers and events (`vstgui_linux_runloop_support.cpp`).
+  `Linux::IRunLoop` (from the `IPlugFrame`) for timers and X events. The plug
+  view installs it through a forwarding run loop and opens the frame with an
+  `X11::FrameConfig`; it offers X11 embedding only, refuses to open without a
+  host run loop, and finishes cairo's xcb device when the last editor closes
+  so the editor can be reopened. Details in
+  [VST3_IMPLEMENTATION.md](VST3_IMPLEMENTATION.md#editors).
   VSTGUI's cairo backend passes `CDrawContext::drawArc` angles to `cairo_arc`
   as radians, although the API takes degrees. The editor therefore strokes
   every arc through a graphics path, which converts the angles correctly on

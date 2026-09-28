@@ -39,6 +39,9 @@ constexpr std::uint32_t kTagDigiRt   = fourcc('D', 'I', 'G', 'R'); // D418 mode 
 constexpr std::uint32_t kTagOutput   = fourcc('O', 'U', 'T', 'M'); // pure SID 1Q1 output mode
 constexpr std::uint32_t kTagSidFile  = fourcc('S', 'I', 'D', 'F'); // u16 subtune + loaded .sid file
 constexpr std::uint32_t kTagBypass   = fourcc('B', 'Y', 'P', 'S'); // host bypass (1 byte)
+constexpr std::uint32_t kTagPreset   = fourcc('P', 'R', 'S', 'T'); // patch-only state (no payload)
+static_assert(kTagRoot == kVst3StateTagRoot && kTagPreset == kVst3StateTagPreset && kStateVersion == kVst3StateVersion,
+              "public state constants match the codec");
 constexpr std::size_t kMaxSidFileBytes = 1u << 20;                    // PSID/RSID files are far smaller
 
 void putU32(std::vector<std::uint8_t>& out, std::uint32_t v) {
@@ -255,6 +258,20 @@ bool Vst3KernelHost::decodeStateRoot(const std::uint8_t* data, std::size_t size,
     return false;
 }
 
+bool Vst3KernelHost::isPresetState(const std::uint8_t* data, std::size_t size) noexcept {
+    if (!data || size < 4 || getU32(data) < kStateVersion) return false;
+    std::size_t pos = 4;
+    while (pos + 8 <= size) {
+        const std::uint32_t tag = getU32(data + pos);
+        const std::uint32_t len = getU32(data + pos + 4);
+        pos += 8;
+        if (len > size - pos) return false;
+        if (tag == kTagPreset) return true;
+        pos += len;
+    }
+    return false;
+}
+
 bool Vst3KernelHost::decodeBypass(const std::uint8_t* data, std::size_t size) noexcept {
     if (!data || size < 4 || getU32(data) < kStateVersion) return false;
     std::size_t pos = 4;
@@ -283,6 +300,7 @@ bool Vst3KernelHost::loadState(const std::uint8_t* data, std::size_t size) {
 
     bool haveRoot = false;
     bool bypassed = false; // a state without the chunk is not bypassed
+    const bool presetOnly = isPresetState(data, size);
     bool haveDigiModel = false, haveDigiBank = false;
     std::vector<std::uint8_t> sidBytes;
     std::uint16_t sidSubtune = 0;
@@ -370,6 +388,8 @@ bool Vst3KernelHost::loadState(const std::uint8_t* data, std::size_t size) {
         GUI::sanitizeDigiPanelModel(digiModel_);
         GUI::digiRepairUserSampleReferences(digiModel_, *digiBank_);
     }
+    // A preset (patch-only state) changes the patch, nothing else.
+    if (presetOnly) return haveRoot;
     publishModelsLocked_(true);
     lock.unlock();
     setBypass(bypassed);

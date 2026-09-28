@@ -33,8 +33,49 @@ and `include/arpsid/version.h`.
   combinations, `notch`, `all`, `off`) now map to the right Filter Mode. Before,
   low-pass imported as band-pass.
 
+### Fixed (VST3)
+
+- **Linux: the editor crashed the host when it opened.** The VSTGUI frame was
+  opened without the X11 frame configuration that carries the host's run loop,
+  so VSTGUI never opened its X connection and crashed on the first X call. The
+  editor now runs on the host's `Linux::IRunLoop` (from the plug frame) through
+  a forwarding run loop, offers X11 only (VSTGUI is built without Wayland), and
+  refuses to open instead of crashing when a host provides no run loop.
+- **Linux: reopening the editor could crash.** When the last editor closed,
+  VSTGUI disconnected from X without finishing cairo's device for the
+  connection; the next connection often reused the address and cairo asserted.
+  The device is now finished before the disconnect.
+- **Editor `attached` result.** A failed open now returns `kResultFalse`, so the
+  host does not show an empty window.
+- **Bypass text.** The Bypass parameter parses its own `On`/`Off` text.
+
+### Added (VST3)
+
+- **Factory patches as `.vstpreset` files.** Hosts whose preset browser reads
+  preset files never showed the factory patches, only hosts that read the
+  program list did. The build now writes all 180 as `.vstpreset` files (one
+  folder per role, with name, category and description metadata), each reloaded
+  and verified against the program it came from. The VST3 zips ship them in
+  `VST3 Presets/` and the installers put them in the VST3 preset folders
+  (`~/.vst3/presets`, `Documents\VST3 Presets`, `~/Library/Audio/Presets`, or
+  the system folders). Loading one changes only the patch, exactly like picking
+  the program: the MIX/KIT/DIGI/SETTINGS models, a loaded tune, bypass and the
+  editor size stay. `cmake --install` and `arpsid_vst3_install_user` install
+  them too.
+- CI opens the Linux editor in a real X11 window (Xvfb) with a host run loop,
+  resizes, closes and reopens it, and checks the preset files on every VST3
+  platform.
+
+### Fixed (installers)
+
+- `install.sh` and `install_macos.sh` no longer abort on macOS's bash 3.2 when
+  no `sudo` is needed (an empty array expanded under `set -u`).
+
 ### Compatibility
 
+- VST3 states can carry a `PRST` chunk that marks a patch-only (preset) state.
+  Older versions skip unknown chunks, so they load such a preset as a normal
+  state.
 - Saved states now carry a **state-law revision** marker: an extra semantic entry
   that older versions ignore, so 0.9.10 projects still open in 0.9.9. A project
   saved before 0.9.10 that plays in SYNTH mode is migrated on load so it sounds

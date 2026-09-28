@@ -54,6 +54,7 @@
 #include <algorithm>
 #include <cstring>
 #include <cmath>
+#include <cctype>
 #include <cstdio>
 
 namespace ArpSID {
@@ -171,8 +172,10 @@ public:
         SidStateRootV1 root{};
         if (!Vst3KernelHost::decodeStateRoot(bytes.data(), (size_t)nRead, root)) return kResultFalse;
         mirrorStateRootToParameters_(root, /*notifyHost*/ false);
-        EditController::setParamNormalized((ParamID)kVst3BypassParamId,
-                                           Vst3KernelHost::decodeBypass(bytes.data(), (size_t)nRead) ? 1.0 : 0.0);
+        // A preset (patch-only state) leaves the processor's bypass alone.
+        if (!Vst3KernelHost::isPresetState(bytes.data(), (size_t)nRead))
+            EditController::setParamNormalized((ParamID)kVst3BypassParamId,
+                                               Vst3KernelHost::decodeBypass(bytes.data(), (size_t)nRead) ? 1.0 : 0.0);
         return kResultOk;
     }
 
@@ -309,6 +312,16 @@ public:
                                               TChar* string,
                                               Steinberg::Vst::ParamValue& valueNormalized) override {
         if (!string) return kResultFalse;
+        if (tag == (Steinberg::Vst::ParamID)kVst3BypassParamId) {
+            // The host text is "On"/"Off"; accept those and 0/1.
+            char buf[16] = {};
+            (void)ArpSID_utf16ToUtf8(string, buf, sizeof(buf));
+            std::string t(buf);
+            for (auto& c : t) c = (char)std::tolower((unsigned char)c);
+            if (t == "on" || t == "1") { valueNormalized = 1.0; return kResultOk; }
+            if (t == "off" || t == "0") { valueNormalized = 0.0; return kResultOk; }
+            return kResultFalse;
+        }
         if (tag >= (Steinberg::Vst::ParamID)kNumParams)
             return EditController::getParamValueByString(tag, string, valueNormalized);
         char buf[128] = {};

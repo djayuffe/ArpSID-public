@@ -46,9 +46,16 @@
 
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <string>
 #include <vector>
+
+#if defined(__linux__)
+#include <chrono>
+#include <poll.h>
+#include <xcb/xcb.h>
+#endif
 
 using namespace Steinberg;
 using namespace Steinberg::Vst;
@@ -155,6 +162,178 @@ void sendMessage(IConnectionPoint* to, const char* id, const std::vector<std::pa
     to->notify(msg);
 }
 
+#if defined(__linux__)
+// A Linux host's editor window: an X11 window plus the IPlugFrame a Linux
+// VST3 host gives the plug-in, which also serves Linux::IRunLoop (fd watches
+// and timers pumped by the host), as the VST3 Linux hosting contract asks.
+class X11PlugFrame final : public IPlugFrame, public Linux::IRunLoop {
+public:
+    struct Fd { IPtr<Linux::IEventHandler> h; int fd; };
+    struct Timer { IPtr<Linux::ITimerHandler> h; int ms; std::chrono::steady_clock::time_point due; };
+    std::vector<Fd> fds;
+    std::vector<Timer> timers;
+    int resizes = 0;
+    int timerFires = 0;
+
+    tresult PLUGIN_API resizeView(IPlugView* view, ViewRect* r) override {
+        ++resizes;
+        return view && r ? view->onSize(r) : kInvalidArgument;
+    }
+    tresult PLUGIN_API registerEventHandler(Linux::IEventHandler* h, Linux::FileDescriptor fd) override {
+        if (!h) return kInvalidArgument;
+        fds.push_back({h, fd});
+        return kResultTrue;
+    }
+    tresult PLUGIN_API unregisterEventHandler(Linux::IEventHandler* h) override {
+        for (auto it = fds.begin(); it != fds.end(); ++it)
+            if (it->h == h) { fds.erase(it); return kResultTrue; }
+        return kResultFalse;
+    }
+    tresult PLUGIN_API registerTimer(Linux::ITimerHandler* h, Linux::TimerInterval ms) override {
+        if (!h) return kInvalidArgument;
+        timers.push_back({h, (int)std::max<Linux::TimerInterval>(ms, 1),
+                          std::chrono::steady_clock::now() + std::chrono::milliseconds(ms)});
+        return kResultTrue;
+    }
+    tresult PLUGIN_API unregisterTimer(Linux::ITimerHandler* h) override {
+        for (auto it = timers.begin(); it != timers.end(); ++it)
+            if (it->h == h) { timers.erase(it); return kResultTrue; }
+        return kResultFalse;
+    }
+
+    // Runs the loop for about `ms` milliseconds.
+    void pump(int ms) {
+        const auto end = std::chrono::steady_clock::now() + std::chrono::milliseconds(ms);
+        while (std::chrono::steady_clock::now() < end) {
+            std::vector<pollfd> p;
+            for (const auto& f : fds) p.push_back({f.fd, POLLIN, 0});
+            ::poll(p.data(), (nfds_t)p.size(), 5);
+            // Copies: handlers may (un)register while being called.
+            const auto fdsNow = fds;
+            for (size_t i = 0; i < p.size() && i < fdsNow.size(); ++i)
+                if (p[i].revents & (POLLIN | POLLHUP)) fdsNow[i].h->onFDIsSet(fdsNow[i].fd);
+            const auto now = std::chrono::steady_clock::now();
+            const auto timersNow = timers;
+            for (const auto& t : timersNow) {
+                if (t.due > now) continue;
+                for (auto& live : timers)
+                    if (live.h == t.h) live.due = now + std::chrono::milliseconds(live.ms);
+                ++timerFires;
+                t.h->onTimer();
+            }
+        }
+    }
+
+    tresult PLUGIN_API queryInterface(const TUID iid, void** obj) override {
+        QUERY_INTERFACE(iid, obj, FUnknown::iid, IPlugFrame)
+        QUERY_INTERFACE(iid, obj, IPlugFrame::iid, IPlugFrame)
+        QUERY_INTERFACE(iid, obj, Linux::IRunLoop::iid, Linux::IRunLoop)
+        *obj = nullptr;
+        return kNoInterface;
+    }
+    uint32 PLUGIN_API addRef() override { return 1; }
+    uint32 PLUGIN_API release() override { return 1; }
+};
+
+// A frame without Linux::IRunLoop (a host that only offers it through the
+// factory host context, or not at all).
+class BarePlugFrame final : public IPlugFrame {
+public:
+    tresult PLUGIN_API resizeView(IPlugView*, ViewRect*) override { return kResultFalse; }
+    tresult PLUGIN_API queryInterface(const TUID iid, void** obj) override {
+        QUERY_INTERFACE(iid, obj, FUnknown::iid, IPlugFrame)
+        QUERY_INTERFACE(iid, obj, IPlugFrame::iid, IPlugFrame)
+        *obj = nullptr;
+        return kNoInterface;
+    }
+    uint32 PLUGIN_API addRef() override { return 1; }
+    uint32 PLUGIN_API release() override { return 1; }
+};
+
+// Opens the editor in a real X11 window the way a Linux DAW does and runs its
+// event loop; checks it paints, resizes, closes and opens again.
+void runX11EditorChecks(IEditController* controller) {
+    const char* display = std::getenv("DISPLAY");
+    const char* required = std::getenv("ARPSID_REQUIRE_X11_EDITOR");
+    const bool mustRun = required && *required && *required != '0';
+    if (!display || !*display) {
+        std::printf("  no DISPLAY: X11 editor checks skipped (run under xvfb-run)\n");
+        CHECK(!mustRun, "X11: ARPSID_REQUIRE_X11_EDITOR is set but there is no DISPLAY");
+        return;
+    }
+    int screenNo = 0;
+    xcb_connection_t* xc = xcb_connect(nullptr, &screenNo);
+    if (!xc || xcb_connection_has_error(xc)) {
+        std::printf("  cannot connect to X server %s: X11 editor checks skipped\n", display);
+        CHECK(!mustRun, "X11: ARPSID_REQUIRE_X11_EDITOR is set but the X server is unreachable");
+        if (xc) xcb_disconnect(xc);
+        return;
+    }
+    const xcb_setup_t* setup = xcb_get_setup(xc);
+    xcb_screen_iterator_t it = xcb_setup_roots_iterator(setup);
+    for (int i = 0; i < screenNo; ++i) xcb_screen_next(&it);
+    xcb_screen_t* screen = it.data;
+
+    auto openWindow = [&]() {
+        const xcb_window_t w = xcb_generate_id(xc);
+        xcb_create_window(xc, XCB_COPY_FROM_PARENT, w, screen->root, 0, 0, 1200, 800, 0,
+                          XCB_WINDOW_CLASS_INPUT_OUTPUT, screen->root_visual, 0, nullptr);
+        xcb_map_window(xc, w);
+        xcb_flush(xc);
+        return w;
+    };
+
+    for (int round = 0; round < 2; ++round) {
+        IPlugView* view = controller->createView(ViewType::kEditor);
+        CHECK(view, "X11: editor view created");
+        if (!view) break;
+        CHECK(view->isPlatformTypeSupported(kPlatformTypeX11EmbedWindowID) == kResultTrue, "X11: X11 embedding supported");
+        CHECK(view->isPlatformTypeSupported(kPlatformTypeWaylandSurfaceID) != kResultTrue,
+              "X11: Wayland is not claimed (VSTGUI is built without it)");
+        X11PlugFrame frame;
+        view->setFrame(&frame);
+        const xcb_window_t parent = openWindow();
+        const tresult attached =
+            view->attached(reinterpret_cast<void*>(static_cast<uintptr_t>(parent)), kPlatformTypeX11EmbedWindowID);
+        CHECK(attached == kResultOk, "X11: editor attaches to the host window");
+        frame.pump(400);
+        CHECK(!frame.fds.empty(), "X11: editor registered its X connection with the host run loop");
+        CHECK(frame.timerFires > 0, "X11: editor timers run on the host run loop");
+        ViewRect bigger(0, 0, 1500, 1000);
+        CHECK(view->checkSizeConstraint(&bigger) == kResultOk && view->onSize(&bigger) == kResultOk,
+              "X11: live resize");
+        frame.pump(150);
+        CHECK(view->removed() == kResultOk, "X11: editor detaches");
+        view->setFrame(nullptr);
+        view->release();
+        CHECK(frame.fds.empty() && frame.timers.empty(), "X11: editor left no handlers on the host run loop");
+        xcb_destroy_window(xc, parent);
+        xcb_flush(xc);
+        std::printf("  X11 editor round %d: timers fired %d, resize requests %d\n", round + 1, frame.timerFires,
+                    frame.resizes);
+    }
+
+    // A host frame without a run loop: the editor must refuse, not crash.
+    {
+        IPlugView* view = controller->createView(ViewType::kEditor);
+        if (view) {
+            BarePlugFrame bare;
+            view->setFrame(&bare);
+            const xcb_window_t parent = openWindow();
+            const tresult r =
+                view->attached(reinterpret_cast<void*>(static_cast<uintptr_t>(parent)), kPlatformTypeX11EmbedWindowID);
+            std::printf("  X11 editor without host run loop: attached -> %d\n", (int)r);
+            if (r == kResultOk) view->removed();
+            view->setFrame(nullptr);
+            view->release();
+            xcb_destroy_window(xc, parent);
+            xcb_flush(xc);
+        }
+    }
+    xcb_disconnect(xc);
+}
+#endif
+
 } // namespace
 
 int main(int argc, char** argv) {
@@ -257,6 +436,9 @@ int main(int argc, char** argv) {
             CHECK(again && again->getSize(&cur) == kResultOk && cur.getWidth() == 1800 && cur.getHeight() == 1200,
                   "a reopened editor keeps the chosen size");
             if (again) again->release();
+#if defined(__linux__)
+            runX11EditorChecks(controller);
+#endif
         }
     }
 #endif
@@ -421,6 +603,66 @@ int main(int argc, char** argv) {
                   "bypass is saved in the state and mirrored by the controller");
             if (c) c->terminate();
         }
+        // ── A factory .vstpreset (patch-only state) changes only the patch ──
+        {
+            const int presetSlot = 12;
+            ArpSID::SidStateRootV1 root = ArpSID::makeFactoryPatchStateRootForSlot(presetSlot);
+            std::vector<uint8_t> blob(ArpSID::encodedSidStateRootBinarySize(root));
+            const size_t len = ArpSID::encodeStateRoot(root, ArpSID::kSidBinaryStateMagic, blob.data(), blob.size());
+            std::vector<uint8_t> st;
+            auto u32 = [&](uint32_t v) { for (int i = 0; i < 4; ++i) st.push_back((uint8_t)(v >> (8 * i))); };
+            u32(ArpSID::kVst3StateVersion);
+            u32(ArpSID::kVst3StateTagPreset);
+            u32(0);
+            u32(ArpSID::kVst3StateTagRoot);
+            u32((uint32_t)len);
+            st.insert(st.end(), blob.begin(), blob.begin() + (std::ptrdiff_t)len);
+            MemoryStream ps;
+            int32 pw = 0;
+            ps.write(st.data(), (int32)st.size(), &pw);
+            ps.seek(0, IBStream::kIBSeekSet, nullptr);
+            CHECK(component->setState(&ps) == kResultOk, "processor loads a patch-only preset state");
+            controller->setParamNormalized(bypassId, 1.0);
+            ps.seek(0, IBStream::kIBSeekSet, nullptr);
+            CHECK(controller->setComponentState(&ps) == kResultOk, "controller follows a preset state");
+            CHECK(controller->getParamNormalized(bypassId) > 0.5, "a preset leaves the controller's bypass alone");
+            CHECK(std::fabs(controller->getParamNormalized((ParamID)ArpSID::kParamBankSlot) -
+                            ArpSID::canonicalNormalizedBankSlotValue(presetSlot)) < 1e-6,
+                  "controller shows the preset's patch");
+            MemoryStream after;
+            CHECK(component->getState(&after) == kResultOk, "getState after preset");
+            int64 asz = 0;
+            after.seek(0, IBStream::kIBSeekEnd, &asz);
+            std::vector<uint8_t> ab((size_t)asz);
+            after.seek(0, IBStream::kIBSeekSet, nullptr);
+            int32 ar = 0;
+            after.read(ab.data(), (int32)ab.size(), &ar);
+            // Chunk scan: 'BYPS' holds the bypass byte, 'PRST' marks a preset.
+            auto chunk = [&](uint32_t want, const uint8_t*& at) {
+                auto g = [&](size_t i) {
+                    return (uint32_t)ab[i] | ((uint32_t)ab[i + 1] << 8) | ((uint32_t)ab[i + 2] << 16) |
+                           ((uint32_t)ab[i + 3] << 24);
+                };
+                for (size_t pos = 4; pos + 8 <= ab.size();) {
+                    const uint32_t tag = g(pos), clen = g(pos + 4);
+                    if (tag == want) { at = ab.data() + pos + 8; return clen; }
+                    pos += 8 + clen;
+                }
+                return 0xFFFFFFFFu;
+            };
+            const uint8_t* at = nullptr;
+            const uint32_t byLen = chunk(0x42595053u /* 'BYPS' */, at);
+            CHECK(byLen == 1 && at && *at == 1, "a preset leaves the processor bypassed");
+            CHECK(chunk(ArpSID::kVst3StateTagPreset, at) == 0xFFFFFFFFu, "saved project state is a full state");
+            after.seek(0, IBStream::kIBSeekSet, nullptr);
+            IPtr<IEditController> c = makeController();
+            CHECK(c && c->setComponentState(&after) == kResultOk &&
+                      std::fabs(c->getParamNormalized((ParamID)ArpSID::kParamBankSlot) -
+                                ArpSID::canonicalNormalizedBankSlotValue(presetSlot)) < 1e-6,
+                  "the processor now runs the preset's patch");
+            if (c) c->terminate();
+        }
+
         ParameterChanges byOff;
         (void)renderRms(proc, 2, 512, nullptr, oneChange(byOff, bypassId, 0.0));
         const double back = renderRms(proc, 8, 512);

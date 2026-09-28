@@ -7,6 +7,7 @@ and the matching installer script.
 - [Quick install](#quick-install)
 - [Which download](#which-download)
 - [macOS](#macos) · [Windows](#windows) · [Linux](#linux)
+- [Factory presets (VST3)](#factory-presets-vst3)
 - [Verifying a download by hand](#verifying-a-download-by-hand)
 - [Uninstalling](#uninstalling)
 - [Troubleshooting](#troubleshooting)
@@ -63,15 +64,18 @@ stop if a checksum does not match.
 | macOS 12+ (Apple silicon and Intel) | `ArpSID-<v>-auv2-macos-universal.zip` | `ArpSID.component`: Audio Unit v2 in five flavors (ArpSID, ArpSID Instrument, DrSID drum machine, SID-808, C64 tune player) |
 | | `ArpSID-<v>-auv3-macos-universal.zip` | `ArpSID.app`: the Logic-compatible app that carries the AUv3 extension |
 | | `ArpSID-<v>-standalone-macos-universal.zip` | `ArpSID Standalone.app`: runs without a DAW (keyboard, transport, preset browser) |
-| | `ArpSID-<v>-vst3-macos-universal.zip` | `arpsid_vst3.vst3` |
-| Windows 10/11 x64 | `ArpSID-<v>-vst3-windows-x64.zip` | `arpsid_vst3.vst3` |
-| Windows 11 on Arm | `ArpSID-<v>-vst3-windows-arm64.zip` | `arpsid_vst3.vst3` |
-| Linux x86_64 | `ArpSID-<v>-vst3-linux-x86_64.zip` | `arpsid_vst3.vst3` |
-| Linux aarch64 | `ArpSID-<v>-vst3-linux-aarch64.zip` | `arpsid_vst3.vst3` |
+| | `ArpSID-<v>-vst3-macos-universal.zip` | `arpsid_vst3.vst3` + `VST3 Presets/` |
+| Windows 10/11 x64 | `ArpSID-<v>-vst3-windows-x64.zip` | `arpsid_vst3.vst3` + `VST3 Presets/` |
+| Windows 11 on Arm | `ArpSID-<v>-vst3-windows-arm64.zip` | `arpsid_vst3.vst3` + `VST3 Presets/` |
+| Linux x86_64 | `ArpSID-<v>-vst3-linux-x86_64.zip` | `arpsid_vst3.vst3` + `VST3 Presets/` |
+| Linux aarch64 | `ArpSID-<v>-vst3-linux-aarch64.zip` | `arpsid_vst3.vst3` + `VST3 Presets/` |
 | Any | `ArpSID-<v>-source.zip` | Source code without the C64 ROMs |
 
 Each plug-in zip also contains its installer (`install_macos.sh`, `install.ps1`
 or `install.sh`) and an `INSTALL.txt` with the short version of this page.
+Every VST3 zip carries the 180 factory patches as `.vstpreset` files in
+`VST3 Presets/`; the installers put them where hosts look for presets (see
+[Factory presets](#factory-presets-vst3)).
 
 ---
 
@@ -86,6 +90,7 @@ or `install.sh`) and an `INSTALL.txt` with the short version of this page.
 | `arpsid_vst3.vst3` | `~/Library/Audio/Plug-Ins/VST3/` | `/Library/Audio/Plug-Ins/VST3/` |
 | `ArpSID.app` | `/Applications/`; the AUv3 extension is registered with `pluginkit` | same |
 | `ArpSID Standalone.app` | `/Applications/` | same |
+| `VST3 Presets/` (VST3 zip) | `~/Library/Audio/Presets/Uber Sound Solutions/ArpSID/` | `/Library/Audio/Presets/Uber Sound Solutions/ArpSID/` |
 
 Then it:
 
@@ -100,7 +105,7 @@ changed Audio Units at launch.
 | `--system` | Plug-ins for all users (uses `sudo`). |
 | `--from DIR` | Install the bundles in `DIR`, e.g. after unzipping several zips into one folder. |
 | `--validate` | Run `auval -v aumu <flavor> ASID` for all five AU flavors afterwards. |
-| `--uninstall` | Remove every ArpSID product. |
+| `--uninstall` | Remove every ArpSID product and the VST3 factory presets. |
 | `--yes` | Replace existing installs without asking. |
 
 **By hand.**
@@ -136,14 +141,17 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1
 | (default) `-Scope System` | Install to `C:\Program Files\Common Files\VST3\`. Every host scans this folder. Needs an elevated PowerShell. |
 | `-Scope User` | Install to `%LOCALAPPDATA%\Programs\Common\VST3\` (the per-user VST3 folder, VST 3.7+). No admin rights needed; check that your host scans this folder. |
 | `-Dest DIR` | Install into `DIR`. |
+| `-PresetsDest DIR` | Put the factory presets in `DIR\Uber Sound Solutions\ArpSID\`. The default is `Documents\VST3 Presets` with `-Scope User` and `%ProgramData%\VST3 Presets` with `-Scope System`. |
+| `-NoPresets` | Do not install the factory presets. |
 | `-Check` | Only check that the bundle has a module for this PC (x64 or arm64). |
-| `-Uninstall` | Remove ArpSID from the chosen folder. |
+| `-Uninstall` | Remove ArpSID and its factory presets from the chosen folders. |
 
 The installer removes the "downloaded from the internet" mark
 (`Unblock-File`), because some hosts refuse to load blocked DLLs.
 
 **By hand.** Copy the `arpsid_vst3.vst3` folder into
-`C:\Program Files\Common Files\VST3\`. If Windows marked the zip as
+`C:\Program Files\Common Files\VST3\`, and the contents of `VST3 Presets`
+into `Documents\VST3 Presets\`. If Windows marked the zip as
 downloaded, right-click the zip, open **Properties**, tick **Unblock**, then
 extract it again.
 
@@ -158,18 +166,25 @@ needed.
 **With the installer.** Unzip, then run:
 
 ```bash
-./install.sh            # for you: ~/.vst3/
-./install.sh --system   # all users: /usr/lib/vst3/ (uses sudo)
+./install.sh            # for you: ~/.vst3/, presets in ~/.vst3/presets/
+./install.sh --system   # all users: /usr/lib/vst3/ and /usr/share/vst3/presets/ (uses sudo)
 ./install.sh --check    # only check that the libraries ArpSID needs are there
 ./install.sh --uninstall
 ```
 
-`--dest DIR` installs into another folder, and `--yes` replaces an existing
-install without asking. The installer checks that the bundle has a module for
+`--dest DIR` installs the plug-in into another folder, `--presets-dest DIR`
+puts the factory presets in `DIR/Uber Sound Solutions/ArpSID/`, `--no-presets`
+skips them, and `--yes` replaces an existing install without asking. The installer checks that the bundle has a module for
 your CPU (`x86_64-linux` or `aarch64-linux`). It also runs `ldd` on it and, if
 a shared library is missing, prints the packages to install.
 
-**By hand.** `mkdir -p ~/.vst3 && cp -R arpsid_vst3.vst3 ~/.vst3/`
+**By hand.**
+
+```bash
+mkdir -p ~/.vst3/presets
+cp -R arpsid_vst3.vst3 ~/.vst3/
+cp -R "VST3 Presets/." ~/.vst3/presets/
+```
 
 **Runtime libraries.** The editor draws with cairo and pango on X11. Desktop
 systems normally have these libraries already. On a minimal system, install:
@@ -183,6 +198,36 @@ systems normally have these libraries already. On a minimal system, install:
 Hosts known to load Linux VST3 plug-ins include Bitwig Studio, REAPER, Ardour,
 Carla and Qtractor. Under Wayland, the editor runs through XWayland, as most
 Linux plug-in editors do.
+
+---
+
+## Factory presets (VST3)
+
+The 180 factory patches reach a VST3 host in two ways:
+
+- **The program list.** ArpSID publishes them as a VST3 program list
+  (`IUnitInfo`). Hosts that read program lists show it in their program or
+  preset menu. The editor's preset picker uses the same list.
+- **Preset files.** Hosts whose preset browser reads files from disk, rather
+  than the program list, need `.vstpreset` files in the standard VST3 preset
+  folders. Every VST3 zip has them in `VST3 Presets/`, and the
+  installers copy them to:
+
+  | OS | For you | For all users |
+  |---|---|---|
+  | Linux | `~/.vst3/presets/Uber Sound Solutions/ArpSID/` | `/usr/share/vst3/presets/Uber Sound Solutions/ArpSID/` |
+  | Windows | `Documents\VST3 Presets\Uber Sound Solutions\ArpSID\` | `%ProgramData%\VST3 Presets\Uber Sound Solutions\ArpSID\` |
+  | macOS | `~/Library/Audio/Presets/Uber Sound Solutions/ArpSID/` | `/Library/Audio/Presets/Uber Sound Solutions/ArpSID/` |
+
+  They are sorted into folders by role: `Bass`, `Bell`, `Drums`, `Keys`,
+  `Lead`, `Metallic` and `Pad`. Each file also carries its name, a musical
+  category and the patch description as preset metadata.
+
+Loading a factory preset does the same as picking the program: it changes the
+patch and nothing else. The MIX, KIT, DIGI and SETTINGS panels, a loaded `.sid`
+tune, the host bypass and the editor's size and tab stay as they were. (A
+preset you save yourself from the host is a full snapshot and restores
+everything.)
 
 ---
 
@@ -206,7 +251,7 @@ shasum -a 256 -c --ignore-missing SHA256SUMS.txt  # macOS
 |---|---|
 | macOS | `./install_macos.sh --uninstall`, or delete the bundles listed under [macOS](#macos) and run `killall -9 AudioComponentRegistrar`. |
 | Windows | `.\install.ps1 -Uninstall`, adding `-Scope User` if you installed for yourself; or delete `arpsid_vst3.vst3` from the VST3 folder. |
-| Linux | `./install.sh --uninstall`, adding `--system` for a system install; or delete `~/.vst3/arpsid_vst3.vst3`. |
+| Linux | `./install.sh --uninstall`, adding `--system` for a system install; or delete `~/.vst3/arpsid_vst3.vst3` and `~/.vst3/presets/Uber Sound Solutions/ArpSID`. |
 
 Projects keep their ArpSID settings. Installing ArpSID again restores them.
 
@@ -222,6 +267,9 @@ Projects keep their ArpSID settings. Installing ArpSID again restores them.
 | Windows: the host skips ArpSID | Check the host's VST3 folder list, and check the files are unblocked (run `install.ps1` again). Use the zip that matches your PC: x64 or arm64. |
 | Linux: the host skips ArpSID, or the editor window is empty | Run `./install.sh --check` and install the listed libraries. Check that your host scans `~/.vst3` (or `/usr/lib/vst3`). |
 | Linux: no editor, only a list of parameters | The plug-in was built with `ARPSID_VST3_EDITOR=OFF`. Release builds always include the editor. |
+| Linux: the host crashed when opening the editor (0.9.9 and earlier) | Fixed after 0.9.9: the editor did not connect VSTGUI to the host's event loop and crashed on the first X11 call, and reopening it could crash in cairo. Update ArpSID. |
+| Linux: the editor does not open and the host reports an error | The host gave the editor no event loop (`Linux::IRunLoop`). ArpSID then refuses to open instead of crashing. Every mainstream Linux host provides one; update the host. |
+| The factory patches are missing from the host's preset browser | Install the presets (run the installer again, or copy `VST3 Presets` by hand, see [Factory presets](#factory-presets-vst3)) and let the host rescan its preset folders. The program list works without them. |
 | RSID tunes do not play in the C64 player | RSID tunes need your own KERNAL/BASIC/CHARGEN ROM dumps; none are bundled. PSID tunes play without them. |
 
 ---

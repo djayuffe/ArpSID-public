@@ -8,6 +8,7 @@
 
 #include "au3/ArpSIDCanonicalEvents.h"
 #include "parameter_ids.h"
+#include "arpsid/core/sid_runtime_state_root_presentation.h"
 
 #include <cmath>
 #include <cstdio>
@@ -143,6 +144,58 @@ int main() {
         check(b.loadState(off.data(), off.size()) && !b.bypass(), "loading an un-bypassed state clears bypass");
         const std::uint8_t legacy[4] = {4, 0, 0, 0};
         check(!Vst3KernelHost::decodeBypass(legacy, sizeof legacy), "legacy state is never bypassed");
+    }
+
+    // Factory .vstpreset state (PRST marker + ROOT only): changes the patch
+    // like a program selection and leaves the tune, the models and bypass.
+    {
+        auto u32 = [](const std::uint8_t* p) {
+            return std::uint32_t(p[0]) | (std::uint32_t(p[1]) << 8) | (std::uint32_t(p[2]) << 16) |
+                   (std::uint32_t(p[3]) << 24);
+        };
+        auto put = [](std::vector<std::uint8_t>& o, std::uint32_t v) {
+            for (int i = 0; i < 4; ++i) o.push_back(std::uint8_t(v >> (8 * i)));
+        };
+        // The patch of factory slot 20, taken from a full state.
+        Vst3KernelHost src;
+        src.setup(48000.0, 256);
+        check(src.loadFactorySlot(20), "factory slot 20 loads");
+        const auto full = src.saveState();
+        std::vector<std::uint8_t> preset;
+        put(preset, kVst3StateVersion);
+        put(preset, kVst3StateTagPreset);
+        put(preset, 0);
+        for (std::size_t pos = 4; pos + 8 <= full.size();) {
+            const std::uint32_t tag = u32(&full[pos]), len = u32(&full[pos + 4]);
+            if (tag == kVst3StateTagRoot) preset.insert(preset.end(), full.begin() + (std::ptrdiff_t)pos, full.begin() + (std::ptrdiff_t)(pos + 8 + len));
+            pos += 8 + len;
+        }
+        check(preset.size() > 12 && preset.size() < 16 * 1024, "a preset state is small (patch only)");
+        check(Vst3KernelHost::isPresetState(preset.data(), preset.size()), "isPresetState sees the marker");
+        check(!Vst3KernelHost::isPresetState(full.data(), full.size()), "a project state is not a preset");
+
+        Vst3KernelHost p;
+        p.setup(48000.0, 256);
+        render(p, 2);
+        check(p.loadSidFile(tune.data(), tune.size(), 2), "tune loads before the preset");
+        auto pm = p.mix();
+        pm.master.masterVolume = 77;
+        p.setMix(pm);
+        p.setBypass(true);
+        check(p.loadState(preset.data(), preset.size()), "preset state loads");
+        render(p, 4);
+        SidStateRootV1 root{};
+        p.currentStateRoot(root);
+        SidStateRootV1 want{};
+        check(Vst3KernelHost::decodeStateRoot(preset.data(), preset.size(), want), "preset root decodes");
+        std::vector<float> have(kNumParams), expect(kNumParams);
+        exportPersistentPresentationParamsFromStateRoot(root, have.data(), kNumParams);
+        exportPersistentPresentationParamsFromStateRoot(want, expect.data(), kNumParams);
+        check(canonicalFactorySlotFromNormalizedBankSlot(have[(size_t)kParamBankSlot]) == 20 && have == expect,
+              "the preset's patch is playing");
+        check(p.isSidFileLoaded() && p.sidSubtune() == 2, "a preset keeps the loaded tune");
+        check(p.mix().master.masterVolume == 77, "a preset keeps the MIX model");
+        check(p.bypass(), "a preset keeps bypass");
     }
 
     if (failures) {

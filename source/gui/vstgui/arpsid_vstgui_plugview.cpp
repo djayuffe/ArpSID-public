@@ -20,14 +20,110 @@
 #include "vstgui/lib/cframe.h"
 #include "vstgui/lib/cvstguitimer.h"
 
+#if defined(__linux__)
+#include "vstgui/lib/platform/linux/linuxfactory.h"
+#include "vstgui/lib/platform/platform_x11.h"
+#include "vstgui/lib/platform/linux/x11platform.h"
+#include <cairo/cairo-xcb.h>
+#include <xcb/xcb.h>
+#endif
+
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <functional>
+#include <vector>
 #include "vst3/arpsid_vst3_kernel_host.h"
 
 namespace ArpSID {
 
 namespace {
+
+#if defined(__linux__)
+// VSTGUI on Linux has no event loop of its own: X events and timers run on
+// the host's Linux::IRunLoop, which hosts serve from the IPlugFrame. VSTGUI
+// opens its X connection only when a frame is opened with an X11::FrameConfig
+// carrying a run loop; without one it drives xcb through a null connection
+// and crashes in the first X call. It also keeps the first run loop it is
+// given for the life of the module, so ArpSID installs this one forwarding
+// object and points it at the current editor's host run loop on every open.
+class HostRunLoop final : public VSTGUI::IRunLoop, public VSTGUI::AtomicReferenceCounted {
+public:
+    static HostRunLoop& instance() {
+        static auto* loop = new HostRunLoop; // lives as long as the module (VSTGUI keeps a reference)
+        return *loop;
+    }
+
+    // The host run loop new registrations go to (nullptr while no editor is open).
+    void setTarget(Steinberg::Linux::IRunLoop* target) { target_ = target; }
+    bool hasTarget() const { return target_ != nullptr; }
+
+    bool registerEventHandler(int fd, VSTGUI::IEventHandler* handler) override {
+        if (!target_ || !handler) return false;
+        auto h = Steinberg::owned(new FdHandler(handler));
+        if (target_->registerEventHandler(h, fd) != Steinberg::kResultTrue) return false;
+        fds_.push_back({h, target_});
+        return true;
+    }
+    bool unregisterEventHandler(VSTGUI::IEventHandler* handler) override {
+        for (auto it = fds_.begin(); it != fds_.end(); ++it) {
+            if (it->handler->target != handler) continue;
+            it->loop->unregisterEventHandler(it->handler);
+            fds_.erase(it);
+            return true;
+        }
+        return false;
+    }
+    bool registerTimer(uint64_t intervalMs, VSTGUI::ITimerHandler* handler) override {
+        if (!target_ || !handler) return false;
+        auto h = Steinberg::owned(new TimerHandler(handler));
+        if (target_->registerTimer(h, intervalMs) != Steinberg::kResultTrue) return false;
+        timers_.push_back({h, target_});
+        return true;
+    }
+    bool unregisterTimer(VSTGUI::ITimerHandler* handler) override {
+        for (auto it = timers_.begin(); it != timers_.end(); ++it) {
+            if (it->handler->target != handler) continue;
+            it->loop->unregisterTimer(it->handler);
+            timers_.erase(it);
+            return true;
+        }
+        return false;
+    }
+
+private:
+    struct FdHandler final : Steinberg::FObject, Steinberg::Linux::IEventHandler {
+        explicit FdHandler(VSTGUI::IEventHandler* t) : target(t) {}
+        void PLUGIN_API onFDIsSet(Steinberg::Linux::FileDescriptor) override { target->onEvent(); }
+        VSTGUI::IEventHandler* target;
+        OBJ_METHODS(FdHandler, FObject)
+        DEFINE_INTERFACES
+            DEF_INTERFACE(Steinberg::Linux::IEventHandler)
+        END_DEFINE_INTERFACES(FObject)
+        REFCOUNT_METHODS(FObject)
+    };
+    struct TimerHandler final : Steinberg::FObject, Steinberg::Linux::ITimerHandler {
+        explicit TimerHandler(VSTGUI::ITimerHandler* t) : target(t) {}
+        void PLUGIN_API onTimer() override { target->onTimer(); }
+        VSTGUI::ITimerHandler* target;
+        OBJ_METHODS(TimerHandler, FObject)
+        DEFINE_INTERFACES
+            DEF_INTERFACE(Steinberg::Linux::ITimerHandler)
+        END_DEFINE_INTERFACES(FObject)
+        REFCOUNT_METHODS(FObject)
+    };
+    // Each registration remembers the host loop it went to, so it is removed
+    // from that loop even after another editor retargeted this object.
+    struct FdEntry { Steinberg::IPtr<FdHandler> handler; Steinberg::IPtr<Steinberg::Linux::IRunLoop> loop; };
+    struct TimerEntry { Steinberg::IPtr<TimerHandler> handler; Steinberg::IPtr<Steinberg::Linux::IRunLoop> loop; };
+
+    HostRunLoop() { remember(); }
+
+    Steinberg::IPtr<Steinberg::Linux::IRunLoop> target_;
+    std::vector<FdEntry> fds_;
+    std::vector<TimerEntry> timers_;
+};
+#endif
 
 using Steinberg::Vst::EditController;
 using Steinberg::Vst::ParamID;
@@ -108,18 +204,50 @@ public:
         setRect(r);
     }
 
+#if defined(__linux__)
+    // VSTGUI is built without Wayland support: offer X11 embedding only, so
+    // hosts that prefer Wayland fall back to X11 (XWayland) instead of opening
+    // an editor that cannot work.
+    Steinberg::tresult PLUGIN_API isPlatformTypeSupported(Steinberg::FIDString type) override {
+        return type && std::strcmp(type, Steinberg::kPlatformTypeX11EmbedWindowID) == 0 ? Steinberg::kResultTrue
+                                                                                         : Steinberg::kResultFalse;
+    }
+#endif
+
     bool PLUGIN_API open(void* parent, const VSTGUI::PlatformType& platformType) override {
         if (frame) return false;
+#if defined(__linux__)
+        // Run loop: the host's, from the plug frame (see HostRunLoop). A host
+        // that passed one to the factory instead (SDK 3.8 host context) has
+        // already installed it in VSTGUI. With neither, refuse to open.
+        auto* lf = VSTGUI::getPlatformFactory().asLinuxFactory();
+        if (!lf) return false;
+        auto& forward = HostRunLoop::instance();
+        Steinberg::FUnknownPtr<Steinberg::Linux::IRunLoop> hostLoop(plugFrame);
+        if (hostLoop) {
+            forward.setTarget(hostLoop);
+            if (!lf->getRunLoop()) lf->setRunLoop(VSTGUI::SharedPointer<VSTGUI::IRunLoop>(&forward));
+        }
+        if (!lf->getRunLoop() || (lf->getRunLoop().get() == &forward && !forward.hasTarget()))
+            return false;
+        VSTGUI::X11::FrameConfig config;
+        config.runLoop = lf->getRunLoop();
+        VSTGUI::IPlatformFrameConfig* frameConfig = &config;
+#else
+        VSTGUI::IPlatformFrameConfig* frameConfig = nullptr;
+#endif
         const VSTGUI::CRect size(0, 0, Editor::EditorView::kWidth, Editor::EditorView::kHeight);
         frame = new VSTGUI::CFrame(size, this);
         frame->setTransparency(false);
         view_ = VSTGUI::makeOwned<Editor::EditorView>(backend_);
         frame->addView(view_);
         view_->remember();
-        if (!frame->open(parent, platformType)) {
+        if (!frame->open(parent, platformType, frameConfig)) {
             close();
             return false;
         }
+        ++openEditors_;
+        counted_ = true;
         applyZoom_(false);
         frame->registerKeyboardHook(view_.get());
         timer_ = VSTGUI::makeOwned<VSTGUI::CVSTGUITimer>([this](VSTGUI::CVSTGUITimer*) {
@@ -135,10 +263,45 @@ public:
         }
         if (frame) {
             if (view_) frame->unregisterKeyboardHook(view_.get());
+            const bool last = counted_ && openEditors_ == 1;
+#if defined(__linux__)
+            // The last X11 frame's destructor closes VSTGUI's X connection, but
+            // cairo keeps its per-connection cache keyed by the connection
+            // pointer. The next editor's xcb_connect often gets the same
+            // address back and cairo then asserts on the stale entry
+            // (cairo-xcb-screen.c _get_screen_index). Keep the connection open
+            // across the frame teardown, finish cairo's device for it, then
+            // let VSTGUI close it.
+            if (last) VSTGUI::X11::RunLoop::init();
+#endif
+            view_ = nullptr;
             frame->forget();
             frame = nullptr;
+            if (counted_) {
+                counted_ = false;
+                --openEditors_;
+            }
+#if defined(__linux__)
+            if (last) {
+                finishCairoDevice_(VSTGUI::X11::RunLoop::instance().getXcbConnection());
+                VSTGUI::X11::RunLoop::exit();
+                // No editor left: drop the reference to the host's run loop.
+                HostRunLoop::instance().setTarget(nullptr);
+            }
+#endif
         }
         view_ = nullptr;
+    }
+
+    // VSTGUIEditor::attached reports success even when open() fails; tell the
+    // host the truth so it does not show an empty window.
+    Steinberg::tresult PLUGIN_API attached(void* parent, Steinberg::FIDString type) override {
+        const Steinberg::tresult r = VSTGUIEditor::attached(parent, type);
+        if (r == Steinberg::kResultOk && !frame) {
+            Steinberg::Vst::EditorView::removed();
+            return Steinberg::kResultFalse;
+        }
+        return r;
     }
 
     // IPlugViewContentScaleSupport (Windows / Linux HiDPI). The host's scale
@@ -206,6 +369,27 @@ private:
         return true;
     }
 
+#if defined(__linux__)
+    // Finishes cairo's xcb device for `c` (drops its cache entry for the
+    // connection); cairo hands back the existing device for a new surface.
+    static void finishCairoDevice_(xcb_connection_t* c) {
+        if (!c || xcb_connection_has_error(c)) return;
+        xcb_screen_t* screen = xcb_setup_roots_iterator(xcb_get_setup(c)).data;
+        if (!screen) return;
+        xcb_visualtype_t* visual = nullptr;
+        for (auto d = xcb_screen_allowed_depths_iterator(screen); d.rem && !visual; xcb_depth_next(&d))
+            for (auto v = xcb_depth_visuals_iterator(d.data); v.rem; xcb_visualtype_next(&v))
+                if (v.data->visual_id == screen->root_visual) {
+                    visual = v.data;
+                    break;
+                }
+        if (!visual) return;
+        cairo_surface_t* s = cairo_xcb_surface_create(c, screen->root, visual, 1, 1);
+        if (cairo_device_t* dev = cairo_surface_get_device(s)) cairo_device_finish(dev);
+        cairo_surface_destroy(s);
+    }
+#endif
+
     static constexpr double kMinZoom = 0.5, kMaxZoom = 3.0;
     static double clampZoom_(double z) { return std::clamp(z, kMinZoom, kMaxZoom); }
     // The largest zoom whose 3:2 editor fits the offered rect.
@@ -228,6 +412,8 @@ private:
     EditController* controller_;
     VSTGUI::SharedPointer<Editor::EditorView> view_;
     VSTGUI::SharedPointer<VSTGUI::CVSTGUITimer> timer_;
+    static inline int openEditors_ = 0; // editors with an open frame (UI thread only)
+    bool counted_ = false;              // this editor is in openEditors_
     double hostScale_ = 1.0; // host content scale factor
     double zoom_ = 1.0;      // total zoom (user size x host scale)
 };

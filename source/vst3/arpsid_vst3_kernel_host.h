@@ -38,6 +38,16 @@ namespace ArpSID {
 // unchanged; the plug-in keeps running while bypassed and fades its output.
 constexpr int kVst3BypassParamId = 1024;
 
+// VST3 component state layout (see arpsid_vst3_kernel_host.cpp): u32 version
+// 5, then chunks of u32 tag, u32 length, payload (all little-endian).
+constexpr std::uint32_t kVst3StateVersion = 5u;
+constexpr std::uint32_t kVst3StateTagRoot = 0x524F4F54u;   // 'ROOT' canonical state root
+// Marks a patch-only state, as saved in the factory .vstpreset files: it
+// carries just the ROOT chunk and loading it changes the patch exactly like a
+// program selection. Bypass, the loaded .sid tune and the GUI models (MIX,
+// KIT, DIGI, settings) are left as they are.
+constexpr std::uint32_t kVst3StateTagPreset = 0x50525354u; // 'PRST'
+
 class ArpSIDDSPKernel;
 struct TimedEvent;
 struct TransportState;
@@ -84,6 +94,8 @@ public:
     // Decode only the canonical state root of a component state (any version);
     // used by the edit controller to mirror parameters.
     static bool decodeStateRoot(const std::uint8_t* data, std::size_t size, SidStateRootV1& out);
+    // True for a patch-only state (kVst3StateTagPreset).
+    static bool isPresetState(const std::uint8_t* data, std::size_t size) noexcept;
 
     // ── GUI models ──────────────────────────────────────────────────────────
     GUI::SettingsPanelModel settings() const;

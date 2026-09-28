@@ -443,7 +443,7 @@ tab, with a compact mirror in OPTIONS.
   - `081–120`: DrSID kits;
   - `121–150`: SID-808 kits;
   - `151–180`: DIGI 4-bit kits.
-- **Host access.** A VST3 program list with program change, and AU factory presets.
+- **Host access.** A VST3 program list with program change, `.vstpreset` files for VST3 preset browsers, and AU factory presets.
   Selecting a slot loads it on the next block.
 - **Files:**
   - `.arpsid` (one patch), `.arpsidbank` (a bank);
@@ -493,7 +493,9 @@ The same mapping applies in AU, VST3 (`IMidiMapping`) and the Standalone app.
   - soft host **bypass** (10 ms fade, saved);
   - **32-bit and 64-bit** processing;
   - **units** (one per tab, plus host MIDI groups);
-  - the **program list**;
+  - the **program list**, and all 180 factory patches as **`.vstpreset` files**
+    (sorted by role, with name, category and description) that the installers
+    put in the VST3 preset folders, for hosts whose preset browser reads files;
   - `IMidiMapping`;
   - `IInfoListener` (track name and colour shown in the editor);
   - a host **right-click parameter menu** (automation, MIDI learn);

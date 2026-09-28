@@ -255,6 +255,8 @@ if [ "$BUILD_VST3" -eq 1 ]; then
   echo "[ArpSID] VST3: build (runs the SDK validator) + host integration test"
   cmake --build "$BUILD_DIR" --config "$CONFIG" --target arpsid_vst3 ${PARALLEL:+--parallel "$PARALLEL"}
   cmake --build "$BUILD_DIR" --config "$CONFIG" --target arpsid_vst3_host_check
+  echo "[ArpSID] VST3: factory presets (.vstpreset)"
+  cmake --build "$BUILD_DIR" --config "$CONFIG" --target arpsid_vst3_presets
   if [ "$INSTALL_VST3" -eq 1 ]; then
     if [ "$(uname -s)" = "Darwin" ]; then
       cmake --build "$BUILD_DIR" --config "$CONFIG" --target arpsid_install_user
@@ -275,8 +277,9 @@ if [ "$BUILD_VST3" -eq 1 ]; then
     STAGE="$DIST/ArpSID-$VERSION-vst3-$PLATFORM"
     rm -rf "$STAGE" && mkdir -p "$STAGE"
     cp -R "$VST3_BUNDLE" "$STAGE/"
+    [ -d "$BUILD_DIR/VST3 Presets" ] && cp -R "$BUILD_DIR/VST3 Presets" "$STAGE/"
     "$ROOT/scripts/install/stage_installer.sh" vst3 "$STAGE"
-    # Same layout as the release zips: the bundle at the root, the installer next to it.
+    # Same layout as the release zips: the bundle and its presets at the root, the installer next to them.
     (cd "$STAGE" && rm -f "../$(basename "$STAGE").zip" && zip -qr "../$(basename "$STAGE").zip" .)
     echo "[ArpSID] packaged $DIST/$(basename "$STAGE").zip"
   fi

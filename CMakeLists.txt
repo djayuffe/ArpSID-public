@@ -692,6 +692,10 @@ if(ARPSID_BUILD_VST3)
         target_link_libraries(arpsid_vst3_host_tests PRIVATE "-framework Cocoa")
     elseif(UNIX)
         target_link_libraries(arpsid_vst3_host_tests PRIVATE ${CMAKE_DL_LIBS})
+        if(TARGET arpsid_vstgui_support)
+            # Real X11 editor checks (skipped at runtime without a DISPLAY).
+            target_link_libraries(arpsid_vst3_host_tests PRIVATE xcb)
+        endif()
     endif()
     add_dependencies(arpsid_vst3_host_tests arpsid_vst3)
     set(_arpsid_vst3_bundle "${CMAKE_BINARY_DIR}/VST3/$<CONFIG>/arpsid_vst3.vst3")
@@ -736,6 +740,41 @@ if(ARPSID_BUILD_VST3)
         endif()
     endif()
 
+    # Factory patches as standard VST3 preset files (.vstpreset) for hosts
+    # whose preset browser reads files from disk rather than the plug-in's
+    # program list. The exporter loads the built
+    # bundle like a host, saves every factory program and reloads each file
+    # into a fresh instance to verify it. Output:
+    #   <build>/VST3 Presets/Uber Sound Solutions/ArpSID/<Role>/<Patch>.vstpreset
+    set(_arpsid_vst3_preset_sources source/vst3/arpsid_vst3_preset_export.cpp)
+    foreach(_src IN LISTS _arpsid_vst3_host_sources)
+        if(_src MATCHES "hosting/module_|common/memorystream")
+            list(APPEND _arpsid_vst3_preset_sources ${_src})
+        endif()
+    endforeach()
+    add_executable(arpsid_vst3_preset_export EXCLUDE_FROM_ALL ${_arpsid_vst3_preset_sources})
+    target_compile_features(arpsid_vst3_preset_export PRIVATE cxx_std_17)
+    target_include_directories(arpsid_vst3_preset_export PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/include
+        ${CMAKE_CURRENT_SOURCE_DIR}/source)
+    target_link_libraries(arpsid_vst3_preset_export PRIVATE sdk_hosting arpsid_forensic_patchbank)
+    if(APPLE)
+        target_link_libraries(arpsid_vst3_preset_export PRIVATE "-framework Cocoa")
+    elseif(UNIX)
+        target_link_libraries(arpsid_vst3_preset_export PRIVATE ${CMAKE_DL_LIBS})
+    endif()
+    add_dependencies(arpsid_vst3_preset_export arpsid_vst3)
+    set(ARPSID_VST3_PRESETS_DIR "${CMAKE_BINARY_DIR}/VST3 Presets")
+    add_custom_target(arpsid_vst3_presets ALL
+        COMMAND $<TARGET_FILE:arpsid_vst3_preset_export> "${_arpsid_vst3_bundle}" "${ARPSID_VST3_PRESETS_DIR}"
+        DEPENDS arpsid_vst3_preset_export
+        COMMENT "Writing the factory patches as VST3 presets"
+        VERBATIM)
+    if(ARPSID_BUILD_TESTS)
+        add_test(NAME Vst3FactoryPresetExport
+            COMMAND arpsid_vst3_preset_export "${_arpsid_vst3_bundle}" "${CMAKE_BINARY_DIR}/vst3-preset-test")
+    endif()
+
     # Linux/Windows install: `cmake --install` puts the bundle under
     # <prefix>/lib/vst3 (Linux, the system VST3 path when prefix=/usr) or
     # <prefix>/VST3; `arpsid_vst3_install_user` copies it to the per-user
@@ -753,13 +792,31 @@ if(ARPSID_BUILD_VST3)
         install(DIRECTORY "${_arpsid_vst3_bundle}"
             DESTINATION "${_arpsid_vst3_install_subdir}"
             USE_SOURCE_PERMISSIONS)
+        # Factory presets: <prefix>/share/vst3/presets (Linux; /usr/share/vst3/presets
+        # is a VST3 system preset folder) or <prefix>/VST3 Presets (Windows).
+        if(WIN32)
+            set(_arpsid_vst3_preset_install_subdir "VST3 Presets")
+            file(TO_CMAKE_PATH "$ENV{USERPROFILE}/Documents/VST3 Presets" _arpsid_default_user_presets)
+        else()
+            set(_arpsid_vst3_preset_install_subdir "share/vst3/presets")
+            set(_arpsid_default_user_presets "$ENV{HOME}/.vst3/presets")
+        endif()
+        install(DIRECTORY "${ARPSID_VST3_PRESETS_DIR}/"
+            DESTINATION "${_arpsid_vst3_preset_install_subdir}"
+            OPTIONAL)
+        set(ARPSID_USER_VST3_PRESETS_DIR "${_arpsid_default_user_presets}" CACHE PATH
+            "Per-user VST3 preset directory (arpsid_vst3_install_user)")
+        set(_arpsid_user_presets "${ARPSID_USER_VST3_PRESETS_DIR}/Uber Sound Solutions/ArpSID")
         add_custom_target(arpsid_vst3_install_user
             COMMAND "${CMAKE_COMMAND}" -E make_directory "${ARPSID_USER_VST3_DIR}"
             COMMAND "${CMAKE_COMMAND}" -E rm -rf "${ARPSID_USER_VST3_DIR}/arpsid_vst3.vst3"
             COMMAND "${CMAKE_COMMAND}" -E copy_directory "${_arpsid_vst3_bundle}"
                     "${ARPSID_USER_VST3_DIR}/arpsid_vst3.vst3"
-            DEPENDS arpsid_vst3
-            COMMENT "Installing arpsid_vst3.vst3 to ${ARPSID_USER_VST3_DIR}"
+            COMMAND "${CMAKE_COMMAND}" -E rm -rf "${_arpsid_user_presets}"
+            COMMAND "${CMAKE_COMMAND}" -E copy_directory
+                    "${ARPSID_VST3_PRESETS_DIR}/Uber Sound Solutions/ArpSID" "${_arpsid_user_presets}"
+            DEPENDS arpsid_vst3 arpsid_vst3_presets
+            COMMENT "Installing arpsid_vst3.vst3 to ${ARPSID_USER_VST3_DIR} and its presets to ${_arpsid_user_presets}"
             VERBATIM)
     endif()
 endif()

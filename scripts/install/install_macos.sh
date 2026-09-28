@@ -6,6 +6,7 @@
 #   arpsid_vst3.vst3          VST3               -> ~/Library/Audio/Plug-Ins/VST3
 #   ArpSID.app                AUv3 host app      -> /Applications (registers the AUv3)
 #   ArpSID Standalone.app     Standalone         -> /Applications
+#   VST3 Presets/             factory presets    -> ~/Library/Audio/Presets/Uber Sound Solutions/ArpSID
 # then removes the download quarantine (the bundles are ad-hoc signed, not
 # notarized) and refreshes the Audio Unit cache so hosts see the new version.
 #
@@ -37,10 +38,12 @@ done
 [ "$(uname -s)" = Darwin ] || { echo "install_macos.sh is for macOS." >&2; exit 1; }
 
 if [ "$SYSTEM" -eq 1 ]; then
-  PLUG="/Library/Audio/Plug-Ins"; SUDO=(sudo)
+  PLUG="/Library/Audio/Plug-Ins"; PRESETS="/Library/Audio/Presets"; SUDO=(sudo)
 else
-  PLUG="$HOME/Library/Audio/Plug-Ins"; SUDO=()
+  PLUG="$HOME/Library/Audio/Plug-Ins"; PRESETS="$HOME/Library/Audio/Presets"; SUDO=()
 fi
+PRESET_SUBDIR="Uber Sound Solutions/ArpSID"
+PRESETS_TARGET="$PRESETS/$PRESET_SUBDIR"
 APPS="/Applications"
 APP_SUDO=()
 [ -w "$APPS" ] || APP_SUDO=(sudo)
@@ -53,7 +56,7 @@ ITEMS=("ArpSID.component|$PLUG/Components|SUDO"
 
 run_as() { # run_as <array-name> cmd...
   local arr="$1"; shift
-  if [ "$arr" = SUDO ]; then "${SUDO[@]}" "$@"; else "${APP_SUDO[@]}" "$@"; fi
+  if [ "$arr" = SUDO ]; then ${SUDO[@]+"${SUDO[@]}"} "$@"; else ${APP_SUDO[@]+"${APP_SUDO[@]}"} "$@"; fi
 }
 
 refresh_au_cache() {
@@ -71,6 +74,11 @@ if [ "$UNINSTALL" -eq 1 ]; then
       echo "Removed $dest/$name"
     fi
   done
+  if [ -e "$PRESETS_TARGET" ]; then
+    ${SUDO[@]+"${SUDO[@]}"} rm -rf "$PRESETS_TARGET"
+    ${SUDO[@]+"${SUDO[@]}"} rmdir "$(dirname "$PRESETS_TARGET")" 2>/dev/null || true
+    echo "Removed the factory presets from $PRESETS_TARGET"
+  fi
   refresh_au_cache
   exit 0
 fi
@@ -96,6 +104,14 @@ for it in "${ITEMS[@]}"; do
   fi
 done
 [ "$found" -eq 1 ] || { echo "No ArpSID bundles found in $FROM (use --from DIR)." >&2; exit 1; }
+
+# VST3 factory presets (.vstpreset) from the VST3 zip.
+if [ -d "$FROM/VST3 Presets/$PRESET_SUBDIR" ]; then
+  ${SUDO[@]+"${SUDO[@]}"} rm -rf "$PRESETS_TARGET"
+  ${SUDO[@]+"${SUDO[@]}"} mkdir -p "$PRESETS_TARGET"
+  ${SUDO[@]+"${SUDO[@]}"} ditto "$FROM/VST3 Presets/$PRESET_SUBDIR" "$PRESETS_TARGET"
+  echo "Installed the VST3 factory presets to $PRESETS_TARGET"
+fi
 
 refresh_au_cache
 echo "Audio Unit cache refreshed. Restart your host (Logic: quit and reopen) to rescan."

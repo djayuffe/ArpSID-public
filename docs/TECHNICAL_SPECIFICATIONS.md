@@ -196,7 +196,7 @@ extended mode). Strict `auval` passes on all five AU flavors.
 | Factory bank | 180 slots: 001–080 melodic (GM order), 081–120 DrSID kits, 121–150 SID-808 kits, 151–180 DIGI kits |
 | Editor tabs | 17 |
 | State root | `SidStateRootV1` (magic `ASR1`), binary codec, magics `ASSD` / `ASPC` / `ASPR` |
-| VST3 state | version 5: `u32` version, then tagged chunks `ROOT`, `SETS` (32 B), `MIX ` (1264 B), `KIT ` (1676 B), `DIGM` (360 B), `DIGB` (480 392 B), `DIGR` (6 B), `OUTM` (1 B), `SIDF` (subtune + tune), `BYPS` (1 B). Versions 1–4 still load. |
+| VST3 state | version 5: `u32` version, then tagged chunks `ROOT`, `SETS` (32 B), `MIX ` (1264 B), `KIT ` (1676 B), `DIGM` (360 B), `DIGB` (480 392 B), `DIGR` (6 B), `OUTM` (1 B), `SIDF` (subtune + tune), `BYPS` (1 B). Versions 1–4 still load. A factory `.vstpreset` holds a patch-only state: `PRST` (0 B) + `ROOT`, about 5 KB, which changes only the patch. |
 | VST3 controller state | magic `ASEC`, version 1, zoom `f64` (0.25–4), tab `i32` |
 | Semantic JSON caps | 4096 parameters, 4096 semantic entries per import |
 | File types | `.arpsid`, `.arpsidbank`, JSON patch/bank/C64 exports, DrSID kit libraries, `.sid`, WAV/audio, `.d418` |
