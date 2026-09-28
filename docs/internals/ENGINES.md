@@ -67,7 +67,7 @@ the single-SID engine, which keeps both topologies in sync.
 | 0 | Poly | `VoiceManager` (8 slots, stealing, sustain/sostenuto per channel) |
 | 1 | Mono | forced-voice plane: last-pressed held note on voice 0, envelope retriggers |
 | 2 | Legato | forced plane, no envelope retrigger while a note is held; the pitch is retargeted instead |
-| 3 | Unison | forced plane on `unisonCount` (1–8) voices, all playing the top held note |
+| 3 | Unison | forced plane on `unisonCount` voices, all playing the top held note. The engine accepts 1–8; the parameter projection currently never sets it, so it stays at the default of **4** (see SYNTH_MODES.md §6). |
 
 Switching modes is a hard safety barrier:
 

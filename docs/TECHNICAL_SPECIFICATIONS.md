@@ -103,7 +103,7 @@ extended mode). Strict `auval` passes on all five AU flavors.
 |---|---|
 | Poly voices (BitPerfect) | 8 (`VoiceManager::MAX_VOICES`) × 3 oscillators |
 | Authentic topology | 1 chip × 3 voices; stealing policies StealOldest, StealQuietest, StealReleasingFirst, Refuse |
-| Voice modes | Poly, Mono, Legato, Unison (1–8 voices, ±24 cents spread) |
+| Voice modes | Poly, Mono, Legato, Unison (CLASSIC: 4 voices, ±24 cents spread; SYNTH: 1–3 voices) |
 | Held-note tracking | per-channel sustain (CC64) and sostenuto (CC66); host note IDs kept |
 | Pitch bend | 14-bit, per channel, range 0–24 semitones (default 2) |
 | Master tune | ±100 cents |

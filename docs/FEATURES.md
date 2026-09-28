@@ -59,7 +59,7 @@ how it behaves, which controls drive it and their ranges, and where it lives in 
 | Mode | What plays |
 |---|---|
 | `CLASSIC` | the BitPerfect SID synthesizer (§4–§8) |
-| `SYNTH / SID REG` | notes become timed SID register writes; the register image you edit is what the chip plays (§11) |
+| `SYNTH / SID REG` | notes become timed SID register writes; the register image you edit is what the chip plays (§11; full detail in [internals/SYNTH_MODES.md](internals/SYNTH_MODES.md)) |
 | `DR SID` | the DrSID drum machine (§12) |
 
 **AU flavors.** Five components share one binary. Each starts in the mode that fits it and
@@ -115,7 +115,7 @@ shows flavor-specific tab names.
   | `POLY` | 8 voices; stealing when all are busy; release tails keep sounding after note-off |
   | `MONO` | last-note priority; every new note retriggers the envelope |
   | `LEGATO` | overlapping notes glide without retriggering |
-  | `UNISON` | 1–8 voices stacked on the top note, detuned symmetrically up to ±24 cents by **Voice Spread** |
+  | `UNISON` | voices stacked on the top note, detuned symmetrically up to ±24 cents by **Voice Spread**. CLASSIC stacks 4 voices; SYNTH mode stacks 1–3 (from Voice Spread). |
 
   Switching mode never leaves stuck notes or stale glides behind: the held keys are carried
   across, and the old mode's voices are silenced first.
