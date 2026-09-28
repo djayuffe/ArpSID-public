@@ -617,6 +617,9 @@ everything except the ROM files and runs the same guard before committing.
 | Document | Contents |
 |---|---|
 | [`CHANGELOG.md`](CHANGELOG.md) | Release notes. |
+| [`docs/FEATURES.md`](docs/FEATURES.md) | Complete feature reference: every engine, control, range and behaviour, area by area. |
+| [`docs/TECHNICAL_SPECIFICATIONS.md`](docs/TECHNICAL_SPECIFICATIONS.md) | Every number and limit: formats, I/O, SID and C64 timing, capacities, modulation, drums, DIGI, mixer, forensic ranges, state formats, editors. |
+| [`docs/internals/`](docs/internals/README.md) | Low-level references: [SID chip core](docs/internals/SID_CHIP.md), [C64 machine](docs/internals/C64_MACHINE.md), [runtime and kernel](docs/internals/RUNTIME.md), [sound engines](docs/internals/ENGINES.md). |
 | [`docs/INSTALL.md`](docs/INSTALL.md) | Installing on macOS, Windows and Linux: one-line installers, installer options, manual steps, checksums, uninstalling, troubleshooting, building from source. |
 | [`docs/AU_EDITOR.md`](docs/AU_EDITOR.md) | The macOS editor (AUv2, AUv3, Standalone, macOS VST3): a screenshot and guide for all 17 tabs, the five AU flavors, controls, shortcuts, the Standalone menus, and how the editor works. |
 | [`docs/VST3_EDITOR.md`](docs/VST3_EDITOR.md) | The Windows/Linux VST3 editor: a screenshot and guide for all 17 tabs, the controls, and how the editor code works. |
