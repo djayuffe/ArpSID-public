@@ -263,8 +263,8 @@ public:
         }
         if (frame) {
             if (view_) frame->unregisterKeyboardHook(view_.get());
-            const bool last = counted_ && openEditors_ == 1;
 #if defined(__linux__)
+            const bool last = counted_ && openEditors_ == 1;
             // The last X11 frame's destructor closes VSTGUI's X connection, but
             // cairo keeps its per-connection cache keyed by the connection
             // pointer. The next editor's xcb_connect often gets the same
