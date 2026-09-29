@@ -1,4 +1,4 @@
-# ArpSID 0.9.10
+# ArpSID 0.9.11
 
 **A Commodore 64 SID synthesizer, drum machine, 4-bit sampler and C64 tune
 player, as an audio plug-in for macOS, Windows and Linux.**
