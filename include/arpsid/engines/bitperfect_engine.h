@@ -1179,6 +1179,9 @@ public:
         retuneActiveVoicesNoRetrigger();
     }
 
+    float pitchBendRangeSemis(int channel) const noexcept {
+        return (channel >= 0 && channel < 16) ? bendRangeSemisByChannel_[(size_t)channel] : globalBendRangeSemis_;
+    }
     void setPitchBendRangeSemis(int channel, float range) {
         const float clean = std::clamp(std::isfinite(range) ? range : 2.0f, 0.0f, ArpSID_kMaxPitchBendRangeSemis);
         if (channel >= 0 && channel < 16) {

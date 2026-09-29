@@ -15,6 +15,7 @@
 #include "public.sdk/source/vst/vstguieditor.h"
 #include "pluginterfaces/gui/iplugviewcontentscalesupport.h"
 #include "pluginterfaces/vst/ivstcontextmenu.h"
+#include "pluginterfaces/vst/ivstplugview.h"
 #include "base/source/fobject.h"
 
 #include "vstgui/lib/cframe.h"
@@ -193,7 +194,8 @@ private:
 };
 
 class CrossPlatformEditor final : public Steinberg::Vst::VSTGUIEditor,
-                                  public Steinberg::IPlugViewContentScaleSupport {
+                                  public Steinberg::IPlugViewContentScaleSupport,
+                                  public Steinberg::Vst::IParameterFinder {
 public:
     explicit CrossPlatformEditor(EditController* controller)
         : VSTGUIEditor(controller, nullptr), backend_(controller), controller_(controller) {
@@ -250,7 +252,10 @@ public:
         counted_ = true;
         applyZoom_(false);
         frame->registerKeyboardHook(view_.get());
+        Editor::ParamKnob::setMode(arpsidControllerKnobMode(controller_));
         timer_ = VSTGUI::makeOwned<VSTGUI::CVSTGUITimer>([this](VSTGUI::CVSTGUITimer*) {
+            // The host may change its knob mode preference while the editor is open.
+            Editor::ParamKnob::setMode(arpsidControllerKnobMode(controller_));
             if (view_) view_->refresh();
         }, 33);
         return true;
@@ -337,8 +342,21 @@ public:
         return Steinberg::Vst::EditorView::onSize(r);
     }
 
+    // IParameterFinder: the parameter under the mouse, for host "learn"
+    // functions (e.g. Cubase Quick Controls, Reaper "last touched").
+    // Coordinates are in view pixels; the editor lays out at 1x.
+    Steinberg::tresult PLUGIN_API findParameter(Steinberg::int32 xPos, Steinberg::int32 yPos,
+                                                ParamID& resultTag) override {
+        if (!view_ || zoom_ <= 0.0) return Steinberg::kResultFalse;
+        const int id = view_->paramIdAt(VSTGUI::CPoint(xPos / zoom_, yPos / zoom_));
+        if (id < 0) return Steinberg::kResultFalse;
+        resultTag = static_cast<ParamID>(id);
+        return Steinberg::kResultTrue;
+    }
+
     DEFINE_INTERFACES
         DEF_INTERFACE(Steinberg::IPlugViewContentScaleSupport)
+        DEF_INTERFACE(Steinberg::Vst::IParameterFinder)
     END_DEFINE_INTERFACES(VSTGUIEditor)
     REFCOUNT_METHODS(VSTGUIEditor)
 

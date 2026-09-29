@@ -223,6 +223,61 @@ int main(int argc, char** argv) {
         check(right.consumed && backend.menuId == foundId, "right-click opens the host parameter menu");
         check(view->paramIdAt(CPoint(4, 4)) < 0, "no parameter at the editor corner");
 
+        // Knob modes (host IEditController2::setKnobMode): circular follows
+        // the mouse angle, relative circular turns by the angle moved, linear
+        // (the default) drags vertically.
+        {
+            Editor::ParamKnob* knob = nullptr;
+            for (CCoord y = 100; y < 700 && !knob; y += 5)
+                for (CCoord x = 12; x < 1188 && !knob; x += 5)
+                    for (CView* v = view->getViewAt(CPoint(x, y), GetViewOptions().deep()); v && !knob;
+                         v = v->getParentView())
+                        knob = dynamic_cast<Editor::ParamKnob*>(v);
+            check(knob != nullptr, "a knob is on the first tab");
+            if (knob) {
+                const CRect r = knob->getViewSize();
+                const CCoord dia = std::min(r.getWidth() - 8.0, r.getHeight() - 28.0);
+                const CPoint c(r.getCenter().x, r.top + 13.0 + dia / 2.0);
+                auto at = [&](double deg) {
+                    const double a = deg * 3.14159265358979 / 180.0;
+                    return CPoint(c.x + std::cos(a) * dia * 0.4, c.y + std::sin(a) * dia * 0.4);
+                };
+                auto drag = [&](CPoint from, CPoint to) {
+                    MouseDownEvent d;
+                    d.mousePosition = from;
+                    d.buttonState.set(MouseButton::Left);
+                    knob->onMouseDownEvent(d);
+                    MouseMoveEvent m;
+                    m.mousePosition = to;
+                    m.buttonState.set(MouseButton::Left);
+                    knob->onMouseMoveEvent(m);
+                    MouseUpEvent u;
+                    u.mousePosition = to;
+                    knob->onMouseUpEvent(u);
+                };
+                check(Editor::ParamKnob::mode() == Editor::ParamKnob::kLinear, "knobs default to linear drag");
+                check(std::fabs(knob->valueAtPoint(at(135.0))) < 1e-3f &&
+                          std::fabs(knob->valueAtPoint(at(270.0)) - 0.5f) < 1e-3f &&
+                          std::fabs(knob->valueAtPoint(at(45.0)) - 1.0f) < 1e-3f,
+                      "knob angle law: lower left 0, top 0.5, lower right 1");
+
+                Editor::ParamKnob::setMode(Editor::ParamKnob::kCircular);
+                drag(at(200.0), at(270.0));
+                check(std::fabs(knob->getValueNormalized() - 0.5f) < 1e-3f, "circular: the knob follows the mouse angle");
+
+                Editor::ParamKnob::setMode(Editor::ParamKnob::kRelativeCircular);
+                knob->setValueNormalized(0.2f);
+                drag(at(270.0), at(0.0)); // a quarter turn clockwise
+                check(std::fabs(knob->getValueNormalized() - (0.2f + 90.0f / 270.0f)) < 1e-3f,
+                      "relative circular: the knob turns by the angle moved");
+
+                Editor::ParamKnob::setMode(Editor::ParamKnob::kLinear);
+                knob->setValueNormalized(0.2f);
+                drag(c, CPoint(c.x, c.y - 90.0));
+                check(std::fabs(knob->getValueNormalized() - 0.7f) < 1e-3f, "linear: 90 px up is half the range");
+            }
+        }
+
         // Computer keyboard: A = C4 (60), X raises the octave, Ctrl+key is the host's.
         auto key = [&](char32_t c, EventType t, bool ctrl = false) {
             KeyboardEvent e(t);

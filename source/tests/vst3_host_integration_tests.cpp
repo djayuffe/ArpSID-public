@@ -37,6 +37,7 @@
 #include "pluginterfaces/vst/ivstchannelcontextinfo.h"
 #include "pluginterfaces/vst/vstpresetkeys.h"
 #include "pluginterfaces/gui/iplugview.h"
+#include "pluginterfaces/vst/ivstplugview.h"
 
 #include "parameter_ids.h"
 #include "arpsid_vst_messages.h"
@@ -44,6 +45,7 @@
 #include "factory_patch_params.h"
 #include "vst3/arpsid_vst3_kernel_host.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cmath>
 #include <cstdio>
@@ -358,12 +360,47 @@ void runX11EditorChecks(IEditController* controller) {
             const double cpu = double(std::clock() - c0) / CLOCKS_PER_SEC;
             std::printf("  X11 editor idle: %.1f%% of one core (timers fired %d)\n", 100.0 * cpu / 2.0, frame.timerFires);
         }
+        {
+            // IParameterFinder: a knob under the mouse is found at 1x and after
+            // a resize; a point off every control is not.
+            FUnknownPtr<IParameterFinder> finder(view);
+            CHECK(finder, "X11: IParameterFinder available on the editor view");
+            if (finder) {
+                ParamID pid = 0;
+                int found = 0;
+                bool valid = true;
+                for (int32 y = 100; y < 600; y += 9)
+                    for (int32 x = 12; x < 1188; x += 9)
+                        if (finder->findParameter(x, y, pid) == kResultTrue) {
+                            ++found;
+                            valid = valid && pid < (ParamID)ArpSID::kNumParams;
+                        }
+                CHECK(found > 100 && valid, "X11: findParameter reports the parameter under the mouse");
+                CHECK(finder->findParameter(4, 4, pid) != kResultTrue, "X11: no parameter at the editor corner");
+            }
+        }
         CHECK(!frame.fds.empty(), "X11: editor registered its X connection with the host run loop");
         CHECK(frame.timerFires > 0, "X11: editor timers run on the host run loop");
         ViewRect bigger(0, 0, 1500, 1000);
         CHECK(view->checkSizeConstraint(&bigger) == kResultOk && view->onSize(&bigger) == kResultOk,
               "X11: live resize");
         frame.pump(150);
+        {
+            // 1500 x 1000 is 1.25x: hits over the scaled editor name real
+            // parameters, and the scaled corner is still empty.
+            FUnknownPtr<IParameterFinder> finder(view);
+            ParamID pidZoomed = 0;
+            bool same = finder != nullptr, any = false;
+            if (finder) {
+                for (int32 y = 125; y < 750; y += 11)
+                    for (int32 x = 15; x < 1485; x += 11)
+                        if (finder->findParameter(x, y, pidZoomed) == kResultTrue) {
+                            any = true;
+                            same = same && pidZoomed < (ParamID)ArpSID::kNumParams;
+                        }
+            }
+            CHECK(any && same, "X11: findParameter works on a resized editor");
+        }
         CHECK(view->removed() == kResultOk, "X11: editor detaches");
         view->setFrame(nullptr);
         view->release();
@@ -552,6 +589,56 @@ int main(int argc, char** argv) {
             CHECK(mm->getMidiControllerAssignment(0, 15, kCtrlModWheel, id) == kResultOk &&
                   id == (ParamID)((int)ArpSID::kParamHostCtrlModWheelBase + 15), "CC1 on channel 16 -> mod wheel");
             CHECK(mm->getMidiControllerAssignment(0, 0, 3, id) != kResultOk, "unmapped CC3 stays unmapped");
+            // RPN / NRPN / Data Entry reach the per-channel host-control
+            // parameters (RPN 0 = pitch-bend range).
+            const struct { CtrlNumber cc; int base; } rpn[] = {
+                {kCtrlRPNSelectMSB, (int)ArpSID::kParamHostCtrlRpnMsbBase},
+                {kCtrlRPNSelectLSB, (int)ArpSID::kParamHostCtrlRpnLsbBase},
+                {kCtrlNRPNSelectMSB, (int)ArpSID::kParamHostCtrlNrpnMsbBase},
+                {kCtrlNRPNSelectLSB, (int)ArpSID::kParamHostCtrlNrpnLsbBase},
+                {kCtrlDataEntryMSB, (int)ArpSID::kParamHostCtrlDataEntryMsbBase},
+                {kCtrlDataEntryLSB, (int)ArpSID::kParamHostCtrlDataEntryLsbBase},
+            };
+            bool rpnOk = true;
+            for (const auto& m : rpn)
+                for (int16 ch = 0; ch < 16; ++ch)
+                    rpnOk = rpnOk && mm->getMidiControllerAssignment(0, ch, m.cc, id) == kResultOk &&
+                            id == (ParamID)(m.base + ch);
+            CHECK(rpnOk, "CC 101/100/99/98/6/38 map to the channel's RPN/NRPN/Data Entry parameters");
+        }
+    }
+
+    // ── Host MIDI parameters: writable, hidden, uniquely named ─────────────
+    {
+        bool flagsOk = true, titlesOk = true;
+        std::vector<std::u16string> titles;
+        for (int id = (int)ArpSID::kParamHostCtrlModWheelBase; id <= (int)ArpSID::kParamHostCtrlLast; ++id) {
+            ParameterInfo pi{};
+            if (controller->getParameterInfo(id, pi) != kResultOk || pi.id != (ParamID)id) {
+                flagsOk = false;
+                continue;
+            }
+            flagsOk = flagsOk && (pi.flags & ParameterInfo::kIsHidden) && !(pi.flags & ParameterInfo::kIsReadOnly);
+            std::u16string t(reinterpret_cast<const char16_t*>(pi.title));
+            titlesOk = titlesOk && std::find(titles.begin(), titles.end(), t) == titles.end();
+            titles.push_back(t);
+        }
+        CHECK(flagsOk, "host MIDI parameters are hidden and host-writable (not read-only)");
+        CHECK(titlesOk && titles.size() == 208, "the 208 host MIDI parameter titles are unique (channel in the title)");
+        ParameterInfo pi{};
+        controller->getParameterInfo((int)ArpSID::kParamHostCtrlSustainBase + 4, pi);
+        CHECK(std::u16string(reinterpret_cast<const char16_t*>(pi.title)) == u"Host MIDI Sustain Ch 5",
+              "host MIDI title names the channel");
+    }
+
+    // ── IEditController2: host knob mode ───────────────────────────────────
+    {
+        FUnknownPtr<IEditController2> ec2(controller);
+        CHECK(ec2, "IEditController2 available");
+        if (ec2) {
+            CHECK(ec2->setKnobMode(kCircularMode) == kResultTrue, "circular knob mode accepted");
+            CHECK(ec2->setKnobMode(kLinearMode) == kResultTrue, "linear knob mode accepted");
+            CHECK(ec2->setKnobMode(7) == kResultFalse, "unknown knob mode rejected");
         }
     }
 
@@ -736,6 +823,66 @@ int main(int argc, char** argv) {
         EventList offs;
         offs.addEvent(off);
         (void)renderRms(proc, 2, 512, &offs);
+
+        // Silence flags: once a note has died away, output below -120 dBFS
+        // (the engine's 24-bit TPDF dither and settling residue) is written
+        // as exact zero and flagged silent on both channels, so hosts can
+        // skip work downstream; a sounding note clears the flags. Slot 150:
+        // most factory patches carry a chip/board profile with a modelled
+        // analogue floor near -80 dBFS, which is sound and never flagged.
+        {
+            controller->setParamNormalized((ParamID)ArpSID::kParamProgram,
+                                           ArpSID::canonicalNormalizedFactoryProgramValue(150));
+            std::vector<float> l(512), r(512);
+            float* chans[2] = {l.data(), r.data()};
+            AudioBusBuffers out{};
+            out.numChannels = 2;
+            out.channelBuffers32 = chans;
+            auto block = [&](IEventList* ev, IParameterChanges* pc = nullptr) {
+                ProcessData data{};
+                data.processMode = kRealtime;
+                data.symbolicSampleSize = kSample32;
+                data.numSamples = 512;
+                data.numOutputs = 1;
+                data.outputs = &out;
+                data.inputEvents = ev;
+                data.inputParameterChanges = pc;
+                out.silenceFlags = 0;
+                callProcess(proc, data);
+                return out.silenceFlags;
+            };
+            ParameterChanges vol;
+            block(nullptr, oneChange(vol, (ParamID)ArpSID::kParamMasterVolume, 0.8));
+            Event e{};
+            e.type = Event::kNoteOnEvent;
+            e.noteOn.pitch = 48;
+            e.noteOn.velocity = 1.0f;
+            e.noteOn.noteId = 48;
+            EventList ons;
+            ons.addEvent(e);
+            uint64 flags = block(&ons);
+            bool heard = false;
+            for (int k = 0; k < 8; ++k) {
+                heard = heard || flags == 0u;
+                flags = block(nullptr);
+            }
+            CHECK(heard, "a sounding note is not flagged silent");
+            Event o{};
+            o.type = Event::kNoteOffEvent;
+            o.noteOff.pitch = 48;
+            o.noteOff.noteId = 48;
+            EventList offs2;
+            offs2.addEvent(o);
+            block(&offs2);
+            const int limit = 44100 * 20 / 512;
+            int n = 0;
+            while (n < limit && block(nullptr) != 3u) ++n;
+            bool zero = true;
+            for (int i = 0; i < 512; ++i) zero = zero && l[(size_t)i] == 0.0f && r[(size_t)i] == 0.0f;
+            std::printf("  output flagged silent %.2f s after note-off\n", n * 512 / 44100.0);
+            CHECK(n < limit && zero, "released output settles to zero and is flagged silent");
+            CHECK(block(nullptr) == 3u, "silence stays flagged");
+        }
         proc->setProcessing(false);
         component->setActive(false);
 

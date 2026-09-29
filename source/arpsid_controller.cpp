@@ -333,6 +333,19 @@ public:
         return kResultOk;
     }
 
+    // ── IEditController2 (via EditController) ───────────────────────────────
+    // The host's knob mode preference (e.g. Cubase: Preferences > Editing >
+    // Controls) drives how the editor's knobs follow the mouse. Kept per
+    // instance, and linear (the editor's own drag) until a host sets one:
+    // the SDK's static default is circular. openHelp / openAboutBox stay
+    // unsupported (the SDK's kResultFalse).
+    tresult PLUGIN_API setKnobMode(KnobMode mode) override {
+        if (mode != kCircularMode && mode != kRelativCircularMode && mode != kLinearMode) return kResultFalse;
+        knobMode_ = (int)mode;
+        return EditController::setKnobMode(mode);
+    }
+    int knobMode() const noexcept { return knobMode_; }
+
     // ── IMidiMapping ─────────────────────────────────────────────────────────
     tresult PLUGIN_API getMidiControllerAssignment(int32 busIndex,
                                                     int16 channel,
@@ -365,6 +378,26 @@ public:
                 return kResultOk;
             case kPitchBend:
                 id = (Steinberg::Vst::ParamID)((int)kParamHostCtrlPitchBendBase + ch);
+                return kResultOk;
+            // RPN / NRPN select and Data Entry: RPN 0 sets the channel's
+            // pitch-bend range (MPE zones and most DAWs send it).
+            case kCtrlRPNSelectMSB:
+                id = (Steinberg::Vst::ParamID)((int)kParamHostCtrlRpnMsbBase + ch);
+                return kResultOk;
+            case kCtrlRPNSelectLSB:
+                id = (Steinberg::Vst::ParamID)((int)kParamHostCtrlRpnLsbBase + ch);
+                return kResultOk;
+            case kCtrlNRPNSelectMSB:
+                id = (Steinberg::Vst::ParamID)((int)kParamHostCtrlNrpnMsbBase + ch);
+                return kResultOk;
+            case kCtrlNRPNSelectLSB:
+                id = (Steinberg::Vst::ParamID)((int)kParamHostCtrlNrpnLsbBase + ch);
+                return kResultOk;
+            case kCtrlDataEntryMSB:
+                id = (Steinberg::Vst::ParamID)((int)kParamHostCtrlDataEntryMsbBase + ch);
+                return kResultOk;
+            case kCtrlDataEntryLSB:
+                id = (Steinberg::Vst::ParamID)((int)kParamHostCtrlDataEntryLsbBase + ch);
                 return kResultOk;
             default: {
                 // Shared realtime CC law (sid_midi_cc_mapping.h), e.g. the
@@ -488,11 +521,24 @@ private:
                        i == (int)kParamVirtualGate ||
                        i == (int)kParamBankCommand) {
                 flags = ParameterInfo::kIsHidden;
+            } else if (isHostMidiBridgeParam(i)) {
+                // Written by the host through IMidiMapping (CC, pitch bend,
+                // aftertouch, RPN): hidden from automation lists but never
+                // kIsReadOnly, which tells a host the plug-in alone may
+                // change the value.
+                flags = ParameterInfo::kIsHidden;
             }
 
             String128 title{};
             String128 units{};
-            utf8ToTChar(info.name, title, 128);
+            if (isHostMidiBridgeParam(i)) {
+                // 16 per controller: the channel makes each title unique.
+                char named[128] = {};
+                std::snprintf(named, sizeof named, "%s Ch %d", info.name, hostMidiBridgeChannelForParam(i) + 1);
+                utf8ToTChar(named, title, 128);
+            } else {
+                utf8ToTChar(info.name, title, 128);
+            }
             // v966: host-visible unit text comes from the shared typed
             // descriptor, not the raw table string, so all wrappers agree.
             const char* unitSuffix = SidParameterPresentation::unit(i).suffix;
@@ -628,6 +674,7 @@ private:
 
     UnitID selectedUnit_ = kRootUnitId;
     double editorZoom_ = 1.0;
+    int knobMode_ = kLinearMode;
     int editorTab_ = 0;
     std::string trackName_;
     uint32 trackColour_ = 0;
@@ -691,6 +738,11 @@ void arpsidControllerSendUiMidi(void* editController, unsigned char status, unsi
                                 unsigned char data2) noexcept {
     if (auto* c = static_cast<ArpSIDControllerPhase3*>(static_cast<EditController*>(editController)))
         c->sendUiMidi(status, data1, data2);
+}
+
+int arpsidControllerKnobMode(void* editController) noexcept {
+    auto* c = static_cast<ArpSIDControllerPhase3*>(static_cast<EditController*>(editController));
+    return c ? c->knobMode() : (int)kLinearMode;
 }
 
 double arpsidControllerEditorZoom(void* editController) noexcept {

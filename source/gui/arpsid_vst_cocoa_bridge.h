@@ -24,6 +24,8 @@ int  arpsidControllerLoadedFactorySlot(void* editController) noexcept;
 // controller so a reopened editor keeps the size the user chose.
 double arpsidControllerEditorZoom(void* editController) noexcept;
 void arpsidControllerSetEditorZoom(void* editController, double zoom) noexcept;
+// Host knob mode (Steinberg::Vst::KnobModes) from IEditController2.
+int  arpsidControllerKnobMode(void* editController) noexcept;
 // Editor tab kept by the controller (and saved in the project).
 int  arpsidControllerEditorTab(void* editController) noexcept;
 void arpsidControllerSetEditorTab(void* editController, int tab) noexcept;

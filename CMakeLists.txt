@@ -592,6 +592,12 @@ if(ARPSID_BUILD_VST3)
     endif()
 
     target_link_libraries(arpsid_vst3 PRIVATE arpsid_core sdk)
+    # Plug-in browser image (<bundle>/Contents/Resources/Snapshots, listed in
+    # moduleinfo.json): the editor's MAIN page, named by the processor CID.
+    if(COMMAND smtg_target_add_plugin_snapshots)
+        smtg_target_add_plugin_snapshots(arpsid_vst3
+            RESOURCES "${CMAKE_CURRENT_SOURCE_DIR}/resources/vst3/A1B2C3D4E5F607189A0B1C2D3E4F5A6B_snapshot.png")
+    endif()
     if(TARGET arpsid_vstgui_support)
         target_link_libraries(arpsid_vst3 PRIVATE arpsid_vstgui_support)
         target_compile_definitions(arpsid_vst3 PRIVATE ARPSID_VSTGUI_EDITOR=1)
@@ -4912,6 +4918,20 @@ target_link_libraries(ArpGateOffTimingV961Tests PRIVATE arpsid_core)
 add_test(NAME ArpGateOffTimingV961Tests COMMAND ArpGateOffTimingV961Tests)
 if(TARGET arpsid_release_closure_suite)
   add_dependencies(arpsid_release_closure_suite ArpGateOffTimingV961Tests)
+endif()
+
+add_executable(RpnPitchBendRangeTests
+               source/tests/rpn_pitch_bend_range_tests.cpp
+               source/forensic_patch_bank.cpp)
+target_compile_features(RpnPitchBendRangeTests PRIVATE cxx_std_17)
+target_include_directories(RpnPitchBendRangeTests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/source)
+target_link_libraries(RpnPitchBendRangeTests PRIVATE arpsid_core)
+add_test(NAME RpnPitchBendRangeTests COMMAND RpnPitchBendRangeTests)
+if(TARGET arpsid_release_closure_suite)
+  add_dependencies(arpsid_release_closure_suite RpnPitchBendRangeTests)
 endif()
 
 add_executable(GuiUserKitAndPopoutWiringV962Tests

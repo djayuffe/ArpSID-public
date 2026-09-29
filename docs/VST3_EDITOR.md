@@ -83,6 +83,10 @@ parameter. What it offers depends on the host: typically automation lanes,
 MIDI learn or remote-control assignment. ArpSID adds **Reset to Default** at
 the end. Double-click (or Ctrl-click) a knob also resets it.
 
+Host "learn" functions that pick the control under the mouse (quick
+controls, "last touched" parameter) see the parameter of any knob, switch or
+menu in the editor, at any editor size.
+
 ### Bypass
 
 The host's bypass button uses ArpSID's `Bypass` parameter. Bypass fades the
@@ -100,7 +104,7 @@ Controls are chosen by the parameter's step count, which comes from
 
 | Control | Used for | Mouse |
 |---|---|---|
-| **Knob** | continuous parameters, and stepped ones with more than 32 steps | Drag up/down; horizontal drag counts a quarter. A full drag of 180 px covers the range; **Shift** makes it about 7× finer (1200 px). **Wheel**: 2 % per notch, 0.2 % with Shift. **Double-click** or **Ctrl-click** resets to the default. The arc shows the value; it lights while you drag. |
+| **Knob** | continuous parameters, and stepped ones with more than 32 steps | Drag up/down; horizontal drag counts a quarter. A full drag of 180 px covers the range; **Shift** makes it about 7× finer (1200 px). A host knob-mode preference (e.g. Cubase: circular or relative circular) replaces the vertical drag: circular jumps to the mouse angle around the knob, relative circular turns by the angle moved; Shift still gives the fine vertical drag. **Wheel**: 2 % per notch, 0.2 % with Shift. **Double-click** or **Ctrl-click** resets to the default. The arc shows the value; it lights while you drag. |
 | **Toggle** | on/off parameters | Click to switch. The LED and frame light when it is on. |
 | **Menu** | stepped parameters with 2–32 steps | Click to choose. Entries are named after what the engine plays (see [decode law](#stepped-values-and-the-decode-law)). |
 | **Byte knob** (MIX, KIT, DIGI) | model values (0–255, semitones, nibbles) | Drag: 180 px covers the range, **Shift** is 6× finer. **Wheel**: ±1. |

@@ -52,9 +52,9 @@ private:
     void sendKernelHost_();
     void collectEvents_(Steinberg::Vst::ProcessData& data, int frameCount);
     // Renders frames [start, start + frames) of the host block; returns the
-    // output channel count and clears `silent` when a sample is not zero.
+    // output channel count and raises `peak` to the slice's largest |sample|.
     int renderSlice_(Steinberg::Vst::ProcessData& data, bool is64, int start, int frames, const TimedEvent* events,
-                     int eventCount, const TransportState& transport, bool& silent) noexcept;
+                     int eventCount, const TransportState& transport, float& peak) noexcept;
     static bool isAutomatableTarget_(Steinberg::Vst::ParamID pid) noexcept;
     void readBypass_(Steinberg::Vst::ProcessData& data) noexcept;
     void applyBypass_(float** out, int channels, int frames) noexcept;

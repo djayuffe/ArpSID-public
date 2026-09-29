@@ -56,7 +56,26 @@ inline void runtimeHandleRenderedCC(Target& t, uint8_t ch, uint8_t cc, uint8_t v
         case 67:
             t.runtimeApplySoftPedal(c, val >= 64);
             break;
-        case 98: case 99: case 6: case 38:
+        // RPN / NRPN select and Data Entry: the host-control parameters own
+        // the RPN state machine (RPN 0 = pitch-bend range), shared with the
+        // parameter path a VST3 host drives through IMidiMapping.
+        case 101:
+            t.runtimeApplyNormalizedParameter(static_cast<uint32_t>(static_cast<int>(kParamHostCtrlRpnMsbBase) + c), n);
+            break;
+        case 100:
+            t.runtimeApplyNormalizedParameter(static_cast<uint32_t>(static_cast<int>(kParamHostCtrlRpnLsbBase) + c), n);
+            break;
+        case 99:
+            t.runtimeApplyNormalizedParameter(static_cast<uint32_t>(static_cast<int>(kParamHostCtrlNrpnMsbBase) + c), n);
+            break;
+        case 98:
+            t.runtimeApplyNormalizedParameter(static_cast<uint32_t>(static_cast<int>(kParamHostCtrlNrpnLsbBase) + c), n);
+            break;
+        case 6:
+            t.runtimeApplyNormalizedParameter(static_cast<uint32_t>(static_cast<int>(kParamHostCtrlDataEntryMsbBase) + c), n);
+            break;
+        case 38:
+            t.runtimeApplyNormalizedParameter(static_cast<uint32_t>(static_cast<int>(kParamHostCtrlDataEntryLsbBase) + c), n);
             break;
         case 120: case 123:
             // P0 FIX: CC120 (AllSoundOff) and CC123 (AllNotesOff) are channel-scoped.
@@ -77,6 +96,9 @@ inline void runtimeHandleRenderedCC(Target& t, uint8_t ch, uint8_t cc, uint8_t v
             // CC121 (Reset All Controllers): per MIDI spec, channel-scoped.
             // P0 FIX: Replaced loop over all 16 channels with channel `c` only.
             t.runtimeApplyNormalizedParameter(kParamPortamentoTime, 0.f);
+            // RP-015: Reset All Controllers deselects the RPN (null).
+            t.runtimeApplyNormalizedParameter(static_cast<uint32_t>(static_cast<int>(kParamHostCtrlRpnMsbBase) + c), 1.0f);
+            t.runtimeApplyNormalizedParameter(static_cast<uint32_t>(static_cast<int>(kParamHostCtrlRpnLsbBase) + c), 1.0f);
             t.runtimeSetSustainState(c, false);
             t.runtimeSetSostenutoState(c, false);
             if (t.runtimeHasBitPerfectEngine()) t.runtimeBitPerfectSetSustainPedal(c, false);

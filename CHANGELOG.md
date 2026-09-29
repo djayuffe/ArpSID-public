@@ -5,6 +5,46 @@ All notable changes to ArpSID are documented here. The project uses
 version is `VERSION.txt`, mirrored by `project(VERSION)` in `CMakeLists.txt`
 and `include/arpsid/version.h`.
 
+## [Unreleased]
+
+### Fixed
+
+- **RPN pitch-bend range reached the wrong channel.** The per-channel
+  host-control parameters start at id 286, which is not a multiple of 16, but
+  the RPN code took the MIDI channel from the low four bits of the id: a
+  bend range sent on channel 1 changed channel 15's range (and read channel
+  15's RPN selection). The channel now comes from the offset into the block.
+- **RPN / NRPN / Data Entry did nothing in the VST3 and on raw MIDI.** The
+  VST3 MIDI mapping did not route CC 101/100/99/98/6/38 and the raw-MIDI path
+  (AU, Standalone) ignored them, so hosts and MPE setups could not set the
+  pitch-bend range. Both now drive the shared RPN state machine: RPN 0 +
+  Data Entry (CC6 semitones, CC38 cents) sets the channel's bend range;
+  selecting an RPN changes nothing by itself; selecting an NRPN or Reset All
+  Controllers (CC121) deselects the RPN, so NRPN data never lands on the
+  bend range.
+- **VST3: host MIDI parameters were read-only.** The 208 per-channel host
+  MIDI parameters (written by the host through the MIDI mapping) were
+  flagged `kIsReadOnly`, which tells a host only the plug-in may change them.
+  They are now hidden and host-writable, and each title names its channel
+  (`Host MIDI Sustain Ch 5`), so the titles are unique (the SDK validator
+  reported 195 duplicate titles).
+- **VST3: silence flags.** Output was flagged silent only when exactly zero,
+  and the engine's 24-bit dither is never zero, so released voices were never
+  reported silent. Blocks at or below −120 dBFS are now written as zero and
+  flagged, so hosts can skip downstream processing.
+
+### Added (VST3)
+
+- **Control under the mouse** (`IParameterFinder`): the editor tells the
+  host which parameter is under a point, so host "learn" functions (quick
+  controls, "last touched" parameter) work with the editor, at any size.
+- **Host knob mode** (`IEditController2::setKnobMode`): circular, relative
+  circular or linear knob dragging follows the host's preference; the editor
+  stays linear until a host sets a mode.
+- **Plug-in browser image**: the bundle carries a snapshot of the editor's
+  MAIN page (`Resources/Snapshots/<class id>_snapshot.png`), listed in
+  `moduleinfo.json`.
+
 ## [0.9.11] — 2026-09-29
 
 ### Fixed (VST3 realtime and buffers)

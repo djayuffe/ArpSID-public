@@ -46,7 +46,9 @@ using ValueFormatter = std::function<std::string(int tag, float normalized)>;
 
 // Rotary control for a continuous parameter (or one with more than 32 steps).
 // Drag vertically (horizontal counts a quarter): 180 px spans 0..1, Shift is
-// fine (1200 px). Wheel: 2 % per notch (Shift 0.2 %). Double-click or
+// fine (1200 px). A VST3 host can choose the knob mode instead
+// (IEditController2::setKnobMode): circular jumps to the angle of the mouse
+// around the knob, relative circular turns by the angle the mouse moves. Wheel: 2 % per notch (Shift 0.2 %). Double-click or
 // Ctrl-click resets to the default. Every gesture is wrapped in
 // beginEdit/endEdit so hosts record one automation gesture. The arc shows the
 // value (270 degrees, from the lower left); caption and value text are fitted
@@ -62,13 +64,28 @@ public:
     void onMouseCancelEvent(VSTGUI::MouseCancelEvent& e) override;
     void onMouseWheelEvent(VSTGUI::MouseWheelEvent& e) override;
     CLASS_METHODS(ParamKnob, CControl)
+
+    // Mouse mode for every knob (Steinberg::Vst::KnobModes values):
+    // 0 circular, 1 relative circular, 2 linear (default).
+    enum Mode { kCircular = 0, kRelativeCircular = 1, kLinear = 2 };
+    static void setMode(int mode) noexcept;
+    static int mode() noexcept;
+    // Knob value for the angle of `p` around the knob centre (circular mode).
+    float valueAtPoint(const CPoint& p) const;
+
 private:
+    CRect knobRect_() const;
+    // Angle of `p` around the knob centre, degrees on the arc's scale.
+    double angleOf_(const CPoint& p) const;
+
     std::string label_;
     const Theme& theme_;
     ValueFormatter fmt_;
     float default_;
     CPoint anchor_;
     float anchorValue_ = 0.f;
+    double anchorAngle_ = 0.0;
+    int dragMode_ = kLinear;
     bool dragging_ = false;
 };
 

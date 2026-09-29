@@ -335,7 +335,7 @@ tresult PLUGIN_API ArpSIDVst3Processor::process(ProcessData& data) {
     // slices instead of being dropped.
     const int slice = is64 ? static_cast<int>(scratchOut_[0].size()) : frames;
     if (slice <= 0) return kResultOk;
-    bool silent = true;
+    float peak = 0.0f;
     int channels = 0;
     int ev = 0;
     for (int start = 0; start < frames; start += slice) {
@@ -350,15 +350,28 @@ tresult PLUGIN_API ArpSIDVst3Processor::process(ProcessData& data) {
         t.frameCount = n;
         if (start > 0 && sampleRate_ > 0.0 && t.bpm > 0.0)
             t.beatPosition += static_cast<double>(start) * t.bpm / (sampleRate_ * 60.0);
-        channels = renderSlice_(data, is64, start, n, events_.data() + evBegin, ev - evBegin, t, silent);
+        channels = renderSlice_(data, is64, start, n, events_.data() + evBegin, ev - evBegin, t, peak);
     }
 
-    if (channels > 0) data.outputs[0].silenceFlags = silent ? ((1ull << channels) - 1ull) : 0ull;
+    // Silence: once the voices have released, the SID output stage settles
+    // on a tiny constant residual (about -150 dBFS), never exact zero. A
+    // block below -120 dBFS is written as zero and flagged silent, so hosts
+    // can skip processing further down the chain.
+    constexpr float kSilenceGate = 1.0e-6f;
+    if (channels > 0) {
+        const bool silent = peak <= kSilenceGate;
+        if (silent && peak > 0.0f)
+            for (int c = 0; c < channels; ++c) {
+                if (is64) std::memset(data.outputs[0].channelBuffers64[c], 0, static_cast<std::size_t>(frames) * sizeof(double));
+                else std::memset(data.outputs[0].channelBuffers32[c], 0, static_cast<std::size_t>(frames) * sizeof(float));
+            }
+        data.outputs[0].silenceFlags = silent ? ((1ull << channels) - 1ull) : 0ull;
+    }
     return kResultOk;
 }
 
 int ArpSIDVst3Processor::renderSlice_(ProcessData& data, bool is64, int start, int frames, const TimedEvent* events,
-                                      int eventCount, const TransportState& transport, bool& silent) noexcept {
+                                      int eventCount, const TransportState& transport, float& peak) noexcept {
     // DIGI capture input (side-chain). Only read while a capture is armed.
     const float* in[2] = {nullptr, nullptr};
     int inChannels = 0;
@@ -402,9 +415,8 @@ int ArpSIDVst3Processor::renderSlice_(ProcessData& data, bool is64, int start, i
     if (channels <= 0) return 0;
     applyBypass_(out, channels, frames);
 
-    for (int c = 0; c < channels && silent; ++c)
-        for (int i = 0; i < frames; ++i)
-            if (out[c][i] != 0.0f) { silent = false; break; }
+    for (int c = 0; c < channels; ++c)
+        for (int i = 0; i < frames; ++i) peak = std::max(peak, std::fabs(out[c][i]));
     if (is64)
         for (int c = 0; c < channels; ++c) {
             double* d = data.outputs[0].channelBuffers64[c] + start;

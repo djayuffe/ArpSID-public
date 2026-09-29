@@ -39,7 +39,7 @@ has three parts:
 |---|---|---|
 | `source/vst3/arpsid_vst3_processor.{h,cpp}` | `ArpSIDVst3Processor` | `AudioEffect`. Buses, process data → kernel events, transport, state I/O, messages. |
 | `source/vst3/arpsid_vst3_kernel_host.{h,cpp}` | `Vst3KernelHost` | Owns the kernel and the GUI models that are not parameters. Handles render chunking, the state codec, telemetry, the SID player and the C64 hub. It is the platform-neutral twin of the AU `ArpSIDDSPKernelAdapter`. |
-| `source/arpsid_controller.cpp` | `ArpSIDControllerPhase3` | `EditController` + `IMidiMapping` + `IUnitInfo` (program list). It is compiled into `factory.cpp`. |
+| `source/arpsid_controller.cpp` | `ArpSIDControllerPhase3` | `EditController` (with `IEditController2` knob mode) + `IMidiMapping` + `IUnitInfo` (program list) + `IInfoListener`. It is compiled into `factory.cpp`. |
 | `source/arpsid_vst_messages.h` | — | Message IDs and attribute names between processor and controller. |
 | `source/factory.cpp`, `source/plugin_ids.{h,cpp}` | — | The factory and the two class IDs. |
 | `source/au3/ArpSIDKernelTelemetryFill.h` | — | Kernel → `ArpSIDTelemetry` projection, shared with the AU adapter. |
@@ -59,6 +59,7 @@ has three parts:
 | Bypass | `Bypass` parameter (id 1024, `kIsBypass`), soft: see [Host bypass](#host-bypass) |
 | Tail | `kInfiniteTail` (release, reverb and delay can ring on) |
 | Process context | tempo, transport state, project time (music), cycle, bar position, time signature |
+| Browser image | `Contents/Resources/Snapshots/A1B2C3D4E5F607189A0B1C2D3E4F5A6B_snapshot.png` (the editor's MAIN page, 1200 × 800, from `resources/vst3/`), listed in `moduleinfo.json` for host plug-in browsers |
 
 The class IDs are unchanged since the first VST3 release, so projects saved
 with any earlier version open with the current engine.
@@ -132,8 +133,15 @@ its target, so a bypassed instance starts silent without a fade.
      `start × bpm / (sampleRate × 60)`. Up to 0.9.10 such a block was
      answered with silence. The host test checks that one oversized 64-bit
      block renders the same audio as the announced block size.
-6. **Silence flags.** A channel that is exactly zero for the whole block is
-   flagged silent, so hosts can skip downstream processing.
+6. **Silence flags.** A block whose peak is at or below −120 dBFS
+   (`kSilenceGate`, 1e-6) is written as exact zero and flagged silent on
+   every output channel, so hosts can skip downstream processing. That
+   covers the engine's 24-bit TPDF dither and settling residue once the
+   voices have released (up to 0.9.11 only exact zeros counted, so a block
+   holding only dither was never flagged). Most factory patches carry a
+   chip/board profile with a modelled analogue floor near −80 dBFS even with
+   no voice sounding; that is sound and is not flagged. (The SDK validator
+   treats anything under −77.6 dBFS as silence and reports an info for it.)
 
 ### Host bypass
 
@@ -320,13 +328,18 @@ The controller registers all 512 parameters (`kNumParams`) as `RangeParameter`
   - Last comes `Host MIDI / read-only`, with 13 sub-units, one per MIDI
     controller kind (mod wheel, breath, expression, sustain, sostenuto,
     channel pressure, pitch bend, RPN/NRPN and data entry MSB/LSB), each with
-    16 channels.
+    16 channels. Their titles carry the channel (`Host MIDI Sustain Ch 5`),
+    so every title is unique.
 
   That is 32 units in all. Hosts that show units group the parameters the way
   the editor does.
 - **Flags**:
   - Program is `kIsProgramChange | kIsList`.
   - Panic, Virtual Gate and Bank Command are hidden.
+  - The 208 host MIDI parameters are hidden but writable (`kIsHidden`, not
+    `kIsReadOnly`): hosts write them through the MIDI mapping below, and
+    `kIsReadOnly` would tell a host that only the plug-in may change them.
+    Up to 0.9.11 they were read-only.
   - Every parameter whose table entry is automatable can be automated.
   - Toggles of the shared set are never marked `kIsBypass`. That flag
     belongs only to the separate `Bypass` parameter (id 1024), which is the
@@ -409,7 +422,26 @@ The mapping applies per channel on MIDI bus 0:
 | CC7 volume | Master Volume |
 | CC64 sustain, CC66 sostenuto | Host Ctrl Sustain / Sostenuto, per channel |
 | channel aftertouch, pitch bend | Host Ctrl Channel Pressure / Pitch Bend, per channel |
+| CC101/100 RPN select, CC99/98 NRPN select, CC6/38 data entry | Host Ctrl RPN / NRPN / Data Entry MSB and LSB, per channel |
 | CC70–77 (e.g. AKAI MPK mini K1–K8) | Filter Cutoff, Resonance, Drive, Env Amount, LFO Amount, Master Volume, Reverb Mix, Forensic Intensity (`sid_midi_cc_mapping.h`, the same targets as AU and Standalone) |
+
+**RPN 0 (pitch-bend range).** The RPN / NRPN / Data Entry parameters run
+the MIDI RPN state machine, shared with the raw-MIDI path of AU and
+Standalone (`sid_runtime_parameter_services.h`, `sid_runtime_render_surface.h`):
+
+- selecting an RPN (CC101/100) changes nothing by itself;
+- Data Entry (CC6 semitones, CC38 cents) writes the selected RPN; with RPN 0
+  selected it sets that channel's pitch-bend range (0–48 semitones), which
+  is how MPE zones and most DAWs set bend ranges;
+- selecting an NRPN (CC99/98) deselects the RPN, so Data Entry meant for an
+  NRPN never changes the bend range; Reset All Controllers (CC121) deselects
+  it too (RP-015).
+
+Up to 0.9.11 the VST3 mapping did not route these CCs at all, the raw-MIDI
+path ignored them, and the parameter path took the channel from the low four
+bits of the parameter id; the host-control blocks start at id 286, which is
+not a multiple of 16, so a bend range sent on one channel landed on another.
+`RpnPitchBendRangeTests` covers both paths.
 
 The per-channel host-controller parameters are the "host-driven" block in
 [PARAMETER_REFERENCE.md](PARAMETER_REFERENCE.md#host-driven-and-read-only-parameters).
@@ -468,6 +500,16 @@ on parameters only, and says so on the panels that need the engine.
     learn and so on, depending on the host) and adds `Reset to Default`. The
     menu opens at the click, scaled by the editor zoom. Hosts without
     `IComponentHandler3` get no menu; the click is passed on.
+  - **Parameter under the mouse (`IParameterFinder`).** The view answers
+    `findParameter` with the parameter of the control under the given point
+    (scaled by the editor zoom), so host "learn" functions (quick controls,
+    "last touched" parameter) work.
+  - **Knob mode (`IEditController2::setKnobMode`).** The host's knob mode
+    preference sets how knobs follow the mouse: circular (jump to the mouse
+    angle around the knob), relative circular (turn by the angle moved) or
+    linear (vertical drag). The editor stays linear until a host sets a
+    mode; Shift always gives the fine linear drag. `openHelp` and
+    `openAboutBox` are not supported (`kResultFalse`).
   - **Computer keyboard.** The editor view is the frame's keyboard hook.
     Letter keys play notes (see [VST3_EDITOR.md](VST3_EDITOR.md#playing-from-the-computer-keyboard));
     keys with Ctrl, Alt or Cmd go to the host.
@@ -560,7 +602,7 @@ Installing released builds: [INSTALL.md](INSTALL.md).
 | Test | Checks |
 |---|---|
 | Steinberg `validator` (runs during every `arpsid_vst3` build) | 47 SDK conformance tests: buses, state, parameters, process formats, flush, variable block size, and more. |
-| `arpsid_vst3_host_check` / `Vst3HostIntegrationTests` (`source/tests/vst3_host_integration_tests.cpp`) | Loads the built bundle like a host and checks each of these: <ul><li>both classes instantiate and connect;</li><li>Program is a 180-entry program-change list;</li><li>the MIDI bus has 16 channels, and the DIGI capture input is an auxiliary bus, inactive by default;</li><li>units: 32 units, each parameter in an existing unit, Program in the root, and <code>selectUnit</code> remembered;</li><li>on Windows and Linux, editor sizing: the 3:2 constraint, the minimum size, and a reopened view keeping its size;</li><li>on Linux with a <code>DISPLAY</code> (CI: Xvfb, and <code>ARPSID_REQUIRE_X11_EDITOR=1</code> makes it mandatory), the editor in a real X11 window: X11 only (no Wayland claim), attach, the X connection and timers on the host's <code>IRunLoop</code>, a live resize, detach leaving no handlers behind, the same again for a second open, and a refusal (no crash) for a host frame without a run loop;</li><li>tempo, transport and musical position are requested;</li><li>the MIDI mapping leaves unmapped CCs alone;</li><li>selecting a program refreshes the host and the controller mirror matches the processor state;</li><li>editor-keyboard (UiMidi) and host note-ons produce audio, and Master Volume automation reaches the engine;</li><li>a v5 state loads into a second instance;</li><li>a legacy v4 state is accepted by processor and controller;</li><li>Bypass is a <code>kIsBypass</code> on/off parameter in the root unit, silences the output, is saved in the state and read back by a fresh controller, and un-bypassing restores the sound;</li><li>64-bit processing renders a note with finite samples, and an oversized 64-bit block does not overrun;</li><li>the controller state round-trips the editor size and tab, and a foreign stream is ignored;</li><li><code>IInfoListener</code> accepts a track name and colour;</li><li>programs report the <code>Instrument|Synth</code> category;</li><li>a patch-only preset state changes the processor's and the controller's patch but leaves bypass alone, and a later project save is a full state again.</li></ul> |
+| `arpsid_vst3_host_check` / `Vst3HostIntegrationTests` (`source/tests/vst3_host_integration_tests.cpp`) | Loads the built bundle like a host and checks each of these: <ul><li>both classes instantiate and connect;</li><li>Program is a 180-entry program-change list;</li><li>the MIDI bus has 16 channels, and the DIGI capture input is an auxiliary bus, inactive by default;</li><li>units: 32 units, each parameter in an existing unit, Program in the root, and <code>selectUnit</code> remembered;</li><li>on Windows and Linux, editor sizing: the 3:2 constraint, the minimum size, and a reopened view keeping its size;</li><li>on Linux with a <code>DISPLAY</code> (CI: Xvfb, and <code>ARPSID_REQUIRE_X11_EDITOR=1</code> makes it mandatory), the editor in a real X11 window: X11 only (no Wayland claim), attach, the X connection and timers on the host's <code>IRunLoop</code>, <code>IParameterFinder</code> naming the parameter under the mouse at 1× and after a resize, a live resize, detach leaving no handlers behind, the same again for a second open, and a refusal (no crash) for a host frame without a run loop;</li><li>tempo, transport and musical position are requested;</li><li>the MIDI mapping leaves unmapped CCs alone and routes CC 101/100/99/98/6/38 to each channel's RPN/NRPN/Data Entry parameters;</li><li>the 208 host MIDI parameters are hidden, host-writable and uniquely titled;</li><li><code>IEditController2</code> accepts the three knob modes;</li><li>released output settles to exact zero and is flagged silent;</li><li>selecting a program refreshes the host and the controller mirror matches the processor state;</li><li>editor-keyboard (UiMidi) and host note-ons produce audio, and Master Volume automation reaches the engine;</li><li>a v5 state loads into a second instance;</li><li>a legacy v4 state is accepted by processor and controller;</li><li>Bypass is a <code>kIsBypass</code> on/off parameter in the root unit, silences the output, is saved in the state and read back by a fresh controller, and un-bypassing restores the sound;</li><li>64-bit processing renders a note with finite samples, and an oversized 64-bit block does not overrun;</li><li>the controller state round-trips the editor size and tab, and a foreign stream is ignored;</li><li><code>IInfoListener</code> accepts a track name and colour;</li><li>programs report the <code>Instrument|Synth</code> category;</li><li>a patch-only preset state changes the processor's and the controller's patch but leaves bypass alone, and a later project save is a full state again.</li></ul> |
 | Realtime contract (in `arpsid_vst3_host_check`) | On Linux an allocation probe (the test's `operator new`) counts heap allocations inside `process()` during a busy block of unsorted notes and 512 automation points: it must be 0. A note-off in a block with more than 4096 automation points still releases the note. An 8192-frame 32-bit block starts a note at frame 6000 exactly there. An oversized 64-bit block renders the same audio as announced-size blocks. The test also prints the render cost as a share of real time at 32 to 2048-frame blocks. |
 | `arpsid_vst3_presets` / `Vst3FactoryPresetExport` | Writes all 180 factory `.vstpreset` files and reloads each into a fresh instance: the bank slot and every persistent parameter must match. |
 | `arpsid_vst3_editor_check` | The offscreen editor render ([VST3_EDITOR.md](VST3_EDITOR.md#tests)). |

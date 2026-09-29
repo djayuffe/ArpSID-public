@@ -61,8 +61,10 @@ inline bool runtimeApplyProjectedHostCtrl(Target& target, uint32_t targetId, flo
 
 template <class Target>
 inline bool runtimeApplyProjectedRpnBendRange(Target& target, uint32_t targetId) noexcept {
-    const int pid = static_cast<int>(targetId);
-    const int ch = pid & 0x0F;
+    // The host-control blocks are not 16-aligned: take the channel from the
+    // offset into the block, never from the low bits of the id.
+    const int ch = hostMidiBridgeChannelForParam(static_cast<int>(targetId));
+    if (ch < 0) return false;
     const auto& params = target.runtimeParameterValues();
     const int rpnMsb = std::clamp(static_cast<int>(std::lround(canonicalClampedNormalizedValue(params[(size_t)kParamHostCtrlRpnMsbBase + (size_t)ch]) * 127.0f)), 0, 127);
     const int rpnLsb = std::clamp(static_cast<int>(std::lround(canonicalClampedNormalizedValue(params[(size_t)kParamHostCtrlRpnLsbBase + (size_t)ch]) * 127.0f)), 0, 127);
@@ -463,9 +465,21 @@ inline bool runtimeApplyProjectedSpecialParameter(Target& target, uint32_t targe
         runtimeStageNormalizedParameter(target, targetId, value);
     }
 
+    // RPN / NRPN (MIDI CC 101/100, 99/98, 6/38). Selecting a parameter
+    // number changes nothing by itself; Data Entry writes the selected RPN
+    // (RPN 0 = pitch-bend range). Selecting an NRPN deselects the RPN, so
+    // Data Entry meant for an NRPN never lands on the pitch-bend range.
     if ((pid >= static_cast<int>(kParamHostCtrlRpnMsbBase) && pid < static_cast<int>(kParamHostCtrlRpnMsbBase) + 16) ||
-        (pid >= static_cast<int>(kParamHostCtrlRpnLsbBase) && pid < static_cast<int>(kParamHostCtrlRpnLsbBase) + 16) ||
-        (pid >= static_cast<int>(kParamHostCtrlDataEntryMsbBase) && pid < static_cast<int>(kParamHostCtrlDataEntryMsbBase) + 16) ||
+        (pid >= static_cast<int>(kParamHostCtrlRpnLsbBase) && pid < static_cast<int>(kParamHostCtrlRpnLsbBase) + 16))
+        return true;
+    if ((pid >= static_cast<int>(kParamHostCtrlNrpnMsbBase) && pid < static_cast<int>(kParamHostCtrlNrpnMsbBase) + 16) ||
+        (pid >= static_cast<int>(kParamHostCtrlNrpnLsbBase) && pid < static_cast<int>(kParamHostCtrlNrpnLsbBase) + 16)) {
+        const int ch = hostMidiBridgeChannelForParam(pid);
+        runtimeStageNormalizedParameter(target, static_cast<uint32_t>(static_cast<int>(kParamHostCtrlRpnMsbBase) + ch), 1.0f);
+        runtimeStageNormalizedParameter(target, static_cast<uint32_t>(static_cast<int>(kParamHostCtrlRpnLsbBase) + ch), 1.0f);
+        return true;
+    }
+    if ((pid >= static_cast<int>(kParamHostCtrlDataEntryMsbBase) && pid < static_cast<int>(kParamHostCtrlDataEntryMsbBase) + 16) ||
         (pid >= static_cast<int>(kParamHostCtrlDataEntryLsbBase) && pid < static_cast<int>(kParamHostCtrlDataEntryLsbBase) + 16)) {
         runtimeApplyProjectedRpnBendRange(target, targetId);
         return true;

@@ -150,12 +150,48 @@ ParamKnob::ParamKnob(const CRect& r, IControlListener* l, int tag, std::string l
     setWheelInc(0.01f);
 }
 
-void ParamKnob::draw(CDrawContext* ctx) {
+namespace {
+int gKnobMode = ParamKnob::kLinear;
+} // namespace
+
+void ParamKnob::setMode(int mode) noexcept {
+    gKnobMode = (mode == kCircular || mode == kRelativeCircular) ? mode : kLinear;
+}
+
+int ParamKnob::mode() noexcept { return gKnobMode; }
+
+CRect ParamKnob::knobRect_() const {
     const CRect r = getViewSize();
     const CCoord labelH = 13.0, valueH = 13.0;
     const CCoord dia = std::min(r.getWidth() - 8.0, r.getHeight() - labelH - valueH - 2.0);
     CRect knob(0, 0, dia, dia);
     knob.offset(r.left + (r.getWidth() - dia) / 2.0, r.top + labelH);
+    return knob;
+}
+
+double ParamKnob::angleOf_(const CPoint& p) const {
+    const CPoint c = knobRect_().getCenter();
+    // Screen y grows downwards, as in draw(): 0 degrees right, 90 down.
+    double a = std::atan2(p.y - c.y, p.x - c.x) * 180.0 / kPi;
+    // Degrees past the arc start, 0..360.
+    a -= kArcStart;
+    while (a < 0.0) a += 360.0;
+    while (a >= 360.0) a -= 360.0;
+    return a;
+}
+
+float ParamKnob::valueAtPoint(const CPoint& p) const {
+    const double a = angleOf_(p);
+    if (a <= kArcSweep) return static_cast<float>(a / kArcSweep);
+    // In the gap below the knob: the nearer end.
+    return a < kArcSweep + (360.0 - kArcSweep) / 2.0 ? 1.f : 0.f;
+}
+
+void ParamKnob::draw(CDrawContext* ctx) {
+    const CRect r = getViewSize();
+    const CCoord labelH = 13.0, valueH = 13.0;
+    const CRect knob = knobRect_();
+    const CCoord dia = knob.getWidth();
 
     ctx->setDrawMode(kAntiAliasing | kNonIntegralMode);
     ctx->setFontColor(theme_.label);
@@ -203,16 +239,38 @@ void ParamKnob::onMouseDownEvent(MouseDownEvent& e) {
     }
     anchor_ = e.mousePosition;
     anchorValue_ = getValueNormalized();
+    anchorAngle_ = angleOf_(e.mousePosition);
+    // Shift keeps the fine linear drag in every mode.
+    dragMode_ = e.modifiers.has(ModifierKey::Shift) ? kLinear : gKnobMode;
     dragging_ = true;
     beginEdit();
+    if (dragMode_ == kCircular) {
+        const float v = valueAtPoint(e.mousePosition);
+        if (v != getValueNormalized()) {
+            setValueNormalized(v);
+            valueChanged();
+        }
+        invalid();
+    }
     e.consumed = true;
 }
 
 void ParamKnob::onMouseMoveEvent(MouseMoveEvent& e) {
     if (!dragging_) return;
-    const bool fine = e.modifiers.has(ModifierKey::Shift);
-    const double dy = anchor_.y - e.mousePosition.y + (e.mousePosition.x - anchor_.x) * 0.25;
-    const float v = std::clamp(anchorValue_ + static_cast<float>(dy / (fine ? 1200.0 : 180.0)), 0.f, 1.f);
+    float v = getValueNormalized();
+    if (dragMode_ == kCircular) {
+        v = valueAtPoint(e.mousePosition);
+    } else if (dragMode_ == kRelativeCircular) {
+        double d = angleOf_(e.mousePosition) - anchorAngle_;
+        if (d > 180.0) d -= 360.0;
+        if (d < -180.0) d += 360.0;
+        anchorAngle_ += d;
+        v = std::clamp(getValueNormalized() + static_cast<float>(d / kArcSweep), 0.f, 1.f);
+    } else {
+        const bool fine = e.modifiers.has(ModifierKey::Shift);
+        const double dy = anchor_.y - e.mousePosition.y + (e.mousePosition.x - anchor_.x) * 0.25;
+        v = std::clamp(anchorValue_ + static_cast<float>(dy / (fine ? 1200.0 : 180.0)), 0.f, 1.f);
+    }
     if (v != getValueNormalized()) {
         setValueNormalized(v);
         valueChanged();
