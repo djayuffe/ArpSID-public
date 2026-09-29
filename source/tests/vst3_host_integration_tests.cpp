@@ -1105,6 +1105,27 @@ int main(int argc, char** argv) {
             String128 v{};
             CHECK(ui->getProgramInfo(1, 0, PresetAttributes::kPlugInCategory, v) == kResultOk && v[0] == 'I',
                   "program category is Instrument|Synth");
+            // Drum programs (DrSID / SID-808 kits) name the GM drum notes.
+            int drums = 0, firstDrum = -1;
+            for (int32 prog = 0; prog < 180; ++prog)
+                if (ui->hasProgramPitchNames(1, prog) == kResultTrue) {
+                    ++drums;
+                    if (firstDrum < 0) firstDrum = prog;
+                }
+            std::printf("  %d drum programs with note names (first %d)\n", drums, firstDrum);
+            CHECK(ui->hasProgramPitchNames(1, 0) != kResultTrue, "a synth program has no note names");
+            CHECK(drums >= 60 && firstDrum >= 0, "the drum kit programs have note names");
+            if (firstDrum >= 0) {
+                String128 n{};
+                CHECK(ui->getProgramPitchName(1, firstDrum, 36, n) == kResultOk &&
+                          std::u16string(reinterpret_cast<const char16_t*>(n)) == u"Bass Drum 1",
+                      "note 36 of a drum program is Bass Drum 1");
+                CHECK(ui->getProgramPitchName(1, firstDrum, 42, n) == kResultOk &&
+                          std::u16string(reinterpret_cast<const char16_t*>(n)) == u"Closed Hi-Hat",
+                      "note 42 of a drum program is Closed Hi-Hat");
+                CHECK(ui->getProgramPitchName(1, firstDrum, 20, n) != kResultOk, "notes outside the GM map have no name");
+            }
+            CHECK(ui->getProgramPitchName(1, 0, 36, v) != kResultOk, "synth programs name no notes");
         }
     }
 

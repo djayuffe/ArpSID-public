@@ -388,6 +388,14 @@ attached to the root unit.
   and `1`/`0` for the Bypass parameter, so the text the host shows parses
   back (the SDK validator checks this).
 
+
+**Drum note names.** For the drum programs (DrSID / SID-808 kits: slot 47
+and slots 80–149, the programs whose patch enables DrSID),
+`hasProgramPitchNames` is true and `getProgramPitchName` returns the General
+MIDI drum name of notes 35–81 (`Bass Drum 1`, `Closed Hi-Hat`, …), from
+`sid_gm_drum_kit.h`, the table the drum engines play from. Host drum editors
+and piano rolls show them. Synth programs name no notes.
+
 ### Controller state (`getState` / `setState`)
 
 The controller saves its own small state next to the processor state. It holds

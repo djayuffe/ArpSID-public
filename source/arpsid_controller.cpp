@@ -36,6 +36,7 @@
 #include "arpsid_vst_messages.h"
 #include "gui/vstgui/arpsid_editor_layout.h"
 #include "arpsid/core/sid_midi_cc_mapping.h"
+#include "arpsid/core/sid_gm_drum_kit.h"
 #include "arpsid/core/sid_runtime_state_root_presentation.h"
 #include "au3/ArpSIDStateSerializer.h"
 #include "factory_patch_params.h"
@@ -466,12 +467,21 @@ public:
         return kResultFalse;
     }
 
-    tresult PLUGIN_API hasProgramPitchNames(ProgramListID, int32) override {
-        return kResultFalse;
+    // Drum programs (DrSID / SID-808 kits) play the General MIDI drum map on
+    // notes 35-81 (sid_gm_drum_kit.h, the table the drum engines use), so
+    // host drum editors and piano rolls can name the notes.
+    tresult PLUGIN_API hasProgramPitchNames(ProgramListID listId, int32 programIndex) override {
+        return isDrumProgram_(listId, programIndex) ? kResultTrue : kResultFalse;
     }
 
-    tresult PLUGIN_API getProgramPitchName(ProgramListID, int32, int16, String128) override {
-        return kResultFalse;
+    tresult PLUGIN_API getProgramPitchName(ProgramListID listId, int32 programIndex, int16 midiPitch,
+                                           String128 name) override {
+        if (!name) return kInvalidArgument;
+        name[0] = 0;
+        if (!isDrumProgram_(listId, programIndex) || midiPitch < 0 || midiPitch > 127) return kResultFalse;
+        if (!sidIsGMDrumNote((uint8_t)midiPitch)) return kResultFalse;
+        utf8ToTChar(sidGMDrumFullName((uint8_t)midiPitch), name, 128);
+        return kResultOk;
     }
 
     int32 PLUGIN_API getSelectedUnit() override { return selectedUnit_; }
@@ -636,6 +646,21 @@ private:
     static constexpr ProgramListID kProgramListId_ = 1;
     // Canonical factory preset count: 180 slots, not legacy 128.
     static constexpr int32         kMaxPresets_     = ArpSID::kCanonicalFactoryPatchSlotCount;
+    std::array<std::int8_t, (size_t)kMaxPresets_> drumProgram_{}; // 0 unknown, 1 drum, -1 not
+
+    // True for a factory program that plays the drum engines (DrSID enabled).
+    // Worked out once per program from its factory state root.
+    bool isDrumProgram_(ProgramListID listId, int32 programIndex) {
+        if (listId != kProgramListId_ || programIndex < 0 || programIndex >= kMaxPresets_) return false;
+        std::int8_t& known = drumProgram_[(size_t)programIndex];
+        if (known == 0) {
+            const SidStateRootV1 root = makeFactoryPatchStateRootForSlot((int)programIndex);
+            std::array<float, kNumParams> params{};
+            if (root.valid()) exportPersistentPresentationParamsFromStateRoot(root, params.data(), kNumParams);
+            known = (root.valid() && params[(size_t)kParamDrSidEnable] > 0.5f) ? 1 : -1;
+        }
+        return known > 0;
+    }
 
     void loadFactoryPatch_(int slot) {
         slot = std::clamp(slot, 0, kCanonicalFactoryPatchSlotMax);

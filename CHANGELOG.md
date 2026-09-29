@@ -41,6 +41,9 @@ and `include/arpsid/version.h`.
 - **Host knob mode** (`IEditController2::setKnobMode`): circular, relative
   circular or linear knob dragging follows the host's preference; the editor
   stays linear until a host sets a mode.
+- **Drum note names**: the drum kit programs (DrSID / SID-808) report the
+  General MIDI drum name of notes 35–81 (`IUnitInfo` program pitch names), so
+  host drum editors and piano rolls label the notes.
 - **Plug-in browser image**: the bundle carries a snapshot of the editor's
   MAIN page (`Resources/Snapshots/<class id>_snapshot.png`), listed in
   `moduleinfo.json`.
