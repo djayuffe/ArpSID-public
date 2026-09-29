@@ -25,6 +25,9 @@ struct SidRegisterSink {
     virtual ~SidRegisterSink() = default;
     virtual void sidWrite(uint8_t reg, uint8_t value, uint64_t phi2Cycle) noexcept = 0;
     virtual uint8_t sidRead(uint8_t reg, uint64_t phi2Cycle) noexcept = 0;
+    // Another sink answers the CPU's SID reads (OSC3/ENV3/POT); a sink with
+    // its own readback model may stop advancing it. Default: ignored.
+    virtual void setReadsAnsweredElsewhere(bool) noexcept {}
 };
 
 enum class C64BootMode : uint8_t {

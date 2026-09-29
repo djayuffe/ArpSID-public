@@ -58,8 +58,11 @@ and the core headers.
    MIDI and parameter rings are drained **once for the parent block**, their
    events sliced per chunk like host events (so a queued event keeps its
    position), and the transport beat position advanced per chunk.
-5. **Denormals** flushed (FTZ/DAZ); transport sanitized with the negotiated
-   sample rate.
+5. **Denormals** flushed (FTZ/DAZ on x86, FZ/DN on AArch64) for the rest of
+   the block by `ScopedFlushDenormals_`, which restores the caller's
+   floating-point mode when `processBlock` returns (the host's audio thread
+   also runs its mixer and other plug-ins); transport sanitized with the
+   negotiated sample rate.
 6. **Dirty parameters** flushed (`flushDirtyParams_`), transient controls
    applied, state projected to the backends, tempo-linked controllers synced.
 7. **C64 branch**: if a `.sid` tune is playing, `renderC64SidplayPathIfActive_`
@@ -353,8 +356,9 @@ VST3 kernel host.
 - Heavy producer work — file parsing, `.sid` loading, state building, sample
   conversion, bank I/O — runs off the render thread and is published through
   mailboxes.
-- Every float leaving a stage is sanitized; denormals are flushed; a NaN guard
-  protects the output.
+- Every float leaving a stage is sanitized; denormals are flushed while the
+  kernel renders (and only then: the caller's FP mode is restored); a NaN
+  guard protects the output.
 - The **reset law** (`sid_runtime_reset_policy.h`): panic amputates every
   transient queue, ingress lane, spill and fallback state, and every active
   token, so nothing stale survives a reset.

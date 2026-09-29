@@ -40,7 +40,30 @@ and `include/arpsid/version.h`.
   22 % of one core at 512-frame blocks (56 % to 29 % at 32 frames), with
   bit-identical audio.
 - The VST3 host test prints the render cost at block sizes from 32 to 2048
-  frames.
+  frames, and the Linux editor's CPU use in a real X11 window.
+- **Idle CLASSIC engine (regression in 0.9.10).** The release-tail fix treated
+  every chip whose envelope reported "active" as a tail, including chips that
+  never played, whose power-on envelope state stays "active". An idle CLASSIC
+  instance therefore rendered all eight chips: 10–40× the idle CPU (a fresh
+  instance: 156 M instructions for its first block instead of 3.5 M) and every
+  silent chip's noise and dither in the output, about 50 dB down. A tail is
+  now a slot that played a note since reset and still has a running envelope;
+  release tails are unchanged.
+- **C64 tune player.** About 10 % fewer instructions, bit-identical output: the
+  timed SID bridge no longer advances a second cycle-by-cycle OSC3/ENV3
+  readback model that nothing reads (the runtime's own model answers every
+  read), the OSC3 byte of a single waveform is computed when read instead of
+  every cycle, and the VIC-II skips its sprite loops when no sprite is active.
+
+### Fixed (all formats, all platforms)
+
+- **Floating-point mode leaked into the host.** The engine switched the
+  calling thread to flush-to-zero (x86 FTZ/DAZ, AArch64 FZ/DN) in every render
+  and in setup, and never restored it, changing the arithmetic of the host's
+  mixer and of other plug-ins on the same threads. It is now set only while
+  the engine renders and restored afterwards; setup no longer touches it.
+  Windows x64 builds (MSVC, which does not define `__SSE__`) now flush
+  denormals too; they did not before.
 
 ## [0.9.10] — 2026-09-28
 

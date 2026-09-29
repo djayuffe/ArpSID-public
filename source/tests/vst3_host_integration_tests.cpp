@@ -49,6 +49,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <ctime>
 #include <string>
 #include <vector>
 
@@ -349,6 +350,14 @@ void runX11EditorChecks(IEditController* controller) {
             view->attached(reinterpret_cast<void*>(static_cast<uintptr_t>(parent)), kPlatformTypeX11EmbedWindowID);
         CHECK(attached == kResultOk, "X11: editor attaches to the host window");
         frame.pump(400);
+        if (round == 0) {
+            // Editor cost report (informational): CPU time of this thread while
+            // the host run loop drives the editor for 2 s (30 Hz refresh).
+            const std::clock_t c0 = std::clock();
+            frame.pump(2000);
+            const double cpu = double(std::clock() - c0) / CLOCKS_PER_SEC;
+            std::printf("  X11 editor idle: %.1f%% of one core (timers fired %d)\n", 100.0 * cpu / 2.0, frame.timerFires);
+        }
         CHECK(!frame.fds.empty(), "X11: editor registered its X connection with the host run loop");
         CHECK(frame.timerFires > 0, "X11: editor timers run on the host run loop");
         ViewRect bigger(0, 0, 1500, 1000);

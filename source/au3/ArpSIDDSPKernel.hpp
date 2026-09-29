@@ -118,7 +118,7 @@
 #if defined(__APPLE__)
 #include <mach/mach_time.h>
 #endif
-#if defined(__SSE__)
+#if defined(__SSE__) || defined(_M_X64) || (defined(_M_IX86_FP) && _M_IX86_FP >= 1)
 #include <xmmintrin.h>
 #endif
 
@@ -3420,16 +3420,41 @@ public:
     // Callers must ensure the render thread is not active (drain/suspend first).
     //──────────────────────────────────────────────────────
     // Fix 1.4: flush denormals to zero for ARM (FPCR) and x86 (MXCSR)
-    static void flushDenormalsToZero_() noexcept {
+    // Denormals are flushed while the kernel renders and the caller's
+    // floating-point mode is restored afterwards: processBlock runs on the
+    // host's audio thread, which also runs the host mixer and other
+    // plug-ins, so the mode must not leak out (it used to be left set, also
+    // on the main thread by setup()/setSampleRate()). x86 (including MSVC,
+    // which does not define __SSE__): MXCSR DAZ|FTZ. AArch64 GCC/Clang:
+    // FPCR FZ|DN. Other targets: no-op.
+    class ScopedFlushDenormals_ {
+    public:
+        ScopedFlushDenormals_() noexcept {
 #if defined(__aarch64__) || defined(__arm64__)
-        uint64_t fpcr; __asm__ volatile("mrs %0, fpcr" : "=r"(fpcr));
-        fpcr |= (1ULL<<24);  // FZ — flush-to-zero
-        fpcr |= (1ULL<<19);  // DN — default NaN
-        __asm__ volatile("msr fpcr, %0" :: "r"(fpcr));
-#elif defined(__SSE__)
-        _mm_setcsr(_mm_getcsr() | 0x8040);  // DAZ | FTZ
+#if defined(__GNUC__) || defined(__clang__)
+            __asm__ volatile("mrs %0, fpcr" : "=r"(saved_));
+            const uint64_t fpcr = saved_ | (1ULL << 24) | (1ULL << 19); // FZ | DN
+            __asm__ volatile("msr fpcr, %0" :: "r"(fpcr));
 #endif
-    }
+#elif defined(__SSE__) || defined(_M_X64) || (defined(_M_IX86_FP) && _M_IX86_FP >= 1)
+            saved_ = _mm_getcsr();
+            _mm_setcsr(static_cast<unsigned int>(saved_) | 0x8040u); // DAZ | FTZ
+#endif
+        }
+        ~ScopedFlushDenormals_() noexcept {
+#if defined(__aarch64__) || defined(__arm64__)
+#if defined(__GNUC__) || defined(__clang__)
+            __asm__ volatile("msr fpcr, %0" :: "r"(saved_));
+#endif
+#elif defined(__SSE__) || defined(_M_X64) || (defined(_M_IX86_FP) && _M_IX86_FP >= 1)
+            _mm_setcsr(static_cast<unsigned int>(saved_));
+#endif
+        }
+        ScopedFlushDenormals_(const ScopedFlushDenormals_&) = delete;
+        ScopedFlushDenormals_& operator=(const ScopedFlushDenormals_&) = delete;
+    private:
+        uint64_t saved_ = 0;
+    };
 
     static float realtimePowUnit_(float base, int exponent) noexcept {
         float result = 1.0f;
@@ -3490,7 +3515,6 @@ public:
         setup(sampleRate, maxFrames);
     }
     void setup(double sampleRate, int /*maxFrames*/) {
-        flushDenormalsToZero_();
         sampleRate_ = ArpSIDSanitizeHostSampleRate(sampleRate);
         refreshTelemetryPeakDecay_();
         seqInternalBeatPosition_ = 0.0;
@@ -3553,7 +3577,6 @@ public:
 
     void setSampleRateNonRealtime(double sr) { setSampleRate(sr); }
     void setSampleRate(double sr) {
-        flushDenormalsToZero_();
         sampleRate_ = ArpSIDSanitizeHostSampleRate(sr);
         refreshTelemetryPeakDecay_();
         if (bpe_())  bpe_()->setSampleRate(sampleRate_);
@@ -6946,8 +6969,8 @@ public:
         beginSidCoreBlockTimeline_(numFrames);
         beginC64TelemetryDemandBlock_(numFrames);
 
-        // ── 0. Flush denormals, apply transport ──────────────────────────────
-        flushDenormalsToZero_();
+        // ── 0. Flush denormals (restored on return), apply transport ─────────
+        const ScopedFlushDenormals_ denormalScope_;
         ArpSID::TransportState canonicalTransport = transport;
         canonicalTransport.sampleRate = sampleRate_;
         canonicalTransport.sanitize();

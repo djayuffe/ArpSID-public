@@ -277,7 +277,10 @@ public:
             }
         }
         uint16_t included = 0;
-        for (int ai = 0; ai < count; ++ai) included |= (uint16_t)(1u << activeVoices[ai]);
+        for (int ai = 0; ai < count; ++ai) {
+            included |= (uint16_t)(1u << activeVoices[ai]);
+            slotSounded_[(size_t)activeVoices[ai]] = true;
+        }
         for (int i = 0; i < MAX_POLYPHONY && count < MAX_POLYPHONY; ++i) {
             if (included & (1u << i)) continue;
             // A chip already advanced earlier in this host sample must also be
@@ -288,12 +291,9 @@ public:
                 included |= (uint16_t)(1u << i);
                 continue;
             }
-            for (int osc = 0; osc < 3; ++osc) {
-                if (sidChips[(size_t)i].isVoiceActive(osc)) {
-                    activeVoices[count++] = i;
-                    included |= (uint16_t)(1u << i);
-                    break;
-                }
+            if (slotHasTail_(i)) {
+                activeVoices[count++] = i;
+                included |= (uint16_t)(1u << i);
             }
         }
         return count;
@@ -659,6 +659,7 @@ public:
             forcedMidi[i] = -1;
             forcedVel[i] = 0.0f;
             forcedTailVel_[(size_t)i] = 0.0f;
+            slotSounded_[(size_t)i] = false;
             voiceDetuneRatio[i] = 1.0f;
         }
         forcedSustainDown_ = false;
@@ -949,10 +950,7 @@ public:
             for (int ai = 0; ai < activeCount; ++ai) included |= (uint16_t)(1u << activeVoices[ai]);
             for (int i = 0; i < MAX_POLYPHONY; ++i) {
                 if (included & (1u << i)) continue; // already in list
-                bool hasTail = false;
-                for (int osc = 0; osc < 3; ++osc) {
-                    if (sidChips[i].isVoiceActive(osc)) { hasTail = true; break; }
-                }
+                const bool hasTail = slotHasTail_(i);
                 if (hasTail && activeCount < MAX_POLYPHONY) {
                     activeVoices[activeCount++] = i;
                     included |= (uint16_t)(1u << i);
@@ -968,10 +966,7 @@ public:
             for (int ai = 0; ai < activeCount; ++ai) included |= (uint16_t)(1u << activeVoices[ai]);
             for (int i = 0; i < MAX_POLYPHONY; ++i) {
                 if (included & (1u << i)) continue;
-                bool hasTail = false;
-                for (int osc = 0; osc < 3; ++osc) {
-                    if (sidChips[i].isVoiceActive(osc)) { hasTail = true; break; }
-                }
+                const bool hasTail = slotHasTail_(i);
                 if (hasTail && activeCount < MAX_POLYPHONY) {
                     activeVoices[activeCount++] = i;
                     included |= (uint16_t)(1u << i);
@@ -1549,9 +1544,7 @@ public:
         for (int i = 0; i < MAX_POLYPHONY; ++i) {
             const bool alreadyCounted = (voiceMode == 0) ? voiceManager.getVoiceState(i).isActive : forcedActive[i];
             if (alreadyCounted) continue;
-            for (int osc = 0; osc < 3; ++osc) {
-                if (sidChips[i].isVoiceActive(osc)) { ++count; break; }
-            }
+            if (slotHasTail_(i)) ++count;
         }
         return count;
     }
@@ -1577,11 +1570,8 @@ public:
         }
 
         // SID envelope tails: any voice still decaying in release phase
-        for (int i = 0; i < MAX_POLYPHONY; ++i) {
-            for (int osc = 0; osc < 3; ++osc) {
-                if (sidChips[i].isVoiceActive(osc)) return true;
-            }
-        }
+        for (int i = 0; i < MAX_POLYPHONY; ++i)
+            if (slotHasTail_(i)) return true;
         return false;
     }
 
@@ -1850,6 +1840,19 @@ private:
     std::array<int, MAX_POLYPHONY> forcedMidi{};
     std::array<float, MAX_POLYPHONY> forcedVel{};
     std::array<float, MAX_POLYPHONY> forcedTailVel_{};  // velocity of a released forced slot's tail
+    std::array<bool, MAX_POLYPHONY> slotSounded_{};     // slot played a note since reset (may have a tail)
+    // A release tail: the slot played a note since reset (startVoice) and one
+    // of its chip's envelopes still runs. Chips that never played are not
+    // tails: after a reset their envelopes report "active" while the power-on
+    // state settles, and treating that as sound rendered all 8 chips of an
+    // idle CLASSIC engine (0.9.10: 10-40x the idle CPU and every silent
+    // chip's noise and dither added to the output).
+    bool slotHasTail_(int i) const noexcept {
+        if (i < 0 || i >= MAX_POLYPHONY || !slotSounded_[(size_t)i]) return false;
+        for (int osc = 0; osc < 3; ++osc)
+            if (sidChips[(size_t)i].isVoiceActive(osc)) return true;
+        return false;
+    }
     std::array<int, MAX_POLYPHONY> forcedVoiceChannel_{};
     std::array<int, MAX_POLYPHONY> forcedVoiceNoteId_{};
     std::array<bool, MAX_POLYPHONY> fractionalSamplePrepared_{};
@@ -2371,6 +2374,7 @@ private:
     }
 
     void startVoice(int voiceIndex, int midiNote, int channel = -1) {
+        if (voiceIndex >= 0 && voiceIndex < MAX_POLYPHONY) slotSounded_[(size_t)voiceIndex] = true;
         float targetFreq = midiNoteToFrequency((float)midiNote + masterTune + currentPitchBendSemisForChannel(channel));
         uint16_t sidFreq = frequencyToSIDValue(targetFreq);
         ARPLOG("startVoice: voice=%d midi=%d freq=%.2fHz sidReg=0x%04X clock=%.0f",

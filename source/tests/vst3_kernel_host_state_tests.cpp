@@ -15,6 +15,9 @@
 #include <memory>
 #include <cstring>
 #include <vector>
+#if defined(__SSE__) || defined(_M_X64)
+#include <xmmintrin.h>
+#endif
 
 using namespace ArpSID;
 
@@ -196,6 +199,30 @@ int main() {
         check(p.isSidFileLoaded() && p.sidSubtune() == 2, "a preset keeps the loaded tune");
         check(p.mix().master.masterVolume == 77, "a preset keeps the MIX model");
         check(p.bypass(), "a preset keeps bypass");
+    }
+
+    // The kernel flushes denormals only while it renders and restores the
+    // caller's floating-point mode: the host's audio thread also runs the
+    // host mixer and other plug-ins, and setup() runs on the main thread.
+    {
+        auto fpMode = []() -> unsigned long long {
+#if defined(__SSE__) || defined(_M_X64)
+            return _mm_getcsr() & 0x8040u; // DAZ | FTZ
+#elif (defined(__aarch64__) || defined(__arm64__)) && (defined(__GNUC__) || defined(__clang__))
+            unsigned long long fpcr = 0;
+            __asm__ volatile("mrs %0, fpcr" : "=r"(fpcr));
+            return fpcr & ((1ULL << 24) | (1ULL << 19)); // FZ | DN
+#else
+            return 0ull;
+#endif
+        };
+        const unsigned long long before = fpMode();
+        Vst3KernelHost f;
+        f.setup(48000.0, 256);
+        check(fpMode() == before, "setup() leaves the caller's floating-point mode alone");
+        f.loadFactorySlot(0);
+        render(f, 4);
+        check(fpMode() == before, "render() restores the caller's floating-point mode (FTZ/DAZ)");
     }
 
     if (failures) {

@@ -182,8 +182,13 @@ the chip in three phases:
 3. trailing sub-cycle phases.
 
 It averages by the actual subphase width. The voices it advances come from `gatherRenderableVoices_`: the
-allocated voices plus every chip whose envelope is still running (release tails and the
-power-on residue). This is the same set the block path renders. A chip already advanced earlier in the host sample is always finalized in the same
+allocated voices plus every chip that has a release tail (`slotHasTail_`: the slot played
+a note since reset and one of its envelopes still runs). This is the same set the block
+path renders, and the same rule `getActiveVoiceCount()` and `hasActiveVoices()` use. A
+chip that never played is not a tail: after a reset its envelopes report "active" while
+the power-on state settles, and in 0.9.10 treating that as sound rendered all eight chips
+of an idle CLASSIC engine (10–40× the idle CPU, with every silent chip's noise and dither
+in the output). A chip already advanced earlier in the host sample is always finalized in the same
 sample, so a tail that ends mid-sample cannot leak its partial accumulation into a later
 sample. At the host-sample boundary it applies velocity
 gain and the smoothed master gain, which slews at most 1/64 per fractional sample.

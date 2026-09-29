@@ -67,7 +67,9 @@ public:
         switch (reg & 0x1Fu) {
             case 0x19u: return potLatchedX_;
             case 0x1Au: return potLatchedY_;
-            case 0x1Bu: return voices_[2].oscReadByte;
+            case 0x1Bu:
+                if (!oscByteStateful_()) updateOscillatorByte_(2u); // lazy: pure function of state
+                return voices_[2].oscReadByte;
             case 0x1Cu: return voices_[2].env.dacOutput();
             default: return openBus;
         }
@@ -169,13 +171,28 @@ private:
             if (hardSyncShouldReset_(static_cast<uint8_t>(i), syncEnabled, msbRose)) voices_[i].phase = 0;
         }
         for (auto& v : voices_) v.env.tick();
-        updateOscillatorByte_(2u);
+        // The OSC3 byte of a single waveform (or TEST / no waveform) is a pure
+        // function of the current phase, LFSR and control: read() computes it
+        // on demand. Combined waveforms carry lastCombined/combinedSeed from
+        // cycle to cycle, so they keep the per-cycle update that makes them
+        // exact. (Rebuilding the byte every cycle cost more than the
+        // oscillators themselves for the common single-waveform voice 3.)
+        if (oscByteStateful_()) updateOscillatorByte_(2u);
 
         if (++potCycle_ >= kPotConversionCycles) {
             potCycle_ = 0;
             potLatchedX_ = potTargetX_;
             potLatchedY_ = potTargetY_;
         }
+    }
+
+    // True when updateOscillatorByte_(2) changes more than oscReadByte, i.e.
+    // voice 3 plays a combined waveform (not under TEST).
+    bool oscByteStateful_() const noexcept {
+        const uint8_t c = voices_[2].control;
+        if (c & 0x08u) return false;
+        const uint8_t selected = uint8_t(c & 0xF0u);
+        return selected != 0u && (selected & uint8_t(selected - 1u)) != 0u; // more than one bit set
     }
 
     static uint16_t noise12_(const Voice& v) noexcept {

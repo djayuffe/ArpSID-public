@@ -2,6 +2,7 @@
 #pragma once
 
 #include <array>
+#include <cstring>
 #include <cstdint>
 
 namespace ArpSID::C64 {
@@ -219,7 +220,8 @@ public:
         // Sprite data slots. Each active sprite consumes the PHI2 halves of two
         // consecutive cycles. BA is independently asserted three cycles before
         // the first stolen cycle and stays low across merged sprite slots.
-        for (uint8_t s = 0; s < 8u; ++s) {
+        // (Skipped outright when no sprite DMA is active: the common case.)
+        for (uint8_t s = 0; anySpriteDmaActive_() && s < 8u; ++s) {
             if (!spriteDmaActive_[s]) continue;
             const uint16_t first = spriteFirstCycle_(s);
             if (cycleDistance_(hw, first) <= 1u) {
@@ -355,7 +357,7 @@ private:
         }
 
         // Three bytes are fetched per active sprite in its fixed two-cycle slot.
-        for (uint8_t s = 0; s < 8u; ++s) {
+        for (uint8_t s = 0; anySpriteDmaActive_() && s < 8u; ++s) {
             if (spriteDmaActive_[s] && hw == wrapHardwareCycle_(spriteFirstCycle_(s) + 1)) {
                 spriteMc_[s] = static_cast<uint8_t>(spriteMc_[s] + 3u);
             }
@@ -390,6 +392,13 @@ private:
 
     std::array<uint8_t, 64> regs_{};
     std::array<bool, 8> spriteDmaActive_{};
+    // Any sprite fetching data: one 8-byte test instead of eight per cycle.
+    bool anySpriteDmaActive_() const noexcept {
+        static_assert(sizeof(spriteDmaActive_) == sizeof(uint64_t), "8 one-byte flags");
+        uint64_t m = 0;
+        std::memcpy(&m, spriteDmaActive_.data(), sizeof(m));
+        return m != 0u;
+    }
     std::array<bool, 8> spriteDisplayActive_{};
     std::array<bool, 8> spriteAdvanceLine_{};
     std::array<uint8_t, 8> spriteMc_{};

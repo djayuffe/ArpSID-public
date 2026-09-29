@@ -66,6 +66,12 @@ struct C64SidBridgeState final : SidRegisterSink {
     ArpSID::SidRegisterEngine* engine = nullptr;
     SidRegisterSink* mirrorSink = nullptr;
     bool deferEngineWrites = false;
+    // Set while the PSID runtime's own sink answers every SID read (it keeps
+    // the authoritative readback model). This bridge then skips advancing its
+    // duplicate cycle-by-cycle readback model on each write (~5 % of C64 tune
+    // playback). A read that still arrives here is counted (tests require 0).
+    bool readsAnsweredElsewhere = false;
+    uint32_t shadowedReadCount = 0;
     uint32_t timedWriteCount = 0;
     uint32_t timedWriteOverflow = 0;
     uint8_t lastReg = 0;
@@ -191,7 +197,7 @@ struct C64SidBridgeState final : SidRegisterSink {
             return;
         }
         regsByChip[chip][r] = value;
-        readbackByChip[chip].write(phi2Cycle, r, value);
+        if (!readsAnsweredElsewhere) readbackByChip[chip].write(phi2Cycle, r, value);
         regs[r] = regsByChip[0][r];
         if (r == 0x18u) {
             if (d418Observed && lastD418Value == value) ++d418RepeatedValueWriteCount;
@@ -239,11 +245,13 @@ struct C64SidBridgeState final : SidRegisterSink {
             ++sidReadApproximationCount;
             return 0xFFu;
         }
+        if (readsAnsweredElsewhere) ++shadowedReadCount;
         const uint8_t value = readbackByChip[chip].read(phi2, r, 0xFFu);
         if (r == 0x1Bu) osc3ByChip[chip] = value;
         if (r == 0x1Cu) env3ByChip[chip] = value;
         return value;
     }
+    void setReadsAnsweredElsewhere(bool elsewhere) noexcept override { readsAnsweredElsewhere = elsewhere; }
 };
 
 inline void c64SidBridgeInstall(C64Platform& platform,

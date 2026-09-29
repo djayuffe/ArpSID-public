@@ -367,8 +367,13 @@ public:
 class C64RuntimePhi2SidSinkBridge final : public ISidRegisterWriteSink {
 public:
     void attach(C64RuntimeSidSink* local, SidRegisterSink* external) noexcept {
+        if (external_ && external_ != external) external_->setReadsAnsweredElsewhere(false);
         local_ = local;
         external_ = external;
+        // readSidRegisterPhi2 answers from local_ whenever it exists, so an
+        // external sink's own readback model is never consulted.
+        if (external_ && external_ != static_cast<SidRegisterSink*>(local_))
+            external_->setReadsAnsweredElsewhere(local_ != nullptr);
     }
     void resetExactnessCounters() noexcept {
         sidReadApproximationCount_ = 0;

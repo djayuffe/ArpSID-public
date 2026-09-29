@@ -258,6 +258,24 @@ the original order for ties.
 polling OSC3 between two host samples sees the right value. Writes to the read
 registers (`$D419–$D41F`) are counted as SID hole writes.
 
+**Cost.** The model advances cycle by cycle (three oscillators, noise LFSRs,
+hard sync, three envelopes, the POT counter) up to each SID access.
+
+- The OSC3 byte of a single waveform, or of voice 3 under TEST or with no
+  waveform, is a pure function of the current state and is computed when
+  `$D41B` is read. Combined waveforms carry the combined-wave hysteresis from
+  cycle to cycle, so they are still updated every cycle.
+- The PSID runtime's own sink (`C64RuntimeSidSink`) answers every CPU read.
+  The timed bridge (`C64SidBridgeState`) receives the same writes and used to
+  advance a second, never-read readback model. The runtime now tells it
+  (`SidRegisterSink::setReadsAnsweredElsewhere`), and it skips that model; a
+  read that still reaches it is counted in `shadowedReadCount`.
+- VIC-II: the two per-cycle sprite loops are skipped when no sprite DMA is
+  active (one 8-byte test instead of eight flags per cycle).
+
+Together about 10 % fewer instructions for PSID playback, bit-identical output
+(checked with a tune that polls OSC3 and ENV3 every frame).
+
 ### 7.3 Projection bridge
 
 Synth, SID REG and drum engines that project register writes onto the C64 bus
