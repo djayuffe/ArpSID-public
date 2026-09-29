@@ -76,7 +76,7 @@ inline constexpr std::array<SidAnalogueAnchor, 9> sidCutoff8580R5Anchors() noexc
     return {{{0, 18.0f}, {64, 28.0f}, {192, 55.0f}, {384, 180.0f}, {768, 900.0f}, {1152, 3100.0f}, {1536, 7600.0f}, {1856, 13200.0f}, {2047, 19800.0f}}};
 }
 
-inline SidAnalogueCalibration sidDefaultAnalogueCalibration(SidFamily family, uint8_t revision) noexcept {
+inline SidAnalogueCalibration sidBuildDefaultAnalogueCalibration(SidFamily family, uint8_t revision) noexcept {
     SidAnalogueCalibration c{};
     c.family = family;
     c.revision = revision;
@@ -118,6 +118,30 @@ inline SidAnalogueCalibration sidDefaultAnalogueCalibration(SidFamily family, ui
     c.externalRcDefaultEnabled = true;
     c.sanitize();
     return c;
+}
+
+// The default calibration is a pure function of (family, revision), but the
+// filter parity law and the chip output stage need it for every rendered
+// sample. Building it (anchor copy, resonance curves, sanitize() sort) there
+// cost about a third of the render time, so every (family, revision 0..15)
+// pair is built once into a static table and read by reference. The values
+// are exactly those of sidBuildDefaultAnalogueCalibration.
+inline const SidAnalogueCalibration& sidDefaultAnalogueCalibrationRef(SidFamily family, uint8_t revision) noexcept {
+    static const std::array<std::array<SidAnalogueCalibration, 16>, 2> table = [] {
+        std::array<std::array<SidAnalogueCalibration, 16>, 2> t{};
+        for (uint8_t r = 0; r < 16u; ++r) {
+            t[0][r] = sidBuildDefaultAnalogueCalibration(SidFamily::MOS6581, r);
+            t[1][r] = sidBuildDefaultAnalogueCalibration(SidFamily::MOS8580, r);
+        }
+        return t;
+    }();
+    return table[family == SidFamily::MOS6581 ? 0u : 1u][revision & 0x0Fu];
+}
+
+inline SidAnalogueCalibration sidDefaultAnalogueCalibration(SidFamily family, uint8_t revision) noexcept {
+    if (revision < 16u && (family == SidFamily::MOS6581 || family == SidFamily::MOS8580))
+        return sidDefaultAnalogueCalibrationRef(family, revision);
+    return sidBuildDefaultAnalogueCalibration(family, revision);
 }
 
 inline SidAnalogueCalibration sidCalibrationForVariant(const SidVariantProfile& profile) noexcept {

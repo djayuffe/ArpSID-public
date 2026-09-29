@@ -5,6 +5,43 @@ All notable changes to ArpSID are documented here. The project uses
 version is `VERSION.txt`, mirrored by `project(VERSION)` in `CMakeLists.txt`
 and `include/arpsid/version.h`.
 
+## [Unreleased]
+
+### Fixed (VST3 realtime and buffers)
+
+- **Stuck notes under heavy automation.** Parameter points were collected
+  before notes into the per-block event buffer, so a block with more
+  automation points than the buffer holds (4096) lost its note-offs. Notes are
+  now collected first, and automation shares a per-block budget (256 events)
+  that keeps the block inside the kernel's event lanes: past it each
+  parameter is thinned to evenly spaced points that always include its last
+  value.
+- **Allocation on the audio thread.** Events were ordered with
+  `std::stable_sort`, which allocates a temporary buffer. They are now sorted
+  with the kernel's total order (`std::sort`, allocation-free); the host test
+  counts heap allocations inside `process()` and requires zero.
+- **Silent 64-bit blocks.** A 64-bit block larger than the announced maximum
+  block size came out silent. It is now rendered in slices and sounds the
+  same as announced-size blocks.
+- **Editor keyboard timing in large blocks.** Blocks over 4096 frames were
+  split before the kernel, which then drained the editor's queued notes and
+  parameter changes per chunk instead of once per block. The whole block now
+  goes to the kernel, which splits it correctly.
+
+### Performance (every format)
+
+- **About half the CPU.** The SID filter law rebuilt its analogue calibration
+  table (and sorted it) for every sample, the SID register engine recomputed
+  the full law whenever the drift inputs moved (almost every sample), and the
+  CLASSIC engine recomputed filter coefficients on all eight chips for every
+  render slice. The calibration is now a static table, the law is split into
+  a cached base stage and a cheap per-sample finish, and unchanged cutoff and
+  resonance keep their law. A held chord in the VST3 went from about 46 % to
+  22 % of one core at 512-frame blocks (56 % to 29 % at 32 frames), with
+  bit-identical audio.
+- The VST3 host test prints the render cost at block sizes from 32 to 2048
+  frames.
+
 ## [0.9.10] — 2026-09-28
 
 ### Fixed (engine, every format)

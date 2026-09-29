@@ -264,6 +264,30 @@ to `[0.25, 7]`.
 - 8580: `0.0007 + 0.0005·(1 − fc/20000) + 0.00012·res`;
 - plus `(1 − supply)·0.004`, clamped to `[0, 0.05]`.
 
+**How the law is evaluated (performance).** The law is computed in two
+stages with identical arithmetic: `sidComputeFilterParityBase()` (anchors,
+model scale, revision calibration, Q; it depends on model, `FC`, resonance
+and revision only) and `sidFinishFilterParityLaw()` (thermal drift, supply,
+limits, integrator leak). `sidComputeFilterParityLaw()` runs both.
+
+- The default analogue calibration (`sidDefaultAnalogueCalibration`: anchors,
+  resonance curve, output gain, DC, external RC) is built once per (family,
+  revision 0–15) into a static table and read by reference
+  (`sidDefaultAnalogueCalibrationRef`); `prewarmAllSidTables()` builds it off
+  the audio thread. It used to be rebuilt, sort included, for every sample in
+  the filter law and in the chip output stage.
+- `SIDFilter::setCutoff` / `setResonance` keep the current law when the value
+  is unchanged (the engines re-apply both every render slice); every setter
+  of a law input recomputes it, and `reset()` invalidates it.
+- The SID register engine's filter derives drift and supply from its input
+  level, so they change almost every sample: it caches the base stage per
+  (model, `FC`, resonance, revision) and redoes only the finish stage.
+
+Together these halved the VST3 render cost (a held chord: about 46 % → 22 %
+of one core at 512-frame blocks) with bit-identical output, checked by
+rendering SYNTH, CLASSIC and DR SID scenarios with filter automation through
+the old and the new code.
+
 ### 4.3 Per-cycle processing (`process()`)
 
 ```

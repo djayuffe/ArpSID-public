@@ -1295,6 +1295,12 @@ private:
 	 // last inputs and recompute only when one actually changes; cutoffHz/q/
 	 // integratorLeak retain the law for the cached inputs, so output stays
 	 // bit-identical to the uncached path.
+	 SidFilterParityBase base_{};
+	 bool baseCacheValid_ = false;
+	 bool baseCacheIs6581_ = false;
+	 uint16_t baseCacheFc_ = 0xFFFFu;
+	 uint8_t baseCacheRes_ = 0xFFu;
+	 uint8_t baseCacheRevision_ = 0xFFu;
 	 bool lawCacheValid_ = false;
 	 bool lawCacheIs6581_ = false;
 	 uint16_t lawCacheFc_ = 0xFFFFu;
@@ -1308,8 +1314,19 @@ private:
 	     lawCacheThermal_ == thermalDrift && lawCacheSupply_ == supplyScale) {
 	  return; // cutoffHz/q/integratorLeak already hold the law for these inputs
 	 }
-	 const SidFilterParityLaw law = sidComputeFilterParityLaw(is6581 ? SIDModel::MOS6581 : SIDModel::MOS8580,
-	                                                          fc, res, thermalDrift, supplyScale, revision);
+	 // thermalDrift/supplyScale follow the filter input level, so they change
+	 // almost every sample: keep the base stage (model, fc, res, revision) and
+	 // redo only the finish stage then. Same result as the one-shot law.
+	 if (!baseCacheValid_ || baseCacheIs6581_ != is6581 || baseCacheFc_ != fc || baseCacheRes_ != res ||
+	     baseCacheRevision_ != revision) {
+	  base_ = sidComputeFilterParityBase(is6581 ? SIDModel::MOS6581 : SIDModel::MOS8580, fc, res, revision);
+	  baseCacheValid_ = true;
+	  baseCacheIs6581_ = is6581;
+	  baseCacheFc_ = fc;
+	  baseCacheRes_ = res;
+	  baseCacheRevision_ = revision;
+	 }
+	 const SidFilterParityLaw law = sidFinishFilterParityLaw(base_, thermalDrift, supplyScale);
 	 cutoffHz = law.cutoffHz;
 	 q = law.q;
 	 integratorLeak = law.integratorLeak;
@@ -1327,6 +1344,7 @@ private:
 	  thermalDrift = 0.0f; supplyScale = 1.0f; supplyRippleAmount = 0.0f; ripplePhase = 0.0;
 	  smoothCoeff = 1.0 - std::exp(-1.0 / std::max(1.0, sr * 0.0015));
 	  lawCacheValid_ = false; // force law recompute on first post-reset sample
+	  baseCacheValid_ = false;
 	 }
  void configure(uint16_t cutoff, uint8_t resonance, uint8_t mv) { fc = cutoff; res = resonance; modeVol = mv; }
  void setParityEnvironment(float drift, float scale, float ripple) noexcept {

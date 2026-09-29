@@ -172,35 +172,8 @@ void ArpSIDVst3Processor::collectEvents_(ProcessData& data, int frameCount) {
     const int cap = static_cast<int>(events_.size());
     const int lastFrame = std::max(0, frameCount - 1);
 
-    // Parameter automation: every point, sample-accurate. Program / BankSlot
-    // are selections handled by the controller (factory patch load message).
-    if (IParameterChanges* changes = data.inputParameterChanges) {
-        const int32 queues = changes->getParameterCount();
-        for (int32 q = 0; q < queues; ++q) {
-            IParamValueQueue* queue = changes->getParameterData(q);
-            if (!queue) continue;
-            const Steinberg::Vst::ParamID pid = queue->getParameterId();
-            if (pid >= static_cast<Steinberg::Vst::ParamID>(kNumParams) || pid == static_cast<Steinberg::Vst::ParamID>(kParamProgram) ||
-                pid == static_cast<Steinberg::Vst::ParamID>(kParamBankSlot))
-                continue;
-            const int32 points = queue->getPointCount();
-            for (int32 p = 0; p < points && n < cap; ++p) {
-                int32 offset = 0;
-                ParamValue value = 0.0;
-                if (queue->getPoint(p, offset, value) != kResultOk || !std::isfinite(value)) continue;
-                TimedEvent ev{};
-                ev.sampleOffset = std::clamp<int32>(offset, 0, lastFrame);
-                ev.kind = EventKind::ParameterSet;
-                ev.target = static_cast<std::uint32_t>(pid);
-                ev.value = static_cast<float>(std::clamp(value, 0.0, 1.0));
-                ev.value_f32 = ev.value;
-                ev.rawOrder = ++eventOrder_;
-                events_[static_cast<std::size_t>(n++)] = ev;
-            }
-        }
-    }
-
-    // Note events.
+    // Note events first: they are never dropped in favour of automation (a
+    // lost note-off is a stuck note).
     if (IEventList* list = data.inputEvents) {
         const int32 count = list->getEventCount();
         for (int32 i = 0; i < count && n < cap; ++i) {
@@ -238,10 +211,65 @@ void ArpSIDVst3Processor::collectEvents_(ProcessData& data, int frameCount) {
         }
     }
 
-    std::stable_sort(events_.begin(), events_.begin() + n, [](const TimedEvent& a, const TimedEvent& b) {
-        return a.sampleOffset < b.sampleOffset;
-    });
+    // Parameter automation, sample-accurate. Program / BankSlot are selections
+    // handled by the controller (factory patch load message). The points share
+    // a budget with the notes (kParamPointBudget, below the kernel's per-block
+    // event lanes). Past it, each queue is thinned to evenly spaced points
+    // that always include its last point, so every parameter still ends the
+    // block on the host's value.
+    if (IParameterChanges* changes = data.inputParameterChanges) {
+        const int32 queues = changes->getParameterCount();
+        int usable = 0;
+        long totalPoints = 0;
+        for (int32 q = 0; q < queues; ++q) {
+            IParamValueQueue* queue = changes->getParameterData(q);
+            if (!queue || !isAutomatableTarget_(queue->getParameterId())) continue;
+            const int32 points = queue->getPointCount();
+            if (points <= 0) continue;
+            ++usable;
+            totalPoints += points;
+        }
+        const int budget = std::max(0, std::min(cap - n, kParamPointBudget - n));
+        // Points each queue may keep (at least its last one).
+        const int perQueue = (usable > 0 && totalPoints > budget) ? std::max(1, budget / usable) : 0x7fffffff;
+        for (int32 q = 0; q < queues && n < cap; ++q) {
+            IParamValueQueue* queue = changes->getParameterData(q);
+            if (!queue) continue;
+            const Steinberg::Vst::ParamID pid = queue->getParameterId();
+            if (!isAutomatableTarget_(pid)) continue;
+            const int32 points = queue->getPointCount();
+            if (points <= 0) continue;
+            const int keep = std::min<int32>(points, perQueue);
+            for (int k = 0; k < keep && n < cap; ++k) {
+                // k-th of `keep` evenly spaced points, ending on the last one.
+                const int32 p = keep == points ? k
+                                               : static_cast<int32>((static_cast<long>(k + 1) * points) / keep) - 1;
+                int32 offset = 0;
+                ParamValue value = 0.0;
+                if (queue->getPoint(p, offset, value) != kResultOk || !std::isfinite(value)) continue;
+                TimedEvent ev{};
+                ev.sampleOffset = std::clamp<int32>(offset, 0, lastFrame);
+                ev.kind = EventKind::ParameterSet;
+                ev.target = static_cast<std::uint32_t>(pid);
+                ev.value = static_cast<float>(std::clamp(value, 0.0, 1.0));
+                ev.value_f32 = ev.value;
+                ev.rawOrder = ++eventOrder_;
+                events_[static_cast<std::size_t>(n++)] = ev;
+            }
+        }
+    }
+
+    // The kernel's canonical total order (sample offset, then kind priority,
+    // then arrival). std::sort on a total order is deterministic and, unlike
+    // std::stable_sort, never allocates a temporary buffer.
+    std::sort(events_.begin(), events_.begin() + n, TimedEvent::before);
     eventCount_ = n;
+}
+
+bool ArpSIDVst3Processor::isAutomatableTarget_(Steinberg::Vst::ParamID pid) noexcept {
+    return pid < static_cast<Steinberg::Vst::ParamID>(kNumParams) &&
+           pid != static_cast<Steinberg::Vst::ParamID>(kParamProgram) &&
+           pid != static_cast<Steinberg::Vst::ParamID>(kParamBankSlot);
 }
 
 void ArpSIDVst3Processor::readBypass_(ProcessData& data) noexcept {
@@ -285,9 +313,7 @@ tresult PLUGIN_API ArpSIDVst3Processor::process(ProcessData& data) {
                 IParamValueQueue* queue = changes->getParameterData(q);
                 if (!queue || queue->getPointCount() <= 0) continue;
                 const Steinberg::Vst::ParamID pid = queue->getParameterId();
-                if (pid >= static_cast<Steinberg::Vst::ParamID>(kNumParams) || pid == static_cast<Steinberg::Vst::ParamID>(kParamProgram) ||
-                pid == static_cast<Steinberg::Vst::ParamID>(kParamBankSlot))
-                    continue;
+                if (!isAutomatableTarget_(pid)) continue;
                 int32 offset = 0;
                 ParamValue value = 0.0;
                 if (queue->getPoint(queue->getPointCount() - 1, offset, value) == kResultOk)
@@ -298,18 +324,41 @@ tresult PLUGIN_API ArpSIDVst3Processor::process(ProcessData& data) {
     }
 
     const bool is64 = data.symbolicSampleSize == kSample64;
-    // 64-bit blocks go through float scratch sized in setupProcessing; a host
-    // that exceeds its announced block size gets silence, never an overrun.
-    if (is64 && static_cast<std::size_t>(frames) > scratchOut_[0].size()) {
-        if (data.numOutputs > 0 && data.outputs && data.outputs[0].channelBuffers64)
-            for (int32 c = 0; c < data.outputs[0].numChannels; ++c)
-                if (double* d = data.outputs[0].channelBuffers64[c])
-                    std::fill(d, d + frames, 0.0);
-        return kResultOk;
+    collectEvents_(data, frames);
+    TransportState transport{};
+    readTransport_(data.processContext, sampleRate_, frames, transport);
+
+    // 32-bit blocks render in one call (the kernel splits blocks larger than
+    // its 4096-frame chunk itself, events and musical position included).
+    // 64-bit blocks go through the float scratch sized in setupProcessing; a
+    // host that exceeds its announced block size is rendered in scratch-sized
+    // slices instead of being dropped.
+    const int slice = is64 ? static_cast<int>(scratchOut_[0].size()) : frames;
+    if (slice <= 0) return kResultOk;
+    bool silent = true;
+    int channels = 0;
+    int ev = 0;
+    for (int start = 0; start < frames; start += slice) {
+        const int n = std::min(slice, frames - start);
+        // Events of this slice (sorted), rebased to the slice.
+        const int evBegin = ev;
+        while (ev < eventCount_ && events_[static_cast<std::size_t>(ev)].sampleOffset < start + n) {
+            events_[static_cast<std::size_t>(ev)].sampleOffset -= start;
+            ++ev;
+        }
+        TransportState t = transport;
+        t.frameCount = n;
+        if (start > 0 && sampleRate_ > 0.0 && t.bpm > 0.0)
+            t.beatPosition += static_cast<double>(start) * t.bpm / (sampleRate_ * 60.0);
+        channels = renderSlice_(data, is64, start, n, events_.data() + evBegin, ev - evBegin, t, silent);
     }
 
-    collectEvents_(data, frames);
+    if (channels > 0) data.outputs[0].silenceFlags = silent ? ((1ull << channels) - 1ull) : 0ull;
+    return kResultOk;
+}
 
+int ArpSIDVst3Processor::renderSlice_(ProcessData& data, bool is64, int start, int frames, const TimedEvent* events,
+                                      int eventCount, const TransportState& transport, bool& silent) noexcept {
     // DIGI capture input (side-chain). Only read while a capture is armed.
     const float* in[2] = {nullptr, nullptr};
     int inChannels = 0;
@@ -319,19 +368,18 @@ tresult PLUGIN_API ArpSIDVst3Processor::process(ProcessData& data) {
             if (is64) {
                 const double* src = data.inputs[0].channelBuffers64 ? data.inputs[0].channelBuffers64[c] : nullptr;
                 if (!src) { inChannels = c; break; }
-                for (int i = 0; i < frames; ++i) scratchIn_[c][static_cast<std::size_t>(i)] = static_cast<float>(src[i]);
+                for (int i = 0; i < frames; ++i)
+                    scratchIn_[c][static_cast<std::size_t>(i)] = static_cast<float>(src[start + i]);
                 in[c] = scratchIn_[c].data();
             } else {
-                in[c] = data.inputs[0].channelBuffers32 ? data.inputs[0].channelBuffers32[c] : nullptr;
-                if (!in[c]) { inChannels = c; break; }
+                const float* src = data.inputs[0].channelBuffers32 ? data.inputs[0].channelBuffers32[c] : nullptr;
+                if (!src) { inChannels = c; break; }
+                in[c] = src + start;
             }
         }
     }
     host_->setDigiCaptureInputActive(inChannels > 0);
     if (inChannels > 0) host_->captureDigiInput(in, inChannels, frames);
-
-    TransportState transport{};
-    readTransport_(data.processContext, sampleRate_, frames, transport);
 
     float* out[2] = {nullptr, nullptr};
     int channels = 0;
@@ -343,28 +391,26 @@ tresult PLUGIN_API ArpSIDVst3Processor::process(ProcessData& data) {
                 out[c] = (data.outputs[0].channelBuffers64 && data.outputs[0].channelBuffers64[c])
                              ? scratchOut_[c].data() : nullptr;
             } else {
-                out[c] = data.outputs[0].channelBuffers32 ? data.outputs[0].channelBuffers32[c] : nullptr;
+                out[c] = (data.outputs[0].channelBuffers32 && data.outputs[0].channelBuffers32[c])
+                             ? data.outputs[0].channelBuffers32[c] + start : nullptr;
             }
             if (!out[c]) { channels = c; break; }
             std::memset(out[c], 0, static_cast<std::size_t>(frames) * sizeof(float));
         }
     }
-    host_->render(channels > 0 ? out : nullptr, channels, frames, events_.data(), eventCount_, transport);
-    if (channels > 0) applyBypass_(out, channels, frames);
+    host_->render(channels > 0 ? out : nullptr, channels, frames, events, eventCount, transport);
+    if (channels <= 0) return 0;
+    applyBypass_(out, channels, frames);
 
-    if (channels > 0) {
-        bool silent = true;
-        for (int c = 0; c < channels && silent; ++c)
-            for (int i = 0; i < frames; ++i)
-                if (out[c][i] != 0.0f) { silent = false; break; }
-        if (is64)
-            for (int c = 0; c < channels; ++c) {
-                double* d = data.outputs[0].channelBuffers64[c];
-                for (int i = 0; i < frames; ++i) d[i] = static_cast<double>(out[c][i]);
-            }
-        data.outputs[0].silenceFlags = silent ? ((1ull << channels) - 1ull) : 0ull;
-    }
-    return kResultOk;
+    for (int c = 0; c < channels && silent; ++c)
+        for (int i = 0; i < frames; ++i)
+            if (out[c][i] != 0.0f) { silent = false; break; }
+    if (is64)
+        for (int c = 0; c < channels; ++c) {
+            double* d = data.outputs[0].channelBuffers64[c] + start;
+            for (int i = 0; i < frames; ++i) d[i] = static_cast<double>(out[c][i]);
+        }
+    return channels;
 }
 
 tresult PLUGIN_API ArpSIDVst3Processor::getState(IBStream* state) {

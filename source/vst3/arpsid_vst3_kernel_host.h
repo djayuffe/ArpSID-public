@@ -55,7 +55,7 @@ struct SidStateRootV1;
 
 class Vst3KernelHost final {
 public:
-    // Render chunk limit (the kernel's kMaxFramesPerBlock); render() splits
+    // Render chunk limit (the kernel's kMaxFramesPerBlock); the kernel splits
     // larger host blocks internally.
     static int maxKernelFrames() noexcept;
 
@@ -180,8 +180,6 @@ public:
 private:
     void publishModelsLocked_(bool includeDigiSampleBank) noexcept;
     void scheduleRoot_(const SidStateRootV1& root);
-    void renderBlocks_(float** outputs, int numChannels, int frameCount, const TimedEvent* events,
-                       int eventCount, const TransportState& transport) noexcept;
 
     // A scheduled root is applied by the kernel at the top of the next render
     // block. Until a block has rendered it, saveState() serializes the pending
@@ -213,11 +211,8 @@ private:
     GUI::KitStateBlob kit_;
     GUI::DigiPanelModel digiModel_;
     std::unique_ptr<GUI::DigiSampleBankBlob> digiBank_;
-    // Render-thread scratch for splitting oversized host blocks (preallocated).
-    std::unique_ptr<std::vector<TimedEvent>> chunkEvents_;
     std::uint64_t modelGeneration_ = 1;
     double sampleRate_ = 44100.0;
-    int maxFrames_ = 1024;
 };
 
 } // namespace ArpSID

@@ -75,8 +75,7 @@ Vst3KernelHost::Vst3KernelHost()
       mix_(GUI::makeDefaultMixModel()),
       kit_(GUI::makeDefaultKitStateBlob()),
       digiModel_(GUI::makeDefaultDigiPanelModel()),
-      digiBank_(std::make_unique<GUI::DigiSampleBankBlob>()),
-      chunkEvents_(std::make_unique<std::vector<TimedEvent>>(kMaxTimedEvents)) {
+      digiBank_(std::make_unique<GUI::DigiSampleBankBlob>()) {
     prewarmAllSidTables();
     GUI::resetDigiSampleBankBlob(*digiBank_);
     kernel_->setComponentFlavor(static_cast<int>(ComponentFlavor::Hybrid));
@@ -88,7 +87,6 @@ Vst3KernelHost::~Vst3KernelHost() = default;
 
 void Vst3KernelHost::setup(double sampleRate, int maxFrames) {
     sampleRate_ = (std::isfinite(sampleRate) && sampleRate > 0.0) ? sampleRate : 44100.0;
-    maxFrames_ = std::max(1, maxFrames);
     // Keep the audible state across re-setup (sample-rate / block-size change).
     std::array<float, kNumParams> snapshot{};
     for (int i = 0; i < kNumParams; ++i) snapshot[static_cast<std::size_t>(i)] = kernel_->getParameter(i);
@@ -96,7 +94,7 @@ void Vst3KernelHost::setup(double sampleRate, int maxFrames) {
     std::lock_guard<std::mutex> lock(modelMutex_);
     kernel_->requestAudioEngineMode(
         settings_.audioEngineMode == GUI::AudioEngineMode::SingleSid3Voice ? 1u : 0u);
-    kernel_->setup(sampleRate_, std::min(maxFrames_, ArpSIDDSPKernel::kMaxFramesPerBlock));
+    kernel_->setup(sampleRate_, std::clamp(maxFrames, 1, ArpSIDDSPKernel::kMaxFramesPerBlock));
     kernel_->restoreHostParameterSnapshotImmediate(snapshot.data(), kNumParams);
     kernel_->setStickyPresetDisplaySlot(stickySlot);
     publishModelsLocked_(true);
@@ -110,47 +108,16 @@ void Vst3KernelHost::render(float** outputs, int numChannels, int frameCount,
     if (frameCount <= 0) return;
     // Any root scheduled before this point is drained by the first processBlock.
     const std::uint64_t seq = scheduledSeq_.load(std::memory_order_acquire);
-    renderBlocks_(outputs, numChannels, frameCount, events, eventCount, transport);
+    // The whole host block goes to the kernel. Blocks larger than its
+    // 4096-frame chunk are split there, which also drains the editor's queued
+    // MIDI and parameter intents once against the full block (splitting here
+    // would drain them per chunk and shift their timing).
+    TransportState t = transport;
+    t.frameCount = frameCount;
+    if (numChannels >= 2) kernel_->processBlock(outputs, 2, frameCount, events, eventCount, t);
+    else if (numChannels == 1) kernel_->processBlockMono(outputs[0], frameCount, events, eventCount, t);
+    else kernel_->processBlock(nullptr, 0, frameCount, events, eventCount, t);
     renderedSeq_.store(seq, std::memory_order_release);
-}
-
-void Vst3KernelHost::renderBlocks_(float** outputs, int numChannels, int frameCount,
-                                   const TimedEvent* events, int eventCount,
-                                   const TransportState& transport) noexcept {
-    const int chunkMax = ArpSIDDSPKernel::kMaxFramesPerBlock;
-    if (frameCount <= chunkMax) {
-        TransportState t = transport;
-        t.frameCount = frameCount;
-        if (numChannels >= 2) kernel_->processBlock(outputs, numChannels, frameCount, events, eventCount, t);
-        else if (numChannels == 1) kernel_->processBlockMono(outputs[0], frameCount, events, eventCount, t);
-        else kernel_->processBlock(nullptr, 0, frameCount, events, eventCount, t);
-        return;
-    }
-    // Hosts may exceed the kernel chunk size: split, rebasing event offsets and
-    // advancing the musical position per chunk (same law as the AUv3 wrapper).
-    std::vector<TimedEvent>& chunkEvents = *chunkEvents_;
-    int next = 0;
-    for (int start = 0; start < frameCount; start += chunkMax) {
-        const int frames = std::min(chunkMax, frameCount - start);
-        int n = 0;
-        while (next < eventCount && (events[next].sampleOffset < start + frames)) {
-            if (n < static_cast<int>(chunkEvents.size())) {
-                TimedEvent ev = events[next];
-                ev.sampleOffset = ev.sampleOffset < 0 ? -1 : std::max(0, ev.sampleOffset - start);
-                chunkEvents[static_cast<std::size_t>(n++)] = ev;
-            }
-            ++next;
-        }
-        TransportState t = transport;
-        t.frameCount = frames;
-        if (t.sampleRate > 0.0 && t.bpm > 0.0)
-            t.beatPosition = transport.beatPosition + double(start) * t.bpm / (t.sampleRate * 60.0);
-        float* chunkOut[2] = {nullptr, nullptr};
-        for (int c = 0; c < std::min(numChannels, 2); ++c) chunkOut[c] = outputs[c] + start;
-        if (numChannels >= 2) kernel_->processBlock(chunkOut, 2, frames, chunkEvents.data(), n, t);
-        else if (numChannels == 1) kernel_->processBlockMono(chunkOut[0], frames, chunkEvents.data(), n, t);
-        else kernel_->processBlock(nullptr, 0, frames, chunkEvents.data(), n, t);
-    }
 }
 
 void Vst3KernelHost::setParameterNonRealtime(int paramId, float normalized) noexcept {

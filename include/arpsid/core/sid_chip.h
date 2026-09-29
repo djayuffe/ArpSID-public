@@ -795,16 +795,30 @@ struct SidFilterParityLaw {
     double integratorLeak = 0.0;
 };
 
-inline SidFilterParityLaw sidComputeFilterParityLaw(SIDModel model,
-                                                    uint16_t cutoff,
-                                                    uint8_t resonance,
-                                                    float thermalDrift,
-                                                    float supplyScale,
-                                                    uint8_t revision = 3u) noexcept {
+// The parity law in two stages. The base stage depends only on (model,
+// cutoff register, resonance, revision); the finish stage applies the
+// per-sample thermal drift and supply scale. Engines whose drift changes every
+// sample cache the base stage. sidComputeFilterParityLaw runs both stages with
+// the same arithmetic in the same order as before, so results are identical.
+struct SidFilterParityBase {
+    double baseCutoffHz = 0.0; // max(model floor, rawHz * modelScale * cutoffScale)
+    double q = 0.0;
+    double resNorm = 0.0;
+    double distortionFactor = 0.0;
+    uint8_t resonance = 0;
+    bool is6581 = false;
+};
+
+inline SidFilterParityBase sidComputeFilterParityBase(SIDModel model,
+                                                      uint16_t cutoff,
+                                                      uint8_t resonance,
+                                                      uint8_t revision = 3u) noexcept {
     ensureSidTablesReadyForNonRealtimeUse("sidComputeFilterParityLaw requires prewarmed SID tables");
-    SidFilterParityLaw out{};
+    SidFilterParityBase b{};
+    b.is6581 = model == SIDModel::MOS6581;
+    b.resonance = static_cast<uint8_t>(resonance & 0x0Fu);
     const uint8_t calibratedRevision = sidCombinedRevisionForModel(revision, model == SIDModel::MOS6581);
-    SidAnalogueCalibration analogue = sidDefaultAnalogueCalibration(model == SIDModel::MOS6581 ? SidFamily::MOS6581 : SidFamily::MOS8580, calibratedRevision);
+    const SidAnalogueCalibration& analogue = sidDefaultAnalogueCalibrationRef(model == SIDModel::MOS6581 ? SidFamily::MOS6581 : SidFamily::MOS8580, calibratedRevision);
     const uint16_t fcReg = static_cast<uint16_t>(cutoff & 0x07FFu);
     double rawHz = analogue.cutoffAnchors.front().hz;
     for (size_t seg = 1; seg < analogue.cutoffAnchors.size(); ++seg) {
@@ -818,23 +832,43 @@ inline SidFilterParityLaw sidComputeFilterParityLaw(SIDModel model,
             break;
         }
     }
-    const double resNorm = (double)(resonance & 0x0Fu) / 15.0;
+    b.resNorm = (double)(resonance & 0x0Fu) / 15.0;
     const double modelScale = (model == SIDModel::MOS6581) ? 0.92 : 0.99;
     const SidFilterCalibration calibration = kSidFilterCalibrationByRevision[(size_t)calibratedRevision];
-    out.cutoffHz = std::max((model == SIDModel::MOS6581) ? 12.0 : 10.0, rawHz * modelScale * calibration.cutoffScale);
-    const double thermalCutoff = 1.0 + ((model == SIDModel::MOS6581) ? 0.035 : 0.015) * std::clamp((double)thermalDrift, 0.0, 1.0);
+    b.baseCutoffHz = std::max((model == SIDModel::MOS6581) ? 12.0 : 10.0, rawHz * modelScale * calibration.cutoffScale);
+    b.q = std::clamp(static_cast<double>(analogue.resonanceQ[(size_t)(resonance & 0x0Fu)]) * calibration.resonanceScale, 0.25, 7.0);
+    b.distortionFactor = calibration.distortionFactor;
+    return b;
+}
+
+inline SidFilterParityLaw sidFinishFilterParityLaw(const SidFilterParityBase& b,
+                                                   float thermalDrift,
+                                                   float supplyScale) noexcept {
+    SidFilterParityLaw out{};
+    out.cutoffHz = b.baseCutoffHz;
+    const double thermalCutoff = 1.0 + (b.is6581 ? 0.035 : 0.015) * std::clamp((double)thermalDrift, 0.0, 1.0);
     out.cutoffHz *= std::clamp((double)std::clamp(std::isfinite(supplyScale) ? supplyScale : 1.0f, 0.85f, 1.15f) * thermalCutoff, 0.90, 1.10);
     out.cutoffHz = std::clamp(out.cutoffHz, 8.0, 48000.0);
-    out.q = std::clamp(static_cast<double>(analogue.resonanceQ[(size_t)(resonance & 0x0Fu)]) * calibration.resonanceScale, 0.25, 7.0);
-    out.integratorLeak = (model == SIDModel::MOS6581)
-        ? (0.0030 + 0.0020 * (1.0 - std::min(1.0, out.cutoffHz / 12000.0)) + 0.0008 * resNorm)
-        : (0.0007 + 0.0005 * (1.0 - std::min(1.0, out.cutoffHz / 20000.0)) + 0.00012 * resNorm);
-    if (model == SIDModel::MOS6581 && (resonance & 0x0Fu) > 8u) {
-        out.integratorLeak += 0.018 * calibration.distortionFactor * ((double)((resonance & 0x0Fu) - 8u) / 7.0);
+    out.q = b.q;
+    out.integratorLeak = b.is6581
+        ? (0.0030 + 0.0020 * (1.0 - std::min(1.0, out.cutoffHz / 12000.0)) + 0.0008 * b.resNorm)
+        : (0.0007 + 0.0005 * (1.0 - std::min(1.0, out.cutoffHz / 20000.0)) + 0.00012 * b.resNorm);
+    if (b.is6581 && b.resonance > 8u) {
+        out.integratorLeak += 0.018 * b.distortionFactor * ((double)(b.resonance - 8u) / 7.0);
     }
     out.integratorLeak = std::clamp(out.integratorLeak + (1.0 - std::clamp((double)std::clamp(std::isfinite(supplyScale) ? supplyScale : 1.0f, 0.85f, 1.15f), 0.85, 1.15)) * 0.004,
                                     0.0, 0.05);
     return out;
+}
+
+inline SidFilterParityLaw sidComputeFilterParityLaw(SIDModel model,
+                                                    uint16_t cutoff,
+                                                    uint8_t resonance,
+                                                    float thermalDrift,
+                                                    float supplyScale,
+                                                    uint8_t revision = 3u) noexcept {
+    return sidFinishFilterParityLaw(sidComputeFilterParityBase(model, cutoff, resonance, revision), thermalDrift,
+                                    supplyScale);
 }
 
 inline float sidComputeFilterRipple(SIDModel model,
@@ -868,6 +902,7 @@ public:
         q_ = 0.74;
         smoothedQ_ = 0.74;
         integratorLeak_ = 0.0;
+        lawValid_ = false; // cutoffHz_/q_ hold reset placeholders, not the law
         updateSmoothCoeff_();
     }
 
@@ -885,12 +920,20 @@ public:
         clockFrequency_ = f;
         updateSmoothCoeff_();
     }
+    // The law is a pure function of (model, cutoff, resonance, drift, supply,
+    // revision), and each of those setters recomputes it. The engines re-apply
+    // cutoff and resonance for every render slice, so an unchanged value keeps
+    // the current law instead of recomputing it (identical result).
     void setCutoff(uint16_t fc) {
-        cutoff = (uint16_t)std::min<uint16_t>(fc, 2047u);
+        const uint16_t c = (uint16_t)std::min<uint16_t>(fc, 2047u);
+        if (lawValid_ && c == cutoff) return;
+        cutoff = c;
         updateFilterLaw_();
     }
     void setResonance(uint8_t r) {
-        resonance = r & 0x0Fu;
+        const uint8_t v = static_cast<uint8_t>(r & 0x0Fu);
+        if (lawValid_ && v == resonance) return;
+        resonance = v;
         updateFilterLaw_();
     }
     void setMode(FilterMode m) { filterMode = m; }
@@ -1029,8 +1072,10 @@ private:
         cutoffHz_ = law.cutoffHz;
         q_ = law.q;
         integratorLeak_ = law.integratorLeak;
+        lawValid_ = true;
     }
 
+    bool lawValid_ = false;
     float thermalDrift_ = 0.0f;
     float supplyScale_ = 1.0f; 
 };
@@ -1816,7 +1861,7 @@ private:
         // master-volume DAC. Keeping it after the high-pass made volume 0 leak
         // a permanent calibrated DC pedestal; putting it here preserves D418
         // volume-step transients while allowing static DC to settle away.
-        const SidAnalogueCalibration outCal = sidDefaultAnalogueCalibration(
+        const SidAnalogueCalibration& outCal = sidDefaultAnalogueCalibrationRef(
             model == SIDModel::MOS6581 ? SidFamily::MOS6581 : SidFamily::MOS8580,
             forensicConfig_.revision);
         const float calibrationGain = std::clamp(outCal.outputGain, 0.10f, 4.0f);
@@ -2057,6 +2102,8 @@ inline bool sidTablesPrewarmed() noexcept {
 
 inline void prewarmAllSidTables() noexcept {
     SIDVoice::initTablesOnce();
+    // Build the calibration table off the audio thread.
+    (void)sidDefaultAnalogueCalibrationRef(SidFamily::MOS6581, 0u);
 }
 
 inline void requireSidTablesPrewarmedForRealtime(const char* site) noexcept {

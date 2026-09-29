@@ -44,12 +44,52 @@
 #include "factory_patch_params.h"
 #include "vst3/arpsid_vst3_kernel_host.h"
 
+#include <chrono>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <string>
 #include <vector>
+
+#if defined(__linux__) && !defined(__SANITIZE_ADDRESS__)
+// Allocation probe: this executable's operator new replaces the global one
+// for the whole process (the plug-in links libstdc++ dynamically), so heap
+// allocations made inside process() can be counted. Linux only: macOS binds
+// dylibs to libc++ directly and Windows links the CRT statically.
+#include <atomic>
+#include <cstdlib>
+#include <new>
+#define ARPSID_ALLOC_PROBE 1
+// Replacement new/delete pair: malloc/free on both sides is the definition.
+#pragma GCC diagnostic ignored "-Wmismatched-new-delete"
+static std::atomic<bool> g_countAllocs{false};  // inside process() while armed
+static std::atomic<bool> g_probeArmed{false};
+static std::atomic<long> g_allocs{0};
+static void* probeAlloc(std::size_t n) noexcept {
+    if (g_countAllocs.load(std::memory_order_relaxed)) {
+        g_allocs.fetch_add(1, std::memory_order_relaxed);
+        if (std::getenv("ARPSID_ALLOC_TRAP")) __builtin_trap(); // debugging: stop at the allocation
+    }
+    return std::malloc(n ? n : 1);
+}
+void* operator new(std::size_t n) {
+    if (void* p = probeAlloc(n)) return p;
+    throw std::bad_alloc();
+}
+void* operator new[](std::size_t n) {
+    if (void* p = probeAlloc(n)) return p;
+    throw std::bad_alloc();
+}
+void* operator new(std::size_t n, const std::nothrow_t&) noexcept { return probeAlloc(n); }
+void* operator new[](std::size_t n, const std::nothrow_t&) noexcept { return probeAlloc(n); }
+void operator delete(void* p) noexcept { std::free(p); }
+void operator delete[](void* p) noexcept { std::free(p); }
+void operator delete(void* p, std::size_t) noexcept { std::free(p); }
+void operator delete[](void* p, std::size_t) noexcept { std::free(p); }
+void operator delete(void* p, const std::nothrow_t&) noexcept { std::free(p); }
+void operator delete[](void* p, const std::nothrow_t&) noexcept { std::free(p); }
+#endif
 
 #if defined(__linux__)
 #include <chrono>
@@ -86,6 +126,18 @@ public:
     uint32 PLUGIN_API release() override { return 1; }
 };
 
+// proc->process(), with heap allocations counted while the probe is armed.
+tresult callProcess(IAudioProcessor* proc, ProcessData& data) {
+#if defined(ARPSID_ALLOC_PROBE)
+    g_countAllocs.store(g_probeArmed.load());
+    const tresult r = proc->process(data);
+    g_countAllocs.store(false);
+    return r;
+#else
+    return proc->process(data);
+#endif
+}
+
 double renderRms(IAudioProcessor* proc, int blocks, int frames,
                  IEventList* firstEvents = nullptr, IParameterChanges* firstParams = nullptr) {
     std::vector<float> l((size_t)frames), r((size_t)frames);
@@ -111,7 +163,7 @@ double renderRms(IAudioProcessor* proc, int blocks, int frames,
             data.inputEvents = firstEvents;
             data.inputParameterChanges = firstParams;
         }
-        proc->process(data);
+        callProcess(proc, data);
         for (int i = 0; i < frames; ++i) {
             sum += (double)l[(size_t)i] * l[(size_t)i] + (double)r[(size_t)i] * r[(size_t)i];
             n += 2;
@@ -139,7 +191,7 @@ double renderRms64(IAudioProcessor* proc, int blocks, int frames, IEventList* fi
         data.numOutputs = 1;
         data.outputs = &out;
         if (b == 0) data.inputEvents = firstEvents;
-        proc->process(data);
+        callProcess(proc, data);
         for (int i = 0; i < frames; ++i) {
             finite &= std::isfinite(l[(size_t)i]) && std::isfinite(r[(size_t)i]);
             sum += l[(size_t)i] * l[(size_t)i] + r[(size_t)i] * r[(size_t)i];
@@ -692,12 +744,165 @@ int main(int argc, char** argv) {
         const double rms64 = renderRms64(proc, 16, 512, &notes64, finite);
         std::printf("64-bit note: rms %.6f\n", rms64);
         CHECK(finite && rms64 > 1e-4, "64-bit processing renders the note");
-        // A block larger than announced must not overrun the scratch buffers.
-        (void)renderRms64(proc, 1, 2048, nullptr, finite);
+        // A block larger than announced (setup: 512) must not overrun the
+        // scratch buffers, and must render the same audio as the announced
+        // block size would (no silent gap).
+        auto after64 = [&](int blockFrames) {
+            component->setActive(false);
+            component->setActive(true);
+            EventList n64;
+            Event e = on64;
+            n64.addEvent(e);
+            bool ok = false;
+            (void)renderRms64(proc, 4, 512, &n64, ok);
+            return renderRms64(proc, 2048 / blockFrames, blockFrames, nullptr, finite);
+        };
+        const double oversized64 = after64(2048);
+        const double regular64 = after64(512);
+        std::printf("64-bit, 2048 frames after the note: one oversized block %.6f, four 512-frame blocks %.6f\n",
+                    oversized64, regular64);
         CHECK(finite, "oversized 64-bit block stays finite");
+        CHECK(regular64 > 1e-4 && std::fabs(oversized64 - regular64) < regular64 * 0.05,
+              "an oversized 64-bit block renders like announced-size blocks (no silent gap)");
         EventList offs64;
         offs64.addEvent(off);
         (void)renderRms64(proc, 2, 512, &offs64, finite);
+        proc->setProcessing(false);
+        component->setActive(false);
+    }
+
+    // ── Realtime contract: no allocation, no dropped notes, big blocks ─────
+    {
+        FUnknownPtr<IAudioProcessor> proc(component);
+        controller->setParamNormalized((ParamID)ArpSID::kParamProgram, ArpSID::canonicalNormalizedFactoryProgramValue(0));
+        ProcessSetup setup{kRealtime, kSample32, 512, 48000.0};
+        proc->setupProcessing(setup);
+        component->setActive(true);
+        proc->setProcessing(true);
+        (void)renderRms(proc, 4, 512);
+
+        auto noteEvent = [](bool on, int16 pitch, int32 offset) {
+            Event e{};
+            e.type = on ? Event::kNoteOnEvent : Event::kNoteOffEvent;
+            e.sampleOffset = offset;
+            if (on) { e.noteOn.pitch = pitch; e.noteOn.velocity = 0.9f; e.noteOn.noteId = -1; }
+            else { e.noteOff.pitch = pitch; e.noteOff.noteId = -1; }
+            return e;
+        };
+
+#if defined(ARPSID_ALLOC_PROBE)
+        // A busy block: 24 notes and 64 automated parameters with 8 points
+        // each, delivered in unsorted order.
+        {
+            EventList busy;
+            for (int i = 0; i < 24; ++i) { Event ev_ = noteEvent(i % 2 == 0, (int16)(48 + i), 511 - i * 20); busy.addEvent(ev_); }
+            ParameterChanges autom;
+            for (int q = 0; q < 64; ++q) {
+                int32 qi = 0;
+                if (IParamValueQueue* pq = autom.addParameterData((ParamID)(ArpSID::kParamHostCtrlModWheelBase + (q % 16)) + (ParamID)(16 * (q / 16)), qi))
+                    for (int k = 0; k < 8; ++k) { int32 pi = 0; pq->addPoint(500 - k * 60, (k % 2) ? 0.2 : 0.8, pi); }
+            }
+            (void)renderRms(proc, 2, 512, &busy, &autom); // warm-up: first-use paths
+            g_allocs.store(0);
+            g_probeArmed.store(true);
+            (void)renderRms(proc, 1, 512, &busy, &autom);
+            (void)renderRms(proc, 8, 512);
+            g_probeArmed.store(false);
+            const long allocs = g_allocs.load();
+            std::printf("heap allocations inside process(): %ld\n", allocs);
+            CHECK(allocs == 0, "process() does not allocate (busy block with unsorted notes and automation)");
+            EventList offs;
+            for (int i = 0; i < 24; ++i) { Event ev_ = noteEvent(false, (int16)(48 + i), 0); offs.addEvent(ev_); }
+            (void)renderRms(proc, 2, 512, &offs);
+        }
+#else
+        std::printf("  allocation probe not available on this platform\n");
+#endif
+
+        // Event overflow: a flood of automation points (more than the event
+        // capacity) in the same block as a note-off must not drop the note-off.
+        auto tailAfter = [&](bool flood) {
+            component->setActive(false);
+            component->setActive(true);
+            EventList on;
+            { Event ev_ = noteEvent(true, 64, 0); on.addEvent(ev_); }
+            (void)renderRms(proc, 8, 512, &on);
+            EventList off;
+            { Event ev_ = noteEvent(false, 64, 256); off.addEvent(ev_); }
+            ParameterChanges pc;
+            if (flood) {
+                const int perQueue = 64;
+                for (int q = 0; q * perQueue < ArpSID::kMaxSidTimedEvents + 512; ++q) {
+                    int32 qi = 0;
+                    IParamValueQueue* pq = pc.addParameterData((ParamID)(ArpSID::kParamHostCtrlModWheelBase + (q % 208)), qi);
+                    for (int k = 0; pq && k < perQueue; ++k) { int32 pi = 0; pq->addPoint(k * 8, (k % 2) ? 0.3 : 0.7, pi); }
+                }
+            }
+            (void)renderRms(proc, 1, 512, &off, flood ? &pc : nullptr);
+            return renderRms(proc, 200, 512); // ~2.1 s after the note-off
+        };
+        const double tailNormal = tailAfter(false);
+        const double tailFlood = tailAfter(true);
+        std::printf("tail after note-off: normal %.6f, with %d+ automation points %.6f\n", tailNormal,
+                    ArpSID::kMaxSidTimedEvents, tailFlood);
+        CHECK(tailFlood <= tailNormal * 1.5 + 1e-4, "an automation flood does not drop the note-off (no stuck note)");
+
+        // A 32-bit block larger than the kernel chunk (4096) with a note late
+        // in the block: the note sounds in the right place.
+        {
+            component->setActive(false);
+            ProcessSetup big{kRealtime, kSample32, 8192, 48000.0};
+            proc->setupProcessing(big);
+            component->setActive(true);
+            proc->setProcessing(true);
+            std::vector<float> l(8192), r(8192);
+            float* chans[2] = {l.data(), r.data()};
+            AudioBusBuffers out{};
+            out.numChannels = 2;
+            out.channelBuffers32 = chans;
+            EventList late;
+            { Event ev_ = noteEvent(true, 60, 6000); late.addEvent(ev_); }
+            ProcessData data{};
+            data.processMode = kRealtime;
+            data.symbolicSampleSize = kSample32;
+            data.numSamples = 8192;
+            data.numOutputs = 1;
+            data.outputs = &out;
+            data.inputEvents = &late;
+            proc->process(data);
+            double before = 0.0, after = 0.0;
+            for (int i = 0; i < 5900; ++i) before = std::max(before, (double)std::fabs(l[(size_t)i]));
+            for (int i = 6000; i < 8192; ++i) after = std::max(after, (double)std::fabs(l[(size_t)i]));
+            std::printf("8192-frame block, note at 6000: peak before %.6f, after %.6f\n", before, after);
+            CHECK(after > 1e-3 && before < after * 0.05, "a note late in an oversized block starts in the right place");
+            EventList off;
+            { Event ev_ = noteEvent(false, 60, 0); off.addEvent(ev_); }
+            data.inputEvents = &off;
+            proc->process(data);
+        }
+        // Render cost report (informational; CI machines vary): 10 s of a
+        // held 4-note chord per block size, as a share of real time.
+        {
+            for (int blockFrames : {32, 64, 128, 512, 2048}) {
+                component->setActive(false);
+                ProcessSetup ps{kRealtime, kSample32, blockFrames, 48000.0};
+                proc->setupProcessing(ps);
+                component->setActive(true);
+                proc->setProcessing(true);
+                EventList chord;
+                for (int16 pitch : {48, 55, 60, 64}) { Event e = noteEvent(true, pitch, 0); chord.addEvent(e); }
+                (void)renderRms(proc, 1, blockFrames, &chord);
+                const int blocks = (48000 * 10) / blockFrames;
+                const auto t0 = std::chrono::steady_clock::now();
+                (void)renderRms(proc, blocks, blockFrames);
+                const double secs = std::chrono::duration<double>(std::chrono::steady_clock::now() - t0).count();
+                std::printf("render cost at %4d-frame blocks: %.1f%% of real time (%.1f us per block)\n", blockFrames,
+                            100.0 * secs / 10.0, 1e6 * secs / blocks);
+                EventList offs;
+                for (int16 pitch : {48, 55, 60, 64}) { Event e = noteEvent(false, pitch, 0); offs.addEvent(e); }
+                (void)renderRms(proc, 1, blockFrames, &offs);
+            }
+        }
         proc->setProcessing(false);
         component->setActive(false);
     }

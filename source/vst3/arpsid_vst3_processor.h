@@ -51,6 +51,11 @@ public:
 private:
     void sendKernelHost_();
     void collectEvents_(Steinberg::Vst::ProcessData& data, int frameCount);
+    // Renders frames [start, start + frames) of the host block; returns the
+    // output channel count and clears `silent` when a sample is not zero.
+    int renderSlice_(Steinberg::Vst::ProcessData& data, bool is64, int start, int frames, const TimedEvent* events,
+                     int eventCount, const TransportState& transport, bool& silent) noexcept;
+    static bool isAutomatableTarget_(Steinberg::Vst::ParamID pid) noexcept;
     void readBypass_(Steinberg::Vst::ProcessData& data) noexcept;
     void applyBypass_(float** out, int channels, int frames) noexcept;
     static void readTransport_(const Steinberg::Vst::ProcessContext* ctx, double sampleRate,
@@ -58,6 +63,9 @@ private:
 
     std::unique_ptr<Vst3KernelHost> host_;
     std::vector<TimedEvent> events_;   // preallocated render scratch
+    // Parameter points per block (shared with the notes) that reach the
+    // kernel; denser automation is thinned per queue (see collectEvents_).
+    static constexpr int kParamPointBudget = 256;
     int eventCount_ = 0;
     std::uint32_t eventOrder_ = 0;
     double sampleRate_ = 44100.0;

@@ -91,29 +91,47 @@ its target, so a bypassed instance starts silent without a fade.
 1. **Parameter flush.** With `numSamples == 0` there is no audio. The last
    value of each changed parameter is staged through the kernel's non-realtime
    parameter intent.
-2. **Events** (`collectEvents_`) go into a preallocated `TimedEvent` array;
-   `process` does not allocate.
-   - Every point of every parameter queue becomes an `EventKind::ParameterSet`
-     at its sample offset, so automation is sample-accurate. Program and
-     BankSlot are skipped: the controller turns those into a patch load (see
-     below).
-   - Note on and note off become `NoteOn` / `NoteOff` with channel, pitch,
-     velocity and the host note ID. A note-on with velocity 0 is a note-off.
-   - Poly pressure becomes `PolyPressure`.
+2. **Events** (`collectEvents_`) go into a preallocated `TimedEvent` array
+   (`kMaxTimedEvents`, 4096). `process` never allocates; the host test checks
+   this with an allocation probe around `process()`.
+   - **Notes first.** Note on and note off become `NoteOn` / `NoteOff` with
+     channel, pitch, velocity and the host note ID (a note-on with velocity 0
+     is a note-off); poly pressure becomes `PolyPressure`. Notes are collected
+     before automation, so a flood of automation can never push a note-off
+     out of the block (up to 0.9.10 that could leave a stuck note).
+   - **Automation.** Each point of each parameter queue becomes an
+     `EventKind::ParameterSet` at its sample offset, so automation is
+     sample-accurate. Program and BankSlot are skipped: the controller turns
+     those into a patch load (see below). The points share a budget with the
+     notes, `kParamPointBudget` (256 events per block), which keeps the block
+     inside the kernel's event lanes (2048 ingress, 512 per merge lane). Past
+     the budget each queue is thinned to evenly spaced points that always
+     include its last one, so every parameter still ends the block on the
+     host's value. Hosts normally send a few points per parameter per block;
+     the budget matters only for extreme automation.
    - Events are clamped to the block, given a monotonic arrival order, and
-     stable-sorted by offset.
+     sorted with the kernel's total order (`TimedEvent::before`: sample
+     offset, then event priority, then arrival) by `std::sort`, which unlike
+     `std::stable_sort` never allocates a temporary buffer.
 3. **DIGI capture input.** If the host feeds `DIGI Capture In`, the processor
    reports that the input is active and passes the block to
    `captureDigiInput`. That call writes only while a recording is armed.
 4. **Transport** (`readTransport_`) maps `ProcessContext` to the kernel's
    `TransportState`: tempo, musical position, playing, cycle active, and loop
    start/end. The render sample rate always comes from `setupProcessing`.
-5. **Render.** The output buffers are cleared, then `Vst3KernelHost::render`
-   runs, then the bypass fade is applied. With 64-bit buses the capture input
-   is converted to float scratch first, the kernel renders into float scratch,
-   and the result is widened into the host's `double` buffers. A 64-bit block
-   larger than `maxSamplesPerBlock` (a host error) is answered with silence
-   instead of overrunning the scratch buffers.
+5. **Render** (`renderSlice_`). The output buffers are cleared, then
+   `Vst3KernelHost::render` runs, then the bypass fade is applied.
+   - A 32-bit block is one slice, whatever its size: the kernel splits blocks
+     larger than its 4096-frame chunk itself (see [Rendering](#rendering)).
+   - With 64-bit buses the capture input is converted to float scratch first,
+     the kernel renders into float scratch (sized by `maxSamplesPerBlock` in
+     `setupProcessing`), and the result is widened into the host's `double`
+     buffers. A 64-bit block larger than `maxSamplesPerBlock` (a host error,
+     seen in some offline renders) is rendered in scratch-sized slices: each
+     slice gets its events rebased and the musical position advanced by
+     `start × bpm / (sampleRate × 60)`. Up to 0.9.10 such a block was
+     answered with silence. The host test checks that one oversized 64-bit
+     block renders the same audio as the announced block size.
 6. **Silence flags.** A channel that is exactly zero for the whole block is
    flagged silent, so hosts can skip downstream processing.
 
@@ -166,13 +184,15 @@ The editor watches that counter to know when to reload a panel.
 `render(outputs, channels, frames, events, n, transport)` runs on the audio
 thread:
 
-- If the block fits the kernel's `kMaxFramesPerBlock` (4096), it is one
-  `processBlock` call (stereo), `processBlockMono` (mono) or an output-less
-  call (no bus).
-- A larger host block is split into kernel-sized chunks. For each chunk the
-  event offsets are rebased and the musical position is advanced by
-  `start × bpm / (sampleRate × 60)`, the same rule as the AUv3 wrapper. The
-  chunk event scratch is preallocated.
+- The whole host block is one `processBlock` call (stereo),
+  `processBlockMono` (mono) or an output-less call (no bus).
+- The kernel splits a block larger than its `kMaxFramesPerBlock` (4096)
+  itself: per chunk it rebases event offsets, advances the musical position
+  by `start × bpm / (sampleRate × 60)` and sorts the chunk's events. It also
+  drains the editor's queued MIDI and parameter intents once against the
+  whole block, so their timing is right. Up to 0.9.10 the kernel host split
+  large blocks itself, which bypassed that and could shift an on-screen
+  keyboard note into the wrong chunk.
 
 ### Patches
 
@@ -541,6 +561,7 @@ Installing released builds: [INSTALL.md](INSTALL.md).
 |---|---|
 | Steinberg `validator` (runs during every `arpsid_vst3` build) | 47 SDK conformance tests: buses, state, parameters, process formats, flush, variable block size, and more. |
 | `arpsid_vst3_host_check` / `Vst3HostIntegrationTests` (`source/tests/vst3_host_integration_tests.cpp`) | Loads the built bundle like a host and checks each of these: <ul><li>both classes instantiate and connect;</li><li>Program is a 180-entry program-change list;</li><li>the MIDI bus has 16 channels, and the DIGI capture input is an auxiliary bus, inactive by default;</li><li>units: 32 units, each parameter in an existing unit, Program in the root, and <code>selectUnit</code> remembered;</li><li>on Windows and Linux, editor sizing: the 3:2 constraint, the minimum size, and a reopened view keeping its size;</li><li>on Linux with a <code>DISPLAY</code> (CI: Xvfb, and <code>ARPSID_REQUIRE_X11_EDITOR=1</code> makes it mandatory), the editor in a real X11 window: X11 only (no Wayland claim), attach, the X connection and timers on the host's <code>IRunLoop</code>, a live resize, detach leaving no handlers behind, the same again for a second open, and a refusal (no crash) for a host frame without a run loop;</li><li>tempo, transport and musical position are requested;</li><li>the MIDI mapping leaves unmapped CCs alone;</li><li>selecting a program refreshes the host and the controller mirror matches the processor state;</li><li>editor-keyboard (UiMidi) and host note-ons produce audio, and Master Volume automation reaches the engine;</li><li>a v5 state loads into a second instance;</li><li>a legacy v4 state is accepted by processor and controller;</li><li>Bypass is a <code>kIsBypass</code> on/off parameter in the root unit, silences the output, is saved in the state and read back by a fresh controller, and un-bypassing restores the sound;</li><li>64-bit processing renders a note with finite samples, and an oversized 64-bit block does not overrun;</li><li>the controller state round-trips the editor size and tab, and a foreign stream is ignored;</li><li><code>IInfoListener</code> accepts a track name and colour;</li><li>programs report the <code>Instrument|Synth</code> category;</li><li>a patch-only preset state changes the processor's and the controller's patch but leaves bypass alone, and a later project save is a full state again.</li></ul> |
+| Realtime contract (in `arpsid_vst3_host_check`) | On Linux an allocation probe (the test's `operator new`) counts heap allocations inside `process()` during a busy block of unsorted notes and 512 automation points: it must be 0. A note-off in a block with more than 4096 automation points still releases the note. An 8192-frame 32-bit block starts a note at frame 6000 exactly there. An oversized 64-bit block renders the same audio as announced-size blocks. The test also prints the render cost as a share of real time at 32 to 2048-frame blocks. |
 | `arpsid_vst3_presets` / `Vst3FactoryPresetExport` | Writes all 180 factory `.vstpreset` files and reloads each into a fresh instance: the bank slot and every persistent parameter must match. |
 | `arpsid_vst3_editor_check` | The offscreen editor render ([VST3_EDITOR.md](VST3_EDITOR.md#tests)). |
 | `Vst3KernelHostStateTests` (`source/tests/vst3_kernel_host_state_tests.cpp`, SDK-free, runs in every build) | The v5 state keeps the models, the C64 tune and its subtune. A tune-less state unloads a tune. A restored tune can switch subtune. A truncated state keeps what came before the cut. A DIGI capture round trip works (arm, feed, stop, then the slot plays the take). Bypass is saved, restored, cleared by an un-bypassed state, read by `decodeBypass`, and never set by a legacy state. A patch-only preset state is small, recognised by `isPresetState`, plays its patch, and keeps the loaded tune, the MIX model and bypass. |
