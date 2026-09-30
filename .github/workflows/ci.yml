@@ -15,6 +15,9 @@ permissions:
 
 jobs:
   build:
+    # Private repository: no runs (the private tree carries real C64 ROMs and
+    # its Actions minutes are not used); the public mirror runs every check.
+    if: ${{ !github.event.repository.private }}
     uses: ./.github/workflows/build.yml
     with:
       # macOS runners bill 10x on private repositories; the public mirror runs

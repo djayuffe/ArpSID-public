@@ -13,6 +13,9 @@ permissions:
 
 jobs:
   au-editor:
+    # Private repository: no runs (the private tree carries real C64 ROMs and
+    # its Actions minutes are not used); the public mirror runs every check.
+    if: ${{ !github.event.repository.private }}
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v7

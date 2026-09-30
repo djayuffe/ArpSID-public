@@ -39,6 +39,9 @@ permissions:
 
 jobs:
   prepare:
+    # Private repository: no runs (the private tree carries real C64 ROMs and
+    # its Actions minutes are not used); the public mirror runs every check.
+    if: ${{ !github.event.repository.private }}
     runs-on: ubuntu-24.04
     outputs:
       version: ${{ steps.v.outputs.version }}
