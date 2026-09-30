@@ -92,6 +92,25 @@ void operator delete(void* p, std::size_t) noexcept { std::free(p); }
 void operator delete[](void* p, std::size_t) noexcept { std::free(p); }
 void operator delete(void* p, const std::nothrow_t&) noexcept { std::free(p); }
 void operator delete[](void* p, const std::nothrow_t&) noexcept { std::free(p); }
+
+// Lock probe: this executable's pthread_mutex_lock / trylock interpose the
+// C library's for the whole process (std::mutex locks through them), so a
+// mutex taken inside process() is counted like an allocation.
+#include <dlfcn.h>
+#include <pthread.h>
+static std::atomic<long> g_locks{0};
+extern "C" int pthread_mutex_lock(pthread_mutex_t* m) {
+    using Fn = int (*)(pthread_mutex_t*);
+    static Fn real = reinterpret_cast<Fn>(dlsym(RTLD_NEXT, "pthread_mutex_lock"));
+    if (g_countAllocs.load(std::memory_order_relaxed)) g_locks.fetch_add(1, std::memory_order_relaxed);
+    return real(m);
+}
+extern "C" int pthread_mutex_trylock(pthread_mutex_t* m) {
+    using Fn = int (*)(pthread_mutex_t*);
+    static Fn real = reinterpret_cast<Fn>(dlsym(RTLD_NEXT, "pthread_mutex_trylock"));
+    if (g_countAllocs.load(std::memory_order_relaxed)) g_locks.fetch_add(1, std::memory_order_relaxed);
+    return real(m);
+}
 #endif
 
 #if defined(__linux__)
@@ -959,14 +978,29 @@ int main(int argc, char** argv) {
                     for (int k = 0; k < 8; ++k) { int32 pi = 0; pq->addPoint(500 - k * 60, (k % 2) ? 0.2 : 0.8, pi); }
             }
             (void)renderRms(proc, 2, 512, &busy, &autom); // warm-up: first-use paths
+            ParameterChanges byOn2, byOff2;
+            (void)renderRms(proc, 1, 512, nullptr, oneChange(byOn2, (ParamID)ArpSID::kVst3BypassParamId, 1.0));
+            (void)renderRms(proc, 1, 512, nullptr, oneChange(byOff2, (ParamID)ArpSID::kVst3BypassParamId, 0.0));
             g_allocs.store(0);
+            g_locks.store(0);
+            // Editor traffic queued from the UI thread is drained inside
+            // process(): an on-screen keyboard note and a parameter edit.
+            sendMessage(procCp, ArpSID::kVstMsgUiMidi,
+                        {{ArpSID::kVstMsgAttrStatus, 0x90}, {ArpSID::kVstMsgAttrData1, 72}, {ArpSID::kVstMsgAttrData2, 100}});
             g_probeArmed.store(true);
             (void)renderRms(proc, 1, 512, &busy, &autom);
+            ParameterChanges byOn3, byOff3;
+            (void)renderRms(proc, 1, 512, nullptr, oneChange(byOn3, (ParamID)ArpSID::kVst3BypassParamId, 1.0));
+            (void)renderRms(proc, 2, 512, nullptr, oneChange(byOff3, (ParamID)ArpSID::kVst3BypassParamId, 0.0));
             (void)renderRms(proc, 8, 512);
             g_probeArmed.store(false);
+            sendMessage(procCp, ArpSID::kVstMsgUiMidi,
+                        {{ArpSID::kVstMsgAttrStatus, 0x80}, {ArpSID::kVstMsgAttrData1, 72}, {ArpSID::kVstMsgAttrData2, 0}});
             const long allocs = g_allocs.load();
-            std::printf("heap allocations inside process(): %ld\n", allocs);
+            const long locks = g_locks.load();
+            std::printf("heap allocations inside process(): %ld, mutex locks: %ld\n", allocs, locks);
             CHECK(allocs == 0, "process() does not allocate (busy block with unsorted notes and automation)");
+            CHECK(locks == 0, "process() takes no mutex (notes, automation, bypass, editor MIDI)");
             EventList offs;
             for (int i = 0; i < 24; ++i) { Event ev_ = noteEvent(false, (int16)(48 + i), 0); offs.addEvent(ev_); }
             (void)renderRms(proc, 2, 512, &offs);

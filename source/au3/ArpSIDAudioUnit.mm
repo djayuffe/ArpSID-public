@@ -816,9 +816,14 @@ static constexpr size_t kArpSIDStateBlobCap = (ArpSID::kStateBufferSize + 65536)
 
 - (void)_buildParameterTree {
     NSMutableArray<AUParameterNode*>* allGroups = [NSMutableArray array];
+    // Every automatable parameter appears exactly once: a second listing is
+    // skipped, and parameters no group lists go into "Other" at the end.
+    NSMutableIndexSet* placed = [NSMutableIndexSet indexSet];
 
     AUParameter* (^makeParam)(int) = ^AUParameter*(int pid) {
         if (!auv3ParamIsAutomatable(pid)) return nil;
+        if ([placed containsIndex:(NSUInteger)pid]) return nil;
+        [placed addIndex:(NSUInteger)pid];
         const ArpSID::ParamInfo& info = ArpSID::kParamInfos[(size_t)pid];
         // Choose a semantically correct unit from the ParamInfo.unit hint
         AudioUnitParameterUnit auUnit = kAudioUnitParameterUnit_Generic;
@@ -956,6 +961,20 @@ static constexpr size_t kArpSIDStateBlobCap = (ArpSID::kStateBufferSize + 65536)
     // replay stale metadata on Play.
     [allGroups addObject:makeGroup(@"Control", @[@(ArpSID::kParamVirtualNote),
         @(ArpSID::kParamVirtualGate)])];
+    [allGroups addObject:makeGroup(@"Portamento", @[@(ArpSID::kParamPortamentoStyle),
+        @(ArpSID::kParamGlideDelta),@(ArpSID::kParamPortamentoArpGlide)])];
+    {
+        NSMutableArray* hf = [NSMutableArray array];
+        for (int p = (int)ArpSID::kParamHiFiEnable; p <= (int)ArpSID::kParamHiFiVoiceDiffuser; ++p) [hf addObject:@(p)];
+        [allGroups addObject:makeGroup(@"HI-FI", hf)];
+    }
+    {
+        // Safety net: any automatable parameter not listed above.
+        NSMutableArray* rest = [NSMutableArray array];
+        for (int p = 0; p < ArpSID::kNumParams; ++p)
+            if (auv3ParamIsAutomatable(p) && ![placed containsIndex:(NSUInteger)p]) [rest addObject:@(p)];
+        if (rest.count > 0) [allGroups addObject:makeGroup(@"Other", rest)];
+    }
 
     _parameterTree = [AUParameterTree createTreeWithChildren:allGroups];
 }
@@ -2433,6 +2452,22 @@ static constexpr size_t kArpSIDStateBlobCap = (ArpSID::kStateBufferSize + 65536)
 - (BOOL)supportsMPE                    { return NO; }
 - (NSInteger)virtualMIDICableCount     { return 1;  }
 - (NSArray<NSString*>*)MIDIOutputNames { return @[]; }
+
+// Hosts with a compact plug-in view (Logic's Smart Controls, GarageBand)
+// ask for the most important parameters, most important first.
+- (NSArray<NSNumber*>*)parametersForOverviewWithCount:(NSInteger)count {
+    static const int kOverview[] = {
+        ArpSID::kParamFilterCutoff, ArpSID::kParamFilterResonance, ArpSID::kParamFilterEnvAmount,
+        ArpSID::kParamAttack, ArpSID::kParamDecay, ArpSID::kParamSustain, ArpSID::kParamRelease,
+        ArpSID::kParamMasterVolume, ArpSID::kParamFilterDrive, ArpSID::kParamPortamentoTime,
+    };
+    NSMutableArray<NSNumber*>* out = [NSMutableArray array];
+    for (int pid : kOverview) {
+        if ((NSInteger)out.count >= count) break;
+        if ([self.parameterTree parameterWithAddress:(AUParameterAddress)pid]) [out addObject:@(pid)];
+    }
+    return out;
+}
 
 // ─── Convenience ─────────────────────────────────────────────────────────────
 

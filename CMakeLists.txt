@@ -4920,6 +4920,14 @@ if(TARGET arpsid_release_closure_suite)
   add_dependencies(arpsid_release_closure_suite ArpGateOffTimingV961Tests)
 endif()
 
+add_executable(ParameterGroupsTests source/tests/parameter_groups_tests.cpp)
+target_compile_features(ParameterGroupsTests PRIVATE cxx_std_17)
+target_include_directories(ParameterGroupsTests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/source)
+target_link_libraries(ParameterGroupsTests PRIVATE arpsid_core)
+add_test(NAME ParameterGroupsTests COMMAND ParameterGroupsTests)
+
 add_executable(RpnPitchBendRangeTests
                source/tests/rpn_pitch_bend_range_tests.cpp
                source/forensic_patch_bank.cpp)

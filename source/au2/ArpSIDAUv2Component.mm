@@ -10,6 +10,7 @@
 
 #include "parameter_ids.h"
 #include "factory_patch_params.h"
+#include "arpsid_parameter_groups.h"
 #include "arpsid/core/sid_event_timing.h"
 #include "arpsid/core/sid_runtime_forensic_config.h"
 #include "arpsid/core/sid_parameter_presentation.h"
@@ -2472,7 +2473,10 @@ static OSStatus fillParameterInfo(AudioUnitParameterID paramID, AudioUnitParamet
     outInfo->flags = kAudioUnitParameterFlag_IsReadable |
                      kAudioUnitParameterFlag_IsHighResolution |
                      kAudioUnitParameterFlag_HasCFNameString |
-                     kAudioUnitParameterFlag_CFNameRelease;
+                     kAudioUnitParameterFlag_CFNameRelease |
+                     kAudioUnitParameterFlag_HasClump;
+    // Group (clump) per editor tab, named by kAudioUnitProperty_ParameterClumpName.
+    outInfo->clumpID = ArpSID::parameterGroupForParam((int)paramID);
     // Program/BankSlot are sticky preset mirrors. AUv2 exposes them for readback
     // only. Marking them writable/rampable gives Logic another metadata replay
     // lane at Play, bypassing PresentPreset/ClassInfo guards.
@@ -2638,6 +2642,9 @@ static OSStatus componentGetPropertyInfo(void* self,
             if (inScope != kAudioUnitScope_Global) return kAudioUnitErr_InvalidScope;
             if (!validateParameterAddress(inElement)) return kAudioUnitErr_InvalidParameter;
             return setInfo((UInt32)sizeof(AudioUnitParameterInfo), false);
+        case kAudioUnitProperty_ParameterClumpName:
+            if (inScope != kAudioUnitScope_Global) return kAudioUnitErr_InvalidScope;
+            return setInfo((UInt32)sizeof(AudioUnitParameterNameInfo), false);
         case kAudioUnitProperty_FastDispatch:
             if (!validateGlobalScope(inScope, inElement)) return kAudioUnitErr_InvalidScope;
             return setInfo((UInt32)sizeof(void*), false);
@@ -2947,6 +2954,17 @@ static OSStatus componentGetProperty(void* self,
             sfv->outString = (__bridge_retained CFStringRef)[stringValue copy];
             *ioDataSize = (UInt32)sizeof(*sfv);
             return noErr;
+        }
+        case kAudioUnitProperty_ParameterClumpName: {
+            if (inScope != kAudioUnitScope_Global) return kAudioUnitErr_InvalidScope;
+            if (!requireSize((UInt32)sizeof(AudioUnitParameterNameInfo))) return kAudioUnitErr_InvalidPropertyValue;
+            AudioUnitParameterNameInfo* ni = (AudioUnitParameterNameInfo*)outData;
+            const char* name = ArpSID::parameterGroupName((std::uint32_t)ni->inID);
+            if (!name) return kAudioUnitErr_InvalidPropertyValue;
+            // The caller releases outName.
+            ni->outName = CFStringCreateWithCString(kCFAllocatorDefault, name, kCFStringEncodingUTF8);
+            *ioDataSize = (UInt32)sizeof(*ni);
+            return ni->outName ? noErr : kAudioUnitErr_InvalidPropertyValue;
         }
         case kAudioUnitProperty_ParameterValueFromString: {
             if (!validateGlobalScope(inScope, inElement)) return kAudioUnitErr_InvalidScope;

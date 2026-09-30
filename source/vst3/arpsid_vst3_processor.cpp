@@ -4,6 +4,7 @@
 #include "vst3/arpsid_vst3_processor.h"
 
 #include "arpsid_vst_messages.h"
+#include "arpsid/core/sid_realtime_guard.h"
 #include "au3/ArpSIDStateSerializer.h"
 #include "parameter_ids.h"
 #include "plugin_ids.h"
@@ -63,7 +64,12 @@ tresult PLUGIN_API ArpSIDVst3Processor::initialize(FUnknown* context) {
     return kResultOk;
 }
 
-tresult PLUGIN_API ArpSIDVst3Processor::terminate() { return AudioEffect::terminate(); }
+tresult PLUGIN_API ArpSIDVst3Processor::terminate() {
+    // The controller and its editor use the kernel host directly; withdraw it
+    // before this instance goes away, whatever order the host tears down in.
+    if (peerConnection) sendKernelHost_(false);
+    return AudioEffect::terminate();
+}
 
 tresult PLUGIN_API ArpSIDVst3Processor::connect(IConnectionPoint* other) {
     const tresult result = AudioEffect::connect(other);
@@ -71,12 +77,17 @@ tresult PLUGIN_API ArpSIDVst3Processor::connect(IConnectionPoint* other) {
     return result;
 }
 
-void ArpSIDVst3Processor::sendKernelHost_() {
+tresult PLUGIN_API ArpSIDVst3Processor::disconnect(IConnectionPoint* other) {
+    if (peerConnection) sendKernelHost_(false);
+    return AudioEffect::disconnect(other);
+}
+
+void ArpSIDVst3Processor::sendKernelHost_(bool available) {
     IMessage* msg = allocateMessage();
     if (!msg) return;
     msg->setMessageID(kVstMsgKernelHost);
     msg->getAttributes()->setInt(kVstMsgAttrHostPtr,
-                                 static_cast<int64>(reinterpret_cast<std::uintptr_t>(host_.get())));
+                                 available ? static_cast<int64>(reinterpret_cast<std::uintptr_t>(host_.get())) : 0);
     msg->getAttributes()->setInt(kVstMsgAttrPid, static_cast<int64>(ARPSID_GETPID()));
     sendMessage(msg);
     msg->release();
@@ -303,6 +314,9 @@ void ArpSIDVst3Processor::applyBypass_(float** out, int channels, int frames) no
 }
 
 tresult PLUGIN_API ArpSIDVst3Processor::process(ProcessData& data) {
+    // Audio thread: the kernel's lock/allocation guards count violations
+    // for the whole callback, not only inside the kernel.
+    ArpSID::SidRealtimeScope realtimeScope("ArpSIDVst3Processor::process");
     const int frames = std::max<int32>(0, data.numSamples);
     readBypass_(data);
 

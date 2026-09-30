@@ -67,6 +67,7 @@ stop if a checksum does not match.
 | | `ArpSID-<v>-vst3-macos-universal.zip` | `arpsid_vst3.vst3` + `VST3 Presets/` |
 | Windows 10/11 x64 | `ArpSID-<v>-vst3-windows-x64.zip` | `arpsid_vst3.vst3` + `VST3 Presets/` |
 | Windows 11 on Arm | `ArpSID-<v>-vst3-windows-arm64.zip` | `arpsid_vst3.vst3` + `VST3 Presets/` |
+| Windows, 32-bit hosts | `ArpSID-<v>-vst3-windows-x86.zip` | `arpsid_vst3.vst3` (32-bit x86) + `VST3 Presets/` |
 | Linux x86_64 | `ArpSID-<v>-vst3-linux-x86_64.zip` | `arpsid_vst3.vst3` + `VST3 Presets/` |
 | Linux aarch64 | `ArpSID-<v>-vst3-linux-aarch64.zip` | `arpsid_vst3.vst3` + `VST3 Presets/` |
 | Any | `ArpSID-<v>-source.zip` | Source code without the C64 ROMs |
@@ -143,8 +144,18 @@ powershell -ExecutionPolicy Bypass -File .\install.ps1
 | `-Dest DIR` | Install into `DIR`. |
 | `-PresetsDest DIR` | Put the factory presets in `DIR\Uber Sound Solutions\ArpSID\`. The default is `Documents\VST3 Presets` with `-Scope User` and `%ProgramData%\VST3 Presets` with `-Scope System`. |
 | `-NoPresets` | Do not install the factory presets. |
-| `-Check` | Only check that the bundle has a module for this PC (x64 or arm64). |
-| `-Uninstall` | Remove ArpSID and its factory presets from the chosen folders. |
+| `-Check` | Only check that the bundle has a module for this PC (x64, arm64, or the 32-bit x86 build). |
+| `-Uninstall` | Remove ArpSID and its factory presets from the chosen folders (the system uninstall also removes a 32-bit copy). |
+
+**32-bit hosts.** The `vst3-windows-x86` zip holds a 32-bit (x86) build for
+32-bit hosts; it runs on 32-bit Windows and, as a 32-bit plug-in, on 64-bit
+Windows. Its installer puts it in
+`C:\Program Files (x86)\Common Files\VST3\` on 64-bit Windows, where 32-bit
+hosts look, so it sits next to the 64-bit build. With `-Scope User` both
+builds use the same per-user folder; install one of them there, or use the
+system folders for both. The one-line installer picks it on 32-bit Windows;
+for a 32-bit host on 64-bit Windows, save `get_arpsid.ps1` and run it with
+`-Arch x86` (or set `$env:ARPSID_ARCH = 'x86'` before the one-liner).
 
 The installer removes the "downloaded from the internet" mark
 (`Unblock-File`), because some hosts refuse to load blocked DLLs.
@@ -155,7 +166,8 @@ into `Documents\VST3 Presets\`. If Windows marked the zip as
 downloaded, right-click the zip, open **Properties**, tick **Unblock**, then
 extract it again.
 
-**Requirements.** Windows 10 or 11, and a 64-bit VST3 host. From 0.9.8 the
+**Requirements.** Windows 10 or 11, and a 64-bit VST3 host (or a 32-bit
+host with the x86 zip). From 0.9.8 the
 C/C++ runtime is linked statically, so no Visual C++ Redistributable is
 needed.
 
@@ -264,7 +276,7 @@ Projects keep their ArpSID settings. Installing ArpSID again restores them.
 | macOS: "ArpSID is damaged and can't be opened" | Remove the quarantine: `xattr -dr com.apple.quarantine <bundle>`. `install_macos.sh` does this for you. |
 | macOS: Logic does not list ArpSID, or lists an old version | Run `killall -9 AudioComponentRegistrar` and restart Logic. Logic's Plug-in Manager can also reset and rescan. |
 | macOS: the AUv3 is missing | Open `ArpSID.app` once, or run `pluginkit -a /Applications/ArpSID.app/Contents/PlugIns/arpsid_auv3.appex`. |
-| Windows: the host skips ArpSID | Check the host's VST3 folder list, and check the files are unblocked (run `install.ps1` again). Use the zip that matches your PC: x64 or arm64. |
+| Windows: the host skips ArpSID | Check the host's VST3 folder list, and check the files are unblocked (run `install.ps1` again). Use the zip that matches your host: x64 or arm64, or x86 for a 32-bit host. |
 | Linux: the host skips ArpSID, or the editor window is empty | Run `./install.sh --check` and install the listed libraries. Check that your host scans `~/.vst3` (or `/usr/lib/vst3`). |
 | Linux: no editor, only a list of parameters | The plug-in was built with `ARPSID_VST3_EDITOR=OFF`. Release builds always include the editor. |
 | Linux: the host crashed when opening the editor (0.9.9 and earlier) | Fixed in 0.9.10: the editor did not connect VSTGUI to the host's event loop and crashed on the first X11 call, and reopening it could crash in cairo. Update ArpSID. |

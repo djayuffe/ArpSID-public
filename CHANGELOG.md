@@ -5,6 +5,40 @@ All notable changes to ArpSID are documented here. The project uses
 version is `VERSION.txt`, mirrored by `project(VERSION)` in `CMakeLists.txt`
 and `include/arpsid/version.h`.
 
+## [Unreleased]
+
+### Added
+
+- **Windows 32-bit (x86) VST3** for 32-bit hosts: built, validated and
+  tested in CI like the x64 and arm64 builds, and released as
+  `vst3-windows-x86`. Its installer puts it in
+  `C:\Program Files (x86)\Common Files\VST3` on 64-bit Windows; the
+  one-line installer picks it on 32-bit Windows (`-Arch x86` for a 32-bit
+  host on 64-bit Windows), and the system uninstall removes both copies.
+- **AUv2 parameter groups**: parameters are grouped by editor tab (AU
+  parameter clumps, `kAudioUnitProperty_ParameterClumpName`), like the
+  VST3's units, so hosts that show groups list them the way the editor does.
+- **AUv3 overview parameters** (`parametersForOverviewWithCount:`): filter
+  cutoff, resonance and envelope amount, ADSR, volume, drive and glide for
+  compact plug-in views (Logic Smart Controls, GarageBand).
+
+### Fixed
+
+- **AUv3: 12 parameters could not be automated.** Portamento Style, C64
+  Glide Delta, Arp Glide Legato and the nine HI-FI parameters were missing
+  from the AUv3 parameter tree. They are now in it (groups `Portamento` and
+  `HI-FI`), and any automatable parameter no group lists goes into `Other`,
+  so a new parameter can no longer be left out.
+- **VST3: the editor could outlive the processor's engine.** The controller
+  and editor use the processor's kernel host directly; the processor now
+  withdraws it when it disconnects or terminates, whatever order the host
+  tears the plug-in down in.
+- **VST3 realtime checks.** The host test now also counts mutex locks inside
+  `process()` (none, with notes, automation, bypass and editor MIDI in the
+  same blocks); `process()` runs under the kernel's realtime guard, and
+  stopping a DIGI capture yields instead of spinning while an audio block
+  finishes.
+
 ## [0.9.12] — 2026-09-30
 
 ### Changed

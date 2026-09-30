@@ -42,7 +42,7 @@ engine, with the same 512 parameters and the same 180 factory patches.
 | | |
 |---|---|
 | **Formats** | AUv2 (5 flavors), AUv3, VST3, Standalone |
-| **Platforms** | macOS (universal: Apple silicon + Intel), Windows x64 and arm64, Linux x86_64 and aarch64 |
+| **Platforms** | macOS (universal: Apple silicon + Intel), Windows x64, arm64 and x86 (32-bit hosts), Linux x86_64 and aarch64 |
 | **Engines** | BitPerfect SID synth, authentic single SID, SID register synthesis, DrSID drums, SID-808 drums, DIGI `$D418` sampler, C64 PSID/RSID player |
 | **SID chips** | MOS 6581 R2, R3, R4 and MOS 8580 R5; PAL and NTSC clocks |
 | **Voices** | up to 24 (8 SIDs × 3) in the BitPerfect topology, or one authentic 3-voice SID |
@@ -163,7 +163,7 @@ uninstalling and troubleshooting.
 |---|---|---|---|
 | **AUv2** (`aumu`, manufacturer `ASID`) | macOS universal | `ArpSID.component` | Five flavors: `ArpS` ArpSID, `ArIn` ArpSID Instrument, `DrSD` DrSID, `S808` SID-808, `C64P` C64 SID Player. Strict `auval` passes on all five with no warnings. |
 | **AUv3** | macOS universal | `ArpSID.app` (extension `arpsid_auv3.appex`) | Logic-compatible app extension; the app registers it. |
-| **VST3** | macOS universal, Windows x64 + arm64, Linux x86_64 + aarch64 | `arpsid_vst3.vst3` | One instrument, category `Instrument\|Synth`. Native Cocoa editor on macOS, VSTGUI editor on Windows/Linux. Static C runtime on Windows (no Visual C++ Redistributable needed). |
+| **VST3** | macOS universal, Windows x64 + arm64 + x86 (32-bit), Linux x86_64 + aarch64 | `arpsid_vst3.vst3` | One instrument, category `Instrument\|Synth`. Native Cocoa editor on macOS, VSTGUI editor on Windows/Linux. Static C runtime on Windows (no Visual C++ Redistributable needed). |
 | **Standalone** | macOS universal | `ArpSID Standalone.app` | Its own audio and MIDI I/O, menus, keyboard and transport. |
 
 Every [release](https://github.com/djayuffe/ArpSID-public/releases) ships each
@@ -586,7 +586,7 @@ requests:
 | `linux` | Repository guards, full build and full CTest suite with GCC and with Clang. |
 | `linux-sanitizers` | Full CTest suite under AddressSanitizer + UndefinedBehaviorSanitizer. |
 | `linux-vst3` | VST3 for x86_64 and aarch64 + Steinberg SDK validator + VST3 host integration test + offscreen render of every editor tab + install layout + installer smoke test. |
-| `windows-vst3` | VST3 (MSVC) for x64 and arm64 + Steinberg SDK validator + VST3 host integration test + offscreen editor render + static-runtime check + installer smoke test. |
+| `windows-vst3` | VST3 (MSVC) for x64, arm64 and x86 (32-bit) + Steinberg SDK validator + VST3 host integration test + offscreen editor render + static-runtime check + installer smoke test. |
 | `macos` | AUv2 (all five flavors) + VST3 build, code-signature check, strict `auval`, VST3 host integration test. Public repository only. |
 | `macos-apps` | Standalone app + AUv3 (Logic-compatible app): bundle/signature checks and a Standalone launch test. Public repository only. |
 | `Screenshots` (manual) | Renders the Mac editor (every tab, every flavor) and publishes the images to the `ci-screenshots` branch. |

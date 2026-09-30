@@ -33,6 +33,7 @@ public:
     Steinberg::tresult PLUGIN_API initialize(Steinberg::FUnknown* context) override;
     Steinberg::tresult PLUGIN_API terminate() override;
     Steinberg::tresult PLUGIN_API connect(Steinberg::Vst::IConnectionPoint* other) override;
+    Steinberg::tresult PLUGIN_API disconnect(Steinberg::Vst::IConnectionPoint* other) override;
     Steinberg::tresult PLUGIN_API notify(Steinberg::Vst::IMessage* message) override;
     Steinberg::tresult PLUGIN_API setBusArrangements(Steinberg::Vst::SpeakerArrangement* inputs,
                                                      Steinberg::int32 numIns,
@@ -49,7 +50,8 @@ public:
     Vst3KernelHost& host() noexcept { return *host_; }
 
 private:
-    void sendKernelHost_();
+    // Tells the controller where the kernel host is (nullptr: it is gone).
+    void sendKernelHost_(bool available = true);
     void collectEvents_(Steinberg::Vst::ProcessData& data, int frameCount);
     // Renders frames [start, start + frames) of the host block; returns the
     // output channel count and raises `peak` to the slice's largest |sample|.

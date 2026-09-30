@@ -15,7 +15,7 @@
 #include <memory>
 #include <cstring>
 #include <vector>
-#if defined(__SSE__) || defined(_M_X64)
+#if defined(__SSE__) || defined(_M_X64) || (defined(_M_IX86_FP) && _M_IX86_FP >= 1)
 #include <xmmintrin.h>
 #endif
 
@@ -206,7 +206,7 @@ int main() {
     // host mixer and other plug-ins, and setup() runs on the main thread.
     {
         auto fpMode = []() -> unsigned long long {
-#if defined(__SSE__) || defined(_M_X64)
+#if defined(__SSE__) || defined(_M_X64) || (defined(_M_IX86_FP) && _M_IX86_FP >= 1)
             return _mm_getcsr() & 0x8040u; // DAZ | FTZ
 #elif (defined(__aarch64__) || defined(__arm64__)) && (defined(__GNUC__) || defined(__clang__))
             unsigned long long fpcr = 0;

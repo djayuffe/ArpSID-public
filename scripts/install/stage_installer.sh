@@ -45,8 +45,10 @@ Only for you (no admin rights):
   powershell -ExecutionPolicy Bypass -File .\\install.ps1 -Scope User
 Remove:  ... install.ps1 -Uninstall
 
-Or copy arpsid_vst3.vst3 into C:\\Program Files\\Common Files\\VST3 and the
-contents of "VST3 Presets" into Documents\\VST3 Presets yourself. Then rescan
+Or copy arpsid_vst3.vst3 into C:\\Program Files\\Common Files\\VST3 (the
+32-bit x86 zip: C:\\Program Files (x86)\\Common Files\\VST3 on 64-bit
+Windows, where 32-bit hosts look) and the contents of "VST3 Presets" into
+Documents\\VST3 Presets yourself. Then rescan
 plug-ins in your host. The 180 factory patches appear in the host's preset
 browser under ArpSID and in the plug-in's program list.
 Full guide: $DOC

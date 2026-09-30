@@ -7,18 +7,23 @@
   or, with options, save the script and run:
     powershell -ExecutionPolicy Bypass -File .\get_arpsid.ps1 -Version 0.9.8 -Scope User
 
-  Picks the x64 or arm64 zip, checks it against the release's
-  SHA256SUMS.txt, then runs the installer inside the zip (install.ps1).
+  Picks the x64, arm64 or (32-bit Windows) x86 zip, checks it against the
+  release's SHA256SUMS.txt, then runs the installer inside the zip
+  (install.ps1). -Arch x86 installs the 32-bit plug-in for 32-bit hosts on
+  64-bit Windows (into C:\Program Files (x86)\Common Files\VST3).
 
 .PARAMETER Version
   Release to install (default: latest).
 .PARAMETER Scope
   System (default; C:\Program Files\Common Files\VST3, needs an elevated
   PowerShell) or User (%LOCALAPPDATA%\Programs\Common\VST3).
+.PARAMETER Arch
+  x64, arm64 or x86 (default: this machine's; also $env:ARPSID_ARCH).
 #>
 param(
   [string] $Version = '',
   [ValidateSet('System', 'User')] [string] $Scope = 'System',
+  [ValidateSet('', 'x64', 'arm64', 'x86')] [string] $Arch = '',
   [string] $Repo = 'djayuffe/ArpSID-public'
 )
 $ErrorActionPreference = 'Stop'
@@ -28,7 +33,14 @@ if (-not $Version) {
   $Version = (Invoke-RestMethod "https://api.github.com/repos/$Repo/releases/latest").tag_name.TrimStart('v')
 }
 $Version = $Version.TrimStart('v')
-$arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'x64' }
+# The OS architecture (a 32-bit PowerShell on 64-bit Windows reports x86 in
+# PROCESSOR_ARCHITECTURE and the real one in PROCESSOR_ARCHITEW6432).
+$arch = $Arch
+if (-not $arch -and $env:ARPSID_ARCH) { $arch = $env:ARPSID_ARCH }
+if (-not $arch) {
+  $os = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }
+  $arch = switch ($os) { 'ARM64' { 'arm64' } 'x86' { 'x86' } default { 'x64' } }
+}
 $asset = "ArpSID-$Version-vst3-windows-$arch.zip"
 $base = "https://github.com/$Repo/releases/download/v$Version"
 $work = Join-Path ([IO.Path]::GetTempPath()) ("arpsid-install-" + [Guid]::NewGuid().ToString('N'))

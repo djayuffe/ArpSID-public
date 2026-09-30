@@ -5,7 +5,9 @@
 .DESCRIPTION
   Copies arpsid_vst3.vst3 (next to this script, or -From) into the VST3
   folder, removes the "downloaded from the internet" mark, and checks that
-  the bundle has a module for this machine (x64 or arm64).
+  the bundle has a module for this machine (x64, arm64, or the 32-bit x86
+  build, which goes to C:\Program Files (x86)\Common Files\VST3 on 64-bit
+  Windows so 32-bit hosts find it).
 
   Run from an extracted release zip:
     powershell -ExecutionPolicy Bypass -File .\install.ps1
@@ -26,7 +28,8 @@
 .PARAMETER NoPresets
   Do not install the factory presets.
 .PARAMETER Uninstall
-  Remove ArpSID (and its factory presets) from the Scope (or Dest) folder.
+  Remove ArpSID (and its factory presets) from the Scope (or Dest) folder;
+  the System uninstall also removes a 32-bit copy from the (x86) folder.
 .PARAMETER Check
   Only check the bundle.
 #>
@@ -42,8 +45,29 @@ param(
 $ErrorActionPreference = 'Stop'
 $bundleName = 'arpsid_vst3.vst3'
 
+# The OS architecture (a 32-bit PowerShell on 64-bit Windows reports x86 in
+# PROCESSOR_ARCHITECTURE and the real one in PROCESSOR_ARCHITEW6432).
+$osArch = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }
+
+if (-not $From) {
+  foreach ($c in @((Join-Path $PSScriptRoot $bundleName), (Join-Path (Get-Location) $bundleName))) {
+    if (Test-Path $c) { $From = $c; break }
+  }
+}
+# The modules in the bundle: Contents\x86_64-win, arm64-win (arm64x also loads
+# on x64) or x86-win (the 32-bit build).
+$modules = @()
+if ($From -and (Test-Path $From)) {
+  $modules = @(Get-ChildItem -Path (Join-Path $From 'Contents') -Directory -ErrorAction SilentlyContinue | ForEach-Object Name)
+}
+$is32 = ($modules -contains 'x86-win') -and -not ($modules | Where-Object { $_ -ne 'x86-win' -and $_ -like '*-win' })
+
+# 32-bit hosts on 64-bit Windows scan the (x86) Common Files folder.
+$destGiven = [bool]$Dest
+$common = $env:CommonProgramFiles
+if ($is32 -and ${env:CommonProgramFiles(x86)}) { $common = ${env:CommonProgramFiles(x86)} }
 if (-not $Dest) {
-  if ($Scope -eq 'System') { $Dest = Join-Path $env:CommonProgramFiles 'VST3' }
+  if ($Scope -eq 'System') { $Dest = Join-Path $common 'VST3' }
   else { $Dest = Join-Path $env:LOCALAPPDATA 'Programs\Common\VST3' }
 }
 $target = Join-Path $Dest $bundleName
@@ -66,8 +90,19 @@ if ($Scope -eq 'System' -and -not $Check -and -not (Test-Admin) -and $Dest -like
 }
 
 if ($Uninstall) {
-  if (Test-Path $target) { Remove-Item -Recurse -Force $target; Write-Host "Removed $target" }
-  else { Write-Host "ArpSID is not installed in $Dest" }
+  # Without -Dest, the system uninstall removes both the 64-bit and the
+  # 32-bit (x86) copies.
+  $targets = @($target)
+  if (-not $destGiven -and $Scope -eq 'System') {
+    foreach ($cf in @($env:CommonProgramFiles, ${env:CommonProgramFiles(x86)})) {
+      if ($cf) { $targets += (Join-Path (Join-Path $cf 'VST3') $bundleName) }
+    }
+  }
+  $removed = $false
+  foreach ($t in ($targets | Select-Object -Unique)) {
+    if (Test-Path $t) { Remove-Item -Recurse -Force $t; Write-Host "Removed $t"; $removed = $true }
+  }
+  if (-not $removed) { Write-Host "ArpSID is not installed in $Dest" }
   if (-not $NoPresets -and (Test-Path $presetTarget)) {
     Remove-Item -Recurse -Force $presetTarget
     $vendorDir = Split-Path $presetTarget -Parent
@@ -77,18 +112,18 @@ if ($Uninstall) {
   exit 0
 }
 
-if (-not $From) {
-  foreach ($c in @((Join-Path $PSScriptRoot $bundleName), (Join-Path (Get-Location) $bundleName))) {
-    if (Test-Path $c) { $From = $c; break }
-  }
-}
 if (-not $From -or -not (Test-Path $From)) { Write-Error "No $bundleName found (use -From PATH)." }
 $From = (Resolve-Path $From).Path
 
-# The module for this machine: Contents\x86_64-win or Contents\arm64-win (arm64x also loads on x64).
-$arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'x86_64' }
-$modules = Get-ChildItem -Path (Join-Path $From 'Contents') -Directory -ErrorAction SilentlyContinue | ForEach-Object Name
-$mine = $modules | Where-Object { $_ -like "$arch*-win" -or $_ -eq 'arm64x-win' }
+# The module for this machine. The 32-bit build loads in 32-bit hosts on any
+# Windows (x64 and ARM64 run them under emulation).
+$arch = switch ($osArch) { 'ARM64' { 'arm64' } 'x86' { 'x86' } default { 'x86_64' } }
+if ($is32) {
+  $mine = @('x86-win')
+  Write-Host "32-bit (x86) build: for 32-bit hosts. 64-bit hosts need the x64 or arm64 zip."
+} else {
+  $mine = $modules | Where-Object { $_ -like "$arch*-win" -or $_ -eq 'arm64x-win' }
+}
 if (-not $mine) {
   Write-Warning "This bundle has no module for $arch (it contains: $($modules -join ', ')). Download the matching zip."
   if ($Check) { exit 1 }

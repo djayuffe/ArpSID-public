@@ -138,6 +138,14 @@ flavor chooses the starting patch range, the drum routing and the tab names.
 | ![C64 SID Player flavor](screenshots/au-flavor-c64-sid-player.jpg) | |
 | *C64 SID Player (`C64P`): `CLASSIC` render mode* | |
 
+**Host parameters.** Hosts see every automatable parameter. AUv2 groups them
+by editor tab (parameter clumps: `MAIN`, `FILTER`, … and `Other`,
+`source/arpsid_parameter_groups.h`); the AUv3 parameter tree has its own
+groups (`Master`, `VCO 1`, … `Portamento`, `HI-FI`), and any automatable
+parameter no group lists goes into `Other`. For compact plug-in views (Logic
+Smart Controls, GarageBand) the AUv3 names its overview parameters: filter
+cutoff, resonance, envelope amount, the ADSR, volume, drive and glide.
+
 ---
 
 ## Tabs

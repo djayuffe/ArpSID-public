@@ -199,6 +199,7 @@ jobs:
       matrix:
         include:
           - { runner: windows-2025,   arch: x64,   cmake_arch: x64 }
+          - { runner: windows-2025,   arch: x86,   cmake_arch: Win32 }  # 32-bit hosts
           - { runner: windows-11-arm, arch: arm64, cmake_arch: ARM64 }
     runs-on: ${{ matrix.runner }}
     defaults:
@@ -257,6 +258,9 @@ jobs:
           if ($n -ne 180) { throw "install.ps1 installed $n presets, expected 180" }
           & "$pkg\install.ps1" -Scope User -Dest $dest -PresetsDest $presets -Uninstall
           if (Test-Path "$dest\arpsid_vst3.vst3") { throw 'install.ps1 -Uninstall left the bundle' }
+          if ('${{ matrix.arch }}' -eq 'x86') {
+            if (-not (Test-Path "$pkg\arpsid_vst3.vst3\Contents\x86-win")) { throw 'the 32-bit bundle has no x86-win module' }
+          }
           if (Test-Path "$presets\Uber Sound Solutions") { throw 'install.ps1 -Uninstall left the presets' }
       - name: Package
         if: inputs.release

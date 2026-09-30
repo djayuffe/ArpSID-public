@@ -244,9 +244,11 @@ public:
             FIDStringsEqual(message->getMessageID(), kVstMsgKernelHost)) {
             int64 ptr = 0, pid = 0;
             IAttributeList* attrs = message->getAttributes();
+            // ptr 0: the processor is disconnecting or terminating and its
+            // kernel host must no longer be used.
             if (attrs && attrs->getInt(kVstMsgAttrHostPtr, ptr) == kResultOk &&
-                attrs->getInt(kVstMsgAttrPid, pid) == kResultOk && pid == currentProcessId_() && ptr != 0)
-                kernelHost_ = reinterpret_cast<Vst3KernelHost*>(static_cast<std::uintptr_t>(ptr));
+                attrs->getInt(kVstMsgAttrPid, pid) == kResultOk && pid == currentProcessId_())
+                kernelHost_ = ptr != 0 ? reinterpret_cast<Vst3KernelHost*>(static_cast<std::uintptr_t>(ptr)) : nullptr;
             return kResultOk;
         }
         return EditController::notify(message);

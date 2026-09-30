@@ -14,6 +14,7 @@
 #include <cmath>
 #include <cstring>
 #include <limits>
+#include <thread>
 
 namespace ArpSID {
 
@@ -492,7 +493,9 @@ void Vst3KernelHost::cancelDigiCapture() noexcept {
     // seq_cst): either the audio block sees disarmed, or we see it busy.
     captureArmed_.store(false);
     while (captureBusy_.load()) {
-        // an audio block is writing; it finishes within one block
+        // An audio block is writing; it finishes within one block. Yield so a
+        // preempted audio thread gets the core back.
+        std::this_thread::yield();
     }
 }
 

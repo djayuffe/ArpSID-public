@@ -465,7 +465,7 @@ on the main thread, never inside `process()`.
 |---|---|---|---|
 | `ArpSID.LoadFactoryPatch` | controller → processor | `slot` | `Vst3KernelHost::loadFactorySlot` |
 | `ArpSID.UiMidi` | controller → processor | `status`, `data1`, `data2` | `injectMidi` (editor keyboard, ALL NOTES OFF) |
-| `ArpSID.KernelHost` | processor → controller | `ptr`, `pid` | The address of the processor's `Vst3KernelHost`. The controller accepts it only if `pid` is its own process ID. |
+| `ArpSID.KernelHost` | processor → controller | `ptr`, `pid` | The address of the processor's `Vst3KernelHost`. The controller accepts it only if `pid` is its own process ID. `ptr` 0 (sent from the processor's `disconnect` and `terminate`) withdraws it: the controller and editor stop using the engine before it goes away, whatever order the host tears down in. The editor looks the pointer up on every use and never keeps it. |
 | `ArpSID.RequestKernelHost` | controller → processor | — | Resend `KernelHost` (sent from `connect`, in case the processor connected first). |
 
 With the kernel host, the editor can read telemetry and edit the non-parameter
@@ -558,13 +558,20 @@ on parameters only, and says so on the panels that need the engine.
 
 | Thread | What runs there |
 |---|---|
-| Audio (`process`) | `readBypass_`, `collectEvents_`, `readTransport_`, `applyBypass_`, `Vst3KernelHost::render` → `ArpSIDDSPKernel::processBlock`. No locks, no allocation. Scheduled roots and GUI models arrive through the kernel's mailboxes. |
+| Audio (`process`) | `readBypass_`, `collectEvents_`, `readTransport_`, `applyBypass_`, DIGI capture, `Vst3KernelHost::render` → `ArpSIDDSPKernel::processBlock`. No locks, no allocation: the host test counts both (it interposes `operator new` and `pthread_mutex_lock` on Linux) over blocks with notes, automation, bypass and editor MIDI, and requires zero. The whole callback runs under the kernel's realtime guard (`SidRealtimeScope`), which counts lock and allocation violations. Scheduled roots and GUI models arrive through the kernel's mailboxes; editor MIDI and parameter intents through its multi-producer rings. |
 | Main / UI | Controller calls, messages, `setState` / `getState`, the editor timer, model edits, telemetry reads, SID file loads. |
 
 - **Models.** `modelMutex_` guards the models on the non-realtime side. The
   render thread never takes it; it reads the published copies.
 - **Pending root.** The pending-root sequence counters are atomics.
   `pendingRootMutex_` guards only the non-realtime copy of the pending root.
+- **DIGI capture.** Arming and stopping (UI) and the capture write (audio)
+  hand over through two atomics (armed, busy); the buffer is allocated when
+  arming, never on the audio thread, and stopping yields while an audio
+  block finishes its write.
+- **Linux editor.** X events and timers run on the host's `IRunLoop` (UI
+  thread); the editor offers X11 embedding only (VSTGUI has no Wayland
+  backend), so Wayland hosts embed it through XWayland.
 - **Kernel.** The kernel's own rules are in
   [REALTIME_OWNERSHIP.md](REALTIME_OWNERSHIP.md).
 
@@ -617,6 +624,6 @@ Installing released builds: [INSTALL.md](INSTALL.md).
 | `Vst3KernelHostStateTests` (`source/tests/vst3_kernel_host_state_tests.cpp`, SDK-free, runs in every build) | The v5 state keeps the models, the C64 tune and its subtune. A tune-less state unloads a tune. A restored tune can switch subtune. A truncated state keeps what came before the cut. A DIGI capture round trip works (arm, feed, stop, then the slot plays the take). Bypass is saved, restored, cleared by an un-bypassed state, read by `decodeBypass`, and never set by a legacy state. A patch-only preset state is small, recognised by `isPresetState`, plays its patch, and keeps the loaded tune, the MIX model and bypass. |
 | `EditorLayoutCoverageTests`, `ParameterReferenceDocTests` | Editor coverage and the decode law, and that the parameter reference is up to date. |
 
-CI runs all of these on Linux x86_64/aarch64 and Windows x64/arm64. On macOS
+CI runs all of these on Linux x86_64/aarch64 and Windows x64/arm64/x86. On macOS
 it runs the validator and host test for the universal bundle (see the README's
 CI table).

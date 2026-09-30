@@ -18,7 +18,7 @@ The version described here is 0.9.12 (`VERSION.txt`).
 |---|---|---|---|
 | AUv2 | type `aumu`, manufacturer `ASID`; subtypes `ArpS` (ArpSID), `ArIn` (Instrument), `DrSD` (DrSID), `S808` (SID-808), `C64P` (C64 SID Player) | macOS universal (arm64 + x86_64) | macOS 12.0 |
 | AUv3 | app extension `arpsid_auv3.appex` inside `ArpSID.app` | macOS universal | macOS 12.0 |
-| VST3 | processor FUID `A1B2C3D4-E5F60718-9A0B1C2D-3E4F5A6B`, controller FUID `B2C3D4E5-F6071829-A0B1C2D3-E4F5A6B7`, category `Instrument\|Synth` | macOS universal; Windows x64 and arm64; Linux x86_64 and aarch64 | macOS 12.0; Windows 10/11; any glibc Linux with XCB, Cairo and Pango |
+| VST3 | processor FUID `A1B2C3D4-E5F60718-9A0B1C2D-3E4F5A6B`, controller FUID `B2C3D4E5-F6071829-A0B1C2D3-E4F5A6B7`, category `Instrument\|Synth` | macOS universal; Windows x64, arm64 and x86 (32-bit hosts); Linux x86_64 and aarch64 | macOS 12.0; Windows 10/11; any glibc Linux with XCB, Cairo and Pango |
 | Standalone | `ArpSID Standalone.app` | macOS universal | macOS 12.0 |
 
 **Build requirements:**
