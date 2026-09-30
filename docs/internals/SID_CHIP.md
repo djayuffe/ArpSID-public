@@ -339,8 +339,10 @@ Per SID cycle (or sub-cycle step), after the oscillators advance:
    `0.018 + 0.0012·vol`.
 9. **Master volume**: `× vol/15` (the `$D418` low nibble, the digi DAC).
 10. **`$D418` asymmetry** (forensic), **8580 Digifix** (boosts low volumes up
-    to +18 % so volume-register digis are audible on 8580), **system noise**,
-    **ADC bleed**, **bus collision**, **POT input** leak.
+    to +18 % so volume-register digis are audible on 8580), **system noise**
+    (follows voice activity: it fades in with the first sounding voice and
+    out, over about 0.1 s, once every envelope has released, so a patch is
+    silent between notes), **ADC bleed**, **bus collision**, **POT input** leak.
 11. **Revision calibration**: output gain (6581 R2 1.16, R3 1.10, R4 1.05;
     8580 1.00) and DC (28 / 20 / 14 / 3 mV × vol/15).
 12. **DC blocker**: first-order high-pass at 16 Hz.

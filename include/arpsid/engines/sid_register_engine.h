@@ -576,6 +576,7 @@ public:
   dst.filter = src.filter;
   dst.forensic_ = src.forensic_;
   dst.busNoiseState_ = src.busNoiseState_;
+  dst.systemNoiseGate_ = src.systemNoiseGate_;
   dst.envTdmHold_ = src.envTdmHold_;
   dst.d418BiasMem_ = src.d418BiasMem_;
   dst.d418PrevVolume_ = src.d418PrevVolume_;
@@ -601,6 +602,7 @@ public:
   dst.voice = src.voice;
   dst.filter = src.filter;
   dst.busNoiseState_ = src.busNoiseState_;
+  dst.systemNoiseGate_ = src.systemNoiseGate_;
   dst.envTdmHold_ = src.envTdmHold_;
   dst.d418BiasMem_ = src.d418BiasMem_;
   dst.d418PrevVolume_ = src.d418PrevVolume_;
@@ -747,6 +749,7 @@ public:
  cycleFrac = 0.0;
  dcIn = dcOut = 0.0f;
  d418VolumeDacState_ = 0.0f;
+ systemNoiseGate_ = 0.0f;
  dcR = static_cast<float>(std::clamp(std::exp(-2.0 * ArpSID_pi() * 16.0 / sr), 0.0, 0.99999));
  limiter_.reset(sr);
  clearScopeHistory_();
@@ -906,9 +909,15 @@ public:
    d418PrevVolume_ = (float)vol;
   }
   if (forensic_.enable && forensic_.systemNoise > 0.0f) {
+   // The system noise sits under the voices: it follows them in (~2 ms)
+   // and fades out (~100 ms at 48 kHz) once every voice has gone silent,
+   // so an idle instance is silent instead of hissing on its track.
+   const float noiseTarget = isActive() ? 1.0f : 0.0f;
+   systemNoiseGate_ += (noiseTarget - systemNoiseGate_) * (noiseTarget > systemNoiseGate_ ? 0.01f : 0.0002f);
+   if (systemNoiseGate_ < 1.0e-4f && noiseTarget == 0.0f) systemNoiseGate_ = 0.0f;
    busNoiseState_ ^= (busNoiseState_ << 13); busNoiseState_ ^= (busNoiseState_ >> 17); busNoiseState_ ^= (busNoiseState_ << 5);
    const float n = ((busNoiseState_ & 0x00FFFFFFu) * (1.0f/8388608.0f)) - 1.0f;
-   y += ((is6581 ? 0.0045f : 0.0020f) * forensic_.systemNoise * forensic_.intensity) * n;
+   y += ((is6581 ? 0.0045f : 0.0020f) * forensic_.systemNoise * forensic_.intensity * systemNoiseGate_) * n;
   }
   if (forensic_.enable && forensic_.adcBleed > 0.0f) {
    y += (inFilt * (is6581 ? 0.010f : 0.006f)) * (forensic_.adcBleed * forensic_.intensity);
@@ -1466,6 +1475,7 @@ private:
  uint8_t potX = 0, potY = 0;
  ArpSIDForensicConfig forensic_{};
  uint32_t busNoiseState_ = 0x13579BDFu;
+ float systemNoiseGate_ = 0.0f;  // 0..1, follows voice activity
  float potPhase_ = 0.0f;
  std::array<float, 3> envTdmHold_{};
  float d418BiasMem_ = 0.0f;

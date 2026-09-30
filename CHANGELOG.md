@@ -5,6 +5,30 @@ All notable changes to ArpSID are documented here. The project uses
 version is `VERSION.txt`, mirrored by `project(VERSION)` in `CMakeLists.txt`
 and `include/arpsid/version.h`.
 
+## [Unreleased]
+
+### Fixed
+
+- **Hiss between notes**: the Forensic **System Noise** term was added to
+  the output all the time, so most factory patches hissed at −80…−100 dBFS
+  with no note playing (and VST3 hosts never saw a silent block). The noise
+  now follows voice activity in both SID engines (SYNTH and CLASSIC): it is
+  there while voices sound and fades out once every envelope has released,
+  so released patches are silent.
+- **DC offset at the output**: the CLASSIC init sound and the overdriven
+  guitar patches carried a steady offset (up to 0.8 % of full scale) from the
+  saturation and drive stages after the chip's DC blocker. A 5 Hz output DC
+  blocker before the limiter removes it; every factory patch now measures
+  below 0.03 %.
+
+### Added
+
+- **Factory patch sound audit** (`arpsid_factory_patch_sound_audit`, built
+  on demand): renders the init sound and all 180 factory patches and prints
+  level, clipping, DC, stereo balance, idle noise, release time and tail;
+  `--check` fails on silent, clipping or non-finite patches. A quick subset
+  runs in ctest (`FactoryPatchSoundTests`).
+
 ## [0.9.13] — 2026-09-30
 
 ### Added

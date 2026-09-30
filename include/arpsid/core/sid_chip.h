@@ -1108,6 +1108,7 @@ public:
         openBusDecayCycle_ = 0u;
         driftPhase_ = 0.0f;
         jitterState_ = 0x51D5A1D1u;
+        systemNoiseGate_ = 0.0f;
         updateDcBlockCoeff();
         limiter.reset(sampleRate);
         plannedSample_ = {};
@@ -1838,8 +1839,15 @@ private:
             y *= (1.0f + 0.18f * digiDrive);
         }
         if (forensicConfig_.enable && forensicConfig_.systemNoise > 0.0f) {
+            // The system noise sits under the voices: it follows them in
+            // (~2 ms) and fades out (~100 ms at 48 kHz) once every voice has
+            // gone silent, so an idle chip is silent instead of hissing.
+            const bool anyVoice = voices[0].isActive() || voices[1].isActive() || voices[2].isActive();
+            const float target = anyVoice ? 1.0f : 0.0f;
+            systemNoiseGate_ += (target - systemNoiseGate_) * (target > systemNoiseGate_ ? 0.01f : 0.0002f);
+            if (systemNoiseGate_ < 1.0e-4f && !anyVoice) systemNoiseGate_ = 0.0f;
             const float amt = forensicConfig_.active(forensicConfig_.systemNoise);
-            y += ((model == SIDModel::MOS6581) ? 0.0045f : 0.0020f) * amt * ArpSID_rand_bipolar(jitterState_);
+            y += ((model == SIDModel::MOS6581) ? 0.0045f : 0.0020f) * amt * systemNoiseGate_ * ArpSID_rand_bipolar(jitterState_);
         }
         if (forensicConfig_.enable && forensicConfig_.adcBleed > 0.0f) {
             const float amt = forensicConfig_.active(forensicConfig_.adcBleed);
@@ -2079,6 +2087,7 @@ private:
     float extInSample_ = 0.0f;
     float driftPhase_ = 0.0f;
     uint32_t jitterState_ = 0x51D5A1D1u;
+    float systemNoiseGate_ = 0.0f;  // 0..1, follows voice activity
     uint32_t combinedWaveSeed_ = 0xDEADBEEFu;
     uint32_t startupSeed_ = 0x13579BDFu;
     float dcBlockR_ = 0.0f; // updated from sample rate in updateDcBlockCoeff()

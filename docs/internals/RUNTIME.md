@@ -96,8 +96,10 @@ and the core headers.
 17. **Pure-SID capture tap**, then **drum bridge** (DrSID/SID-808 bridge output)
     and the **DIGI layer** (after the bridge so it is not overwritten).
 18. **Post**: in Pure SID 1Q1 mode everything below is bypassed. Otherwise
-    the MIX FX chain, then reverb and limiter and the Hi-Fi chain on the exact
-    canonical timeline (automation at sample N affects N and later).
+    the MIX FX chain, then reverb, an output DC blocker (5 Hz first-order
+    high-pass, so saturation and drive cannot leave an offset at the host
+    output) and limiter, and the Hi-Fi chain on the exact canonical timeline
+    (automation at sample N affects N and later).
 19. **Host block advance**, SIDCORE timeline publish.
 20. **Stuck-note safety net**: in pure direct polyphony (BitPerfect, POLY, no
     arp, no sequencer), gated voices whose key is not held (and no sustain or

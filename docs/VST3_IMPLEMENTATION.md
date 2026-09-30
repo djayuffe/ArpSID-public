@@ -138,10 +138,10 @@ its target, so a bypassed instance starts silent without a fade.
    every output channel, so hosts can skip downstream processing. That
    covers the engine's 24-bit TPDF dither and settling residue once the
    voices have released (up to 0.9.11 only exact zeros counted, so a block
-   holding only dither was never flagged). Most factory patches carry a
-   chip/board profile with a modelled analogue floor near −80 dBFS even with
-   no voice sounding; that is sound and is not flagged. (The SDK validator
-   treats anything under −77.6 dBFS as silence and reports an info for it.)
+   holding only dither was never flagged). The chip/board profile's modelled
+   system noise follows voice activity (up to 0.9.13 it hissed near −80 dBFS
+   with no voice sounding), so factory patches go silent, and are flagged,
+   shortly after their last note releases.
 
 ### Host bypass
 

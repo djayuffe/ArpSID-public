@@ -3970,6 +3970,27 @@ target_include_directories(arpsid_vst3_kernel_host_state_tests PRIVATE
 target_link_libraries(arpsid_vst3_kernel_host_state_tests PRIVATE arpsid_core arpsid_forensic_patchbank)
 add_test(NAME Vst3KernelHostStateTests COMMAND arpsid_vst3_kernel_host_state_tests)
 
+# Factory patch sound regressions: silence after release (System Noise
+# follows voice activity), no DC at the output, finite and unclipped output.
+add_executable(arpsid_factory_patch_sound_tests
+    source/tests/factory_patch_sound_tests.cpp
+    source/vst3/arpsid_vst3_kernel_host.cpp)
+target_compile_features(arpsid_factory_patch_sound_tests PRIVATE cxx_std_17)
+target_include_directories(arpsid_factory_patch_sound_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/source)
+target_link_libraries(arpsid_factory_patch_sound_tests PRIVATE arpsid_core arpsid_forensic_patchbank)
+add_test(NAME FactoryPatchSoundTests COMMAND arpsid_factory_patch_sound_tests)
+
+# Factory patch sound audit: renders every factory patch and measures level,
+# clipping, DC, idle noise and release (tool; run with --check to gate).
+add_executable(arpsid_factory_patch_sound_audit EXCLUDE_FROM_ALL
+    source/tests/factory_patch_sound_audit.cpp
+    source/vst3/arpsid_vst3_kernel_host.cpp)
+target_compile_features(arpsid_factory_patch_sound_audit PRIVATE cxx_std_17)
+target_include_directories(arpsid_factory_patch_sound_audit PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/source)
+target_link_libraries(arpsid_factory_patch_sound_audit PRIVATE arpsid_core arpsid_forensic_patchbank)
+
 # docs/PARAMETER_REFERENCE.md is generated from the parameter table, the
 # presentation laws and the editor layout; the test fails when it is stale.
 add_executable(arpsid_parameter_reference_doc_tests source/tests/parameter_reference_doc_tests.cpp)

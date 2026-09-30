@@ -3076,6 +3076,7 @@ private:
         smoothedLimiterWet_ = auLimiterEnabled_ ? 1.0f : 0.0f;
         smoothedLimiterThreshold_ = std::clamp(ArpSID_sanitizeFloat(auLimiterThreshold_), 0.05f, 1.5f);
         auPostFxSilentFrames_ = 0u;
+        resetOutputDcBlocker_();
         engineBank_.sidWriteQueue.clear();
         std::memset(runtimeFractionalAccumL_, 0, sizeof(runtimeFractionalAccumL_));
         std::memset(runtimeFractionalAccumR_, 0, sizeof(runtimeFractionalAccumR_));
@@ -3606,6 +3607,7 @@ public:
         auLimiter_.setAttackMs(auLimiterAttackMs_, sampleRate_);
         auLimiter_.setReleaseMs(auLimiterReleaseMs_, sampleRate_);
         auPostFxSilentFrames_ = 0u;
+        resetOutputDcBlocker_();
         prepareMixFxProcessors_();  // Fix #8: re-prepare at each sample-rate change
         drumEngineBridge_.prepare(sampleRate_);  // A2: bridge follows sample rate
         configureDefaultDrumBridgeIdentityNonRealtime_();
@@ -3658,6 +3660,7 @@ public:
         smoothedLimiterWet_ = auLimiterEnabled_ ? 1.0f : 0.0f;
         smoothedLimiterThreshold_ = std::clamp(ArpSID_sanitizeFloat(auLimiterThreshold_), 0.05f, 1.5f);
         auPostFxSilentFrames_ = 0u;
+        resetOutputDcBlocker_();
         engineBank_.sidWriteQueue.clear();
         for (auto& v : engineBank_.synthVoices) v.reset();
         if (auto* vp = runtimeVoicePolicy_()) {
@@ -5184,6 +5187,15 @@ public:
     float auReverbMix_ = 0.0f;
     float smoothedReverbMix_ = 0.0f;
     uint32_t auPostFxSilentFrames_ = 0u;
+    // Output DC blocker (5 Hz one-pole high-pass, the audio output's
+    // coupling capacitor): the SID model, its soft saturator, drive and the
+    // FX can leave a DC offset that would shift with every note.
+    float outputDcR_ = 0.99935f;
+    float outputDcInL_ = 0.0f, outputDcOutL_ = 0.0f, outputDcInR_ = 0.0f, outputDcOutR_ = 0.0f;
+    void resetOutputDcBlocker_() noexcept {
+        outputDcInL_ = outputDcOutL_ = outputDcInR_ = outputDcOutR_ = 0.0f;
+        outputDcR_ = static_cast<float>(std::clamp(std::exp(-2.0 * 3.14159265358979323846 * 5.0 / std::max(1.0, sampleRate_)), 0.0, 0.99999));
+    }
     // Configurable quiet-tail reset threshold. Default 0.25 s can cut quiet
     // tails prematurely; expose as a tunable so host can set a longer hold time.
     float auReverbQuietResetSeconds_ = 0.25f;
@@ -5329,6 +5341,15 @@ public:
                 auReverb_.process(l, r, rl, rr);
                 l += rl * state.reverbMix;
                 r += rr * state.reverbMix;
+            }
+            {
+                const float hl = l - outputDcInL_ + outputDcR_ * outputDcOutL_;
+                const float hr = r - outputDcInR_ + outputDcR_ * outputDcOutR_;
+                outputDcInL_ = l; outputDcInR_ = r;
+                outputDcOutL_ = std::fabs(hl) < 1.0e-15f ? 0.0f : hl;
+                outputDcOutR_ = std::fabs(hr) < 1.0e-15f ? 0.0f : hr;
+                l = outputDcOutL_;
+                r = outputDcOutR_;
             }
             if (state.limiterEnabled) auLimiter_.processStereoSample(l, r, state.limiterThreshold);
             const float lc = std::clamp(ArpSID_sanitizeFloat(l), -1.0f, 1.0f);
