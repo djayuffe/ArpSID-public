@@ -8,7 +8,7 @@ source. For how the pieces work, see the internals references:
 - [RUNTIME.md](internals/RUNTIME.md)
 - [ENGINES.md](internals/ENGINES.md)
 
-The version described here is 0.9.12 (`VERSION.txt`).
+The version described here is 0.9.13 (`VERSION.txt`).
 
 ---
 
