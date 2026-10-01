@@ -585,6 +585,7 @@ if(ARPSID_BUILD_VST3)
             source/forensic_patch_bank.cpp
             source/arpsid_file_bank.cpp
             source/gui/arpsid_vstgui_editor.cpp
+            ${vst3sdk_SOURCE_DIR}/public.sdk/source/common/memorystream.cpp
             ${_arpsid_vst3_gui_sources}
             )
     else()
@@ -592,6 +593,11 @@ if(ARPSID_BUILD_VST3)
     endif()
 
     target_link_libraries(arpsid_vst3 PRIVATE arpsid_core sdk)
+    if(UNIX AND NOT APPLE)
+        # A shared module may link with undefined symbols on Linux and then
+        # fail only when a host loads it; refuse that at build time.
+        target_link_options(arpsid_vst3 PRIVATE "LINKER:--no-undefined")
+    endif()
     # Plug-in browser image (<bundle>/Contents/Resources/Snapshots, listed in
     # moduleinfo.json): the editor's MAIN page, named by the processor CID.
     if(COMMAND smtg_target_add_plugin_snapshots)
