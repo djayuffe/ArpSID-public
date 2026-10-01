@@ -5,7 +5,7 @@ All notable changes to ArpSID are documented here. The project uses
 version is `VERSION.txt`, mirrored by `project(VERSION)` in `CMakeLists.txt`
 and `include/arpsid/version.h`.
 
-## [Unreleased]
+## [0.9.15] — 2026-10-01
 
 ### Fixed
 
