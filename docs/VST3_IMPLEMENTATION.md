@@ -363,7 +363,9 @@ attached to the root unit.
   state (any version) and mirrors it the same way, without notifying the
   host. It also reads the `BYPS` chunk into the Bypass parameter.
 - **Program attributes.** `getProgramInfo` reports `PlugInCategory` =
-  `Instrument|Synth` and `PlugInName` = `ArpSID` for every factory program.
+  `Instrument|Synth`, `PlugInName` = `ArpSID`, `Name` (the patch name) and
+  `MusicalInstrument` / `MusicalCategory` (from the patch role, the same value
+  as in the factory `.vstpreset` files) for every factory program.
 - **Preset files.** Hosts whose preset browser reads files never see the
   program list, so the build also writes every factory patch as a
   `.vstpreset` (`arpsid_vst3_presets`, see below) and the release zips and
@@ -384,6 +386,32 @@ attached to the root unit.
     writes it with `PresetFile::savePreset`, then loads every file into a
     fresh instance with `PresetFile::loadPreset` and fails unless the bank
     slot and every persistent parameter match.
+- **User patches.** A patch that is not a factory slot (the editor's preset
+  browser, LOAD PRESET, a patch file, a user-bank entry) goes through
+  `loadPatch(root, name)`: the controller encodes it as a patch-only state
+  (`Vst3KernelHost::encodePresetState`), sends it to the processor
+  (`ArpSID.LoadPresetState`, applied like a `.vstpreset`), mirrors the values
+  to the host (`restartComponent(kParamValuesChanged)`), marks the project
+  dirty and keeps the name. This works when the processor runs in another
+  process too. Before 0.9.15 the editor wrote such patches straight into the
+  engine, so the host and the knobs kept showing the old values.
+- **Patch names.** The controller keeps the name of a loaded user patch (empty
+  while a factory patch plays) and saves it in its state (v2):
+  - a `.vstpreset` the host loads is named after its file (`IStreamAttributes`
+    file name, else the `Name` or `FilePathString` attribute); a factory preset
+    file stays the factory patch;
+  - a full state the host loads in a preset context (`StateType` other than
+    `Project`, e.g. a preset saved from the host's own browser) is named the
+    same way; a project load clears the name until the controller state
+    restores it;
+  - selecting a program (even the current one) clears it.
+- **User preset files.** The editor's SAVE PRESET writes the current patch
+  (the processor's live root, or one rebuilt from the parameter values when
+  the processor is out of process) as a `.vstpreset` with the same layout as
+  the factory files (`source/vst3/arpsid_vst3_preset_file.h`, editable
+  MetaInfo), by default into `<user preset folder>/User/`. The preset folders
+  per OS are in `source/arpsid_preset_paths.h`; the editor's PRESETS view
+  lists the user folder minus the installed factory presets.
 - **Parameter text for Bypass.** `getParamValueByString` accepts `On`/`Off`
   and `1`/`0` for the Bypass parameter, so the text the host shows parses
   back (the SDK validator checks this).
@@ -404,12 +432,14 @@ editor settings that are not part of the sound:
 | Field | Type | Meaning |
 |---|---|---|
 | magic | `u32` | `ASEC` (0x41534543) |
-| version | `u32` | 1 |
+| version | `u32` | 2 (version 1 has no name fields) |
 | zoom | `f64` | editor size (1.0 = 1200 × 800 at host scale 1; clamped 0.25–4) |
 | tab | `i32` | the tab the editor was left on |
+| name length | `u32` | 0–255 (v2) |
+| name | UTF-8 | the user patch name, empty for a factory patch (v2) |
 
 All fields are little-endian. A missing, short or foreign stream leaves the
-defaults (size 1.0, MAIN tab), so older projects open normally.
+defaults (size 1.0, MAIN tab, no user patch), so older projects open normally.
 
 ### Track information (`IInfoListener`)
 
@@ -464,6 +494,7 @@ on the main thread, never inside `process()`.
 | ID | Direction | Attributes | Effect |
 |---|---|---|---|
 | `ArpSID.LoadFactoryPatch` | controller → processor | `slot` | `Vst3KernelHost::loadFactorySlot` |
+| `ArpSID.LoadPresetState` | controller → processor | `data` (binary) | A patch-only state (`PRST` + `ROOT`) for `Vst3KernelHost::loadState`: a user patch from the editor. Anything that is not a preset state is refused. |
 | `ArpSID.UiMidi` | controller → processor | `status`, `data1`, `data2` | `injectMidi` (editor keyboard, ALL NOTES OFF) |
 | `ArpSID.KernelHost` | processor → controller | `ptr`, `pid` | The address of the processor's `Vst3KernelHost`. The controller accepts it only if `pid` is its own process ID. `ptr` 0 (sent from the processor's `disconnect` and `terminate`) withdraws it: the controller and editor stop using the engine before it goes away, whatever order the host tears down in. The editor looks the pointer up on every use and never keeps it. |
 | `ArpSID.RequestKernelHost` | controller → processor | — | Resend `KernelHost` (sent from `connect`, in case the processor connected first). |
@@ -617,11 +648,11 @@ Installing released builds: [INSTALL.md](INSTALL.md).
 | Test | Checks |
 |---|---|
 | Steinberg `validator` (runs during every `arpsid_vst3` build) | 47 SDK conformance tests: buses, state, parameters, process formats, flush, variable block size, and more. |
-| `arpsid_vst3_host_check` / `Vst3HostIntegrationTests` (`source/tests/vst3_host_integration_tests.cpp`) | Loads the built bundle like a host and checks each of these: <ul><li>both classes instantiate and connect;</li><li>Program is a 180-entry program-change list;</li><li>the MIDI bus has 16 channels, and the DIGI capture input is an auxiliary bus, inactive by default;</li><li>units: 32 units, each parameter in an existing unit, Program in the root, and <code>selectUnit</code> remembered;</li><li>on Windows and Linux, editor sizing: the 3:2 constraint, the minimum size, and a reopened view keeping its size;</li><li>on Linux with a <code>DISPLAY</code> (CI: Xvfb, and <code>ARPSID_REQUIRE_X11_EDITOR=1</code> makes it mandatory), the editor in a real X11 window: X11 only (no Wayland claim), attach, the X connection and timers on the host's <code>IRunLoop</code>, <code>IParameterFinder</code> naming the parameter under the mouse at 1× and after a resize, a live resize, detach leaving no handlers behind, the same again for a second open, and a refusal (no crash) for a host frame without a run loop;</li><li>tempo, transport and musical position are requested;</li><li>the MIDI mapping leaves unmapped CCs alone and routes CC 101/100/99/98/6/38 to each channel's RPN/NRPN/Data Entry parameters;</li><li>the 208 host MIDI parameters are hidden, host-writable and uniquely titled;</li><li><code>IEditController2</code> accepts the three knob modes;</li><li>released output settles to exact zero and is flagged silent;</li><li>selecting a program refreshes the host and the controller mirror matches the processor state;</li><li>editor-keyboard (UiMidi) and host note-ons produce audio, and Master Volume automation reaches the engine;</li><li>a v5 state loads into a second instance;</li><li>a legacy v4 state is accepted by processor and controller;</li><li>Bypass is a <code>kIsBypass</code> on/off parameter in the root unit, silences the output, is saved in the state and read back by a fresh controller, and un-bypassing restores the sound;</li><li>64-bit processing renders a note with finite samples, and an oversized 64-bit block does not overrun;</li><li>the controller state round-trips the editor size and tab, and a foreign stream is ignored;</li><li><code>IInfoListener</code> accepts a track name and colour;</li><li>programs report the <code>Instrument|Synth</code> category;</li><li>a patch-only preset state changes the processor's and the controller's patch but leaves bypass alone, and a later project save is a full state again.</li></ul> |
+| `arpsid_vst3_host_check` / `Vst3HostIntegrationTests` (`source/tests/vst3_host_integration_tests.cpp`) | Loads the built bundle like a host and checks each of these: <ul><li>both classes instantiate and connect;</li><li>Program is a 180-entry program-change list;</li><li>the MIDI bus has 16 channels, and the DIGI capture input is an auxiliary bus, inactive by default;</li><li>units: 32 units, each parameter in an existing unit, Program in the root, and <code>selectUnit</code> remembered;</li><li>on Windows and Linux, editor sizing: the 3:2 constraint, the minimum size, and a reopened view keeping its size;</li><li>on Linux with a <code>DISPLAY</code> (CI: Xvfb, and <code>ARPSID_REQUIRE_X11_EDITOR=1</code> makes it mandatory), the editor in a real X11 window: X11 only (no Wayland claim), attach, the X connection and timers on the host's <code>IRunLoop</code>, <code>IParameterFinder</code> naming the parameter under the mouse at 1× and after a resize, a live resize, detach leaving no handlers behind, the same again for a second open, and a refusal (no crash) for a host frame without a run loop;</li><li>tempo, transport and musical position are requested;</li><li>the MIDI mapping leaves unmapped CCs alone and routes CC 101/100/99/98/6/38 to each channel's RPN/NRPN/Data Entry parameters;</li><li>the 208 host MIDI parameters are hidden, host-writable and uniquely titled;</li><li><code>IEditController2</code> accepts the three knob modes;</li><li>released output settles to exact zero and is flagged silent;</li><li>selecting a program refreshes the host and the controller mirror matches the processor state;</li><li>editor-keyboard (UiMidi) and host note-ons produce audio, and Master Volume automation reaches the engine;</li><li>a v5 state loads into a second instance;</li><li>a legacy v4 state is accepted by processor and controller;</li><li>Bypass is a <code>kIsBypass</code> on/off parameter in the root unit, silences the output, is saved in the state and read back by a fresh controller, and un-bypassing restores the sound;</li><li>64-bit processing renders a note with finite samples, and an oversized 64-bit block does not overrun;</li><li>the controller state round-trips the editor size and tab, and a foreign stream is ignored;</li><li><code>IInfoListener</code> accepts a track name and colour;</li><li>programs report the <code>Instrument|Synth</code> category;</li><li>a patch-only preset state changes the processor's and the controller's patch but leaves bypass alone, and a later project save is a full state again;</li><li>user patches: a host-loaded <code>.vstpreset</code> is named after its file (<code>IStreamAttributes</code>), a host-saved full-state preset too, a project load or a program choice clears the name, a factory preset file stays the factory patch, and the name round-trips through controller state v2;</li><li><code>ArpSID.LoadPresetState</code> makes the processor play the patch it carries and refuses a non-preset state;</li><li>a user <code>.vstpreset</code> built with the shared helpers reads back its patch and name, is refused for another plug-in, and loads into a fresh instance through <code>PresetFile::loadPreset</code>;</li><li>programs report their name and musical instrument category.</li></ul> |
 | Realtime contract (in `arpsid_vst3_host_check`) | On Linux an allocation probe (the test's `operator new`) counts heap allocations inside `process()` during a busy block of unsorted notes and 512 automation points: it must be 0. A note-off in a block with more than 4096 automation points still releases the note. An 8192-frame 32-bit block starts a note at frame 6000 exactly there. An oversized 64-bit block renders the same audio as announced-size blocks. The test also prints the render cost as a share of real time at 32 to 2048-frame blocks. |
 | `arpsid_vst3_presets` / `Vst3FactoryPresetExport` | Writes all 180 factory `.vstpreset` files and reloads each into a fresh instance: the bank slot and every persistent parameter must match. |
 | `arpsid_vst3_editor_check` | The offscreen editor render ([VST3_EDITOR.md](VST3_EDITOR.md#tests)). |
-| `Vst3KernelHostStateTests` (`source/tests/vst3_kernel_host_state_tests.cpp`, SDK-free, runs in every build) | The v5 state keeps the models, the C64 tune and its subtune. A tune-less state unloads a tune. A restored tune can switch subtune. A truncated state keeps what came before the cut. A DIGI capture round trip works (arm, feed, stop, then the slot plays the take). Bypass is saved, restored, cleared by an un-bypassed state, read by `decodeBypass`, and never set by a legacy state. A patch-only preset state is small, recognised by `isPresetState`, plays its patch, and keeps the loaded tune, the MIX model and bypass. |
+| `Vst3KernelHostStateTests` (`source/tests/vst3_kernel_host_state_tests.cpp`, SDK-free, runs in every build) | The v5 state keeps the models, the C64 tune and its subtune. A tune-less state unloads a tune. A restored tune can switch subtune. A truncated state keeps what came before the cut. A DIGI capture round trip works (arm, feed, stop, then the slot plays the take). Bypass is saved, restored, cleared by an un-bypassed state, read by `decodeBypass`, and never set by a legacy state. A patch-only preset state is small, recognised by `isPresetState`, plays its patch, and keeps the loaded tune, the MIX model and bypass; `encodePresetState` writes the same bytes. The user preset folder follows the VST3 layout, and the user preset list leaves out installed factory presets and other files. |
 | `EditorLayoutCoverageTests`, `ParameterReferenceDocTests` | Editor coverage and the decode law, and that the parameter reference is up to date. |
 
 CI runs all of these on Linux x86_64/aarch64 and Windows x64/arm64/x86. On macOS

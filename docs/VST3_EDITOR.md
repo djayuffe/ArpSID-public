@@ -330,12 +330,33 @@ The patch browser.
   - `151–180`: DIGI 4-bit kits.
 
   Click a patch to load it. The current patch has an outline.
+- **PRESETS** lists your own `.vstpreset` files: everything in the user VST3
+  preset folder (`<preset root>/Uber Sound Solutions/ArpSID`, see
+  [INSTALL.md](INSTALL.md#factory-presets-vst3)) except the installed factory
+  presets, by sub-folder and name. Click one to load it. The list is read when
+  you open the view; with more than 180 presets, **<** / **>** page through
+  them.
 - **USER BANK** shows the patches of the last `.arpsidbank` you loaded; click
   one to load it.
+- **LOAD PRESET** loads any ArpSID `.vstpreset` (a factory one, a preset saved
+  by a host, one someone sent you).
+- **SAVE PRESET** saves the current patch as a `.vstpreset`. The dialog opens
+  in the `User` sub-folder of the user preset folder, so the preset shows up in
+  PRESETS and in your host's preset browser; the file name is the preset name.
 - **LOAD PATCH** / **SAVE PATCH** load or save one `.arpsid` file (the full
-  patch).
+  patch). A saved patch is named after its file.
 - **LOAD BANK** reads an `.arpsidbank` into the user view. **SAVE BANK** writes
-  a bank of all 180 factory patches, with the current patch in its own slot.
+  a bank of all 180 factory patches, with the current patch in its own slot
+  (under its own name when it is a user patch).
+
+Every patch you load here goes through the plug-in's controller, exactly like
+a program change: the host sees the new parameter values, the knobs follow,
+and the project is marked changed. A patch that is not a factory slot (a
+preset, a patch file, a user-bank entry) is a **user patch**: the header's
+patch menu shows it as `USER  <name>` (its last entry) and the name is saved
+with the project. Choosing a factory patch replaces it. Presets carry only the
+patch: loading one leaves the MIX, KIT and DIGI models, a loaded C64 tune and
+bypass as they are.
 
 ### OPTIONS
 

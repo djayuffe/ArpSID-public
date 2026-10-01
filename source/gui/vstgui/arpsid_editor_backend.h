@@ -12,6 +12,7 @@
 namespace ArpSID {
 
 class Vst3KernelHost;
+struct SidStateRootV1;
 
 struct EditorBackend {
     virtual ~EditorBackend() = default;
@@ -26,6 +27,24 @@ struct EditorBackend {
     // Factory patches.
     virtual void selectFactoryPatch(int slot) = 0;
     virtual int currentFactorySlot() const = 0;
+
+    // Patches that are not factory slots (user bank, patch files, presets).
+    // loadPatch applies <root> through the host and names it; patchName is
+    // the current patch's name (user or factory) and isUserPatch tells which.
+    virtual void loadPatch(const SidStateRootV1& root, const std::string& name) { (void)root; (void)name; }
+    virtual std::string patchName() const { return {}; }
+    virtual bool isUserPatch() const { return false; }
+    // .vstpreset files (UTF-8 paths). False with a reason on failure.
+    virtual bool savePresetFile(const std::string& path, std::string& error) {
+        (void)path;
+        error = "presets are not available here";
+        return false;
+    }
+    virtual bool loadPresetFile(const std::string& path, std::string& error) {
+        (void)path;
+        error = "presets are not available here";
+        return false;
+    }
 
     // Editor keyboard.
     virtual void sendMidi(std::uint8_t status, std::uint8_t data1, std::uint8_t data2) = 0;

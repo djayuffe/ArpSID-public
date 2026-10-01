@@ -40,6 +40,8 @@
 #include "arpsid/core/sid_runtime_state_root_presentation.h"
 #include "au3/ArpSIDStateSerializer.h"
 #include "factory_patch_params.h"
+#include "plugin_ids.h"
+#include "vst3/arpsid_vst3_preset_file.h"
 #include "pluginterfaces/vst/ivstmessage.h"
 #include "base/source/fobject.h"
 
@@ -50,6 +52,7 @@
 #endif
 
 #include <array>
+#include <filesystem>
 #include <string>
 #include <vector>
 #include <algorithm>
@@ -153,7 +156,9 @@ public:
             (tag == (Steinberg::Vst::ParamID)kParamProgram ||
              tag == (Steinberg::Vst::ParamID)kParamBankSlot)) {
             const int slot = canonicalFactorySlotFromNormalizedBankSlot((float)value);
-            if (slot != loadedFactorySlot_)
+            // Re-selecting the current program reloads it when a user patch
+            // replaced it (the user patch may carry the same BankSlot value).
+            if (slot != loadedFactorySlot_ || !userPatchName_.empty())
                 loadFactoryPatch_(slot);
         }
         return result;
@@ -174,15 +179,33 @@ public:
         if (!Vst3KernelHost::decodeStateRoot(bytes.data(), (size_t)nRead, root)) return kResultFalse;
         mirrorStateRootToParameters_(root, /*notifyHost*/ false);
         // A preset (patch-only state) leaves the processor's bypass alone.
-        if (!Vst3KernelHost::isPresetState(bytes.data(), (size_t)nRead))
+        if (!Vst3KernelHost::isPresetState(bytes.data(), (size_t)nRead)) {
             EditController::setParamNormalized((ParamID)kVst3BypassParamId,
                                                Vst3KernelHost::decodeBypass(bytes.data(), (size_t)nRead) ? 1.0 : 0.0);
+            // Project state: the patch name follows in the controller state.
+            // A full state a host saved as a preset (its own preset browser)
+            // is named after the preset like a patch-only one.
+            userPatchName_.clear();
+            if (streamIsPreset_(state)) {
+                const std::string name = presetNameFromStream_(state);
+                if (!name.empty() && name != factoryPatchNameForSlot(std::max(0, loadedFactorySlot_)))
+                    userPatchName_ = name;
+            }
+        } else {
+            // A .vstpreset loaded by the host: name the patch after the
+            // preset (IStreamAttributes), unless it is a factory preset.
+            const std::string name = presetNameFromStream_(state);
+            userPatchName_ = (name.empty() || name == factoryPatchNameForSlot(std::max(0, loadedFactorySlot_)))
+                                 ? std::string()
+                                 : name;
+        }
         return kResultOk;
     }
 
     // Controller-only state (saved by the host next to the processor state):
-    // the editor size and the tab it was left on.
-    //   u32 magic 'ASEC', u32 version 1, f64 zoom, i32 tab
+    // the editor size, the tab it was left on and the user patch name.
+    //   u32 magic 'ASEC', u32 version 2, f64 zoom, i32 tab,
+    //   (v2) u32 name length, UTF-8 name (empty for a factory patch)
     static constexpr uint32 kEditorStateMagic_ = 0x41534543u; // 'ASEC'
     tresult PLUGIN_API setState(IBStream* state) override {
         if (!state) return kResultFalse;
@@ -195,16 +218,29 @@ public:
             return kResultOk; // no or foreign editor state: keep the defaults
         if (std::isfinite(zoom)) setEditorZoom(zoom);
         setEditorTab(tab);
+        if (version >= 2) {
+            uint32 len = 0;
+            if (s.readInt32u(len) && len <= kMaxPatchNameBytes_) {
+                std::string name(len, '\0');
+                int32 got = 0;
+                if (len == 0 || (state->read(name.data(), (int32)len, &got) == kResultOk && got == (int32)len))
+                    userPatchName_ = name;
+            }
+        }
         return kResultOk;
     }
 
     tresult PLUGIN_API getState(IBStream* state) override {
         if (!state) return kResultFalse;
         IBStreamer s(state, kLittleEndian);
-        return (s.writeInt32u(kEditorStateMagic_) && s.writeInt32u(1u) && s.writeDouble(editorZoom_) &&
-                s.writeInt32(editorTab_))
-            ? kResultOk
-            : kResultFalse;
+        const std::string name = userPatchName_.substr(0, kMaxPatchNameBytes_);
+        int32 wrote = 0;
+        const bool ok = s.writeInt32u(kEditorStateMagic_) && s.writeInt32u(2u) && s.writeDouble(editorZoom_) &&
+                        s.writeInt32(editorTab_) && s.writeInt32u((uint32)name.size()) &&
+                        (name.empty() || (state->write(const_cast<char*>(name.data()), (int32)name.size(), &wrote) ==
+                                              kResultOk &&
+                                          wrote == (int32)name.size()));
+        return ok ? kResultOk : kResultFalse;
     }
 
     // ── IInfoListener: the host track (name / colour) ───────────────────────
@@ -274,6 +310,94 @@ public:
         endEdit((ParamID)kParamBankSlot);
     }
     int loadedFactorySlot() const noexcept { return loadedFactorySlot_; }
+
+    // A patch that is not a factory slot (user bank, patch file, preset
+    // browser): the processor applies it as a patch-only state (like a
+    // .vstpreset), the controller mirrors its values to the host and keeps
+    // its name for the editor and the project.
+    bool loadPatch(const SidStateRootV1& root, const std::string& name) {
+        const std::vector<std::uint8_t> state = Vst3KernelHost::encodePresetState(root);
+        if (state.empty()) return false;
+        if (IPtr<IMessage> msg = owned(allocateMessage())) {
+            msg->setMessageID(kVstMsgLoadPresetState);
+            msg->getAttributes()->setBinary(kVstMsgAttrData, state.data(), (uint32)state.size());
+            sendMessage(msg);
+        }
+        mirrorStateRootToParameters_(root, /*notifyHost*/ true);
+        userPatchName_ = name.empty() ? std::string("User patch") : name.substr(0, kMaxPatchNameBytes_);
+        markStateDirty();
+        return true;
+    }
+
+    std::string patchName() const {
+        return userPatchName_.empty() ? factoryPatchNameForSlot(std::max(0, loadedFactorySlot_)) : userPatchName_;
+    }
+    bool isUserPatch() const noexcept { return !userPatchName_.empty(); }
+
+    // The live patch: the processor's when it runs in this process, else
+    // rebuilt from the host-visible parameter values.
+    SidStateRootV1 currentPatchRoot() {
+        SidStateRootV1 root{};
+        if (kernelHost_) {
+            kernelHost_->currentStateRoot(root);
+            if (root.valid()) return root;
+        }
+        std::array<float, kNumParams> params{};
+        for (int i = 0; i < kNumParams; ++i)
+            params[(size_t)i] = (float)EditController::getParamNormalized((ParamID)i);
+        return importPresentationParamsToStateRoot(params.data(), kNumParams);
+    }
+
+    // Save the current patch as a .vstpreset (UTF-8 path); the file name is
+    // the preset name, which becomes the patch name.
+    bool savePresetFile(const std::string& path, std::string& error) {
+        const std::filesystem::path p = Presets::pathFromUtf8(path);
+        const std::string name = Presets::presetNameFromPath(p);
+        const std::vector<std::uint8_t> state = Vst3KernelHost::encodePresetState(currentPatchRoot());
+        if (state.empty()) {
+            error = "no patch to save";
+            return false;
+        }
+        const std::vector<char> image =
+            Presets::buildPresetFile(ProcessorUID, state, Presets::metaInfoXml(name, "Synth", {}, false));
+        if (image.empty()) {
+            error = "cannot encode the preset";
+            return false;
+        }
+        if (!Presets::writeFileBytes(p, image, &error)) return false;
+        userPatchName_ = name.substr(0, kMaxPatchNameBytes_);
+        return true;
+    }
+
+    // Load a .vstpreset's patch (any ArpSID preset: patch-only or full state).
+    bool loadPresetFile(const std::string& path, std::string& error) {
+        const std::filesystem::path p = Presets::pathFromUtf8(path);
+        std::vector<char> image;
+        if (!Presets::readFileBytes(p, image)) {
+            error = "cannot read " + path;
+            return false;
+        }
+        std::vector<std::uint8_t> comp;
+        std::string metaName;
+        if (!Presets::readPresetComponentState(image, ProcessorUID, comp, &metaName)) {
+            error = "not an ArpSID preset";
+            return false;
+        }
+        SidStateRootV1 root{};
+        if (!Vst3KernelHost::decodeStateRoot(comp.data(), comp.size(), root)) {
+            error = "preset holds no ArpSID patch";
+            return false;
+        }
+        std::string name = Presets::presetNameFromPath(p);
+        if (name.empty()) name = metaName;
+        if (!loadPatch(root, name)) {
+            error = "cannot load the patch";
+            return false;
+        }
+        // A factory preset file shows as the factory patch.
+        if (userPatchName_ == factoryPatchNameForSlot(std::max(0, loadedFactorySlot_))) userPatchName_.clear();
+        return true;
+    }
     double editorZoom() const noexcept { return editorZoom_; }
     void setEditorZoom(double z) noexcept { editorZoom_ = std::clamp(z, 0.25, 4.0); }
     int editorTab() const noexcept { return editorTab_; }
@@ -464,6 +588,18 @@ public:
         }
         if (std::strcmp(attributeId, PresetAttributes::kPlugInName) == 0) {
             utf8ToTChar("ArpSID", attributeValue, 128);
+            return kResultOk;
+        }
+        // Same musical category as the factory .vstpreset files, so a host
+        // that sorts programs by instrument groups them alike.
+        if (std::strcmp(attributeId, PresetAttributes::kInstrument) == 0 ||
+            std::strcmp(attributeId, "MusicalCategory") == 0) {
+            const PatchDefinition* def = getFactoryPatchDefinition((int)programIndex);
+            utf8ToTChar(Presets::musicalCategory(def ? def->usage.role : PatchRole::Utility), attributeValue, 128);
+            return kResultOk;
+        }
+        if (std::strcmp(attributeId, PresetAttributes::kName) == 0) {
+            utf8ToTChar(factoryPatchNameForSlot((int)programIndex).c_str(), attributeValue, 128);
             return kResultOk;
         }
         return kResultFalse;
@@ -667,6 +803,7 @@ private:
     void loadFactoryPatch_(int slot) {
         slot = std::clamp(slot, 0, kCanonicalFactoryPatchSlotMax);
         loadedFactorySlot_ = slot;
+        userPatchName_.clear();
         if (IPtr<IMessage> msg = owned(allocateMessage())) {
             msg->setMessageID(kVstMsgLoadFactoryPatch);
             msg->getAttributes()->setInt(kVstMsgAttrSlot, slot);
@@ -691,6 +828,48 @@ private:
             componentHandler->restartComponent(kParamValuesChanged);
     }
 
+    // Name of the preset a host is loading, from the stream's attributes
+    // (IStreamAttributes, VST 3.6): the file name, else the "Name" attribute.
+    static std::string presetNameFromStream_(IBStream* state) {
+        FUnknownPtr<IStreamAttributes> sa(state);
+        if (!sa) return {};
+        String128 n{};
+        char buf[512] = {};
+        if (sa->getFileName(n) == kResultOk && n[0]) {
+            (void)ArpSID_utf16ToUtf8(n, buf, sizeof(buf));
+            std::string s(buf);
+            const auto dot = s.rfind(".vstpreset");
+            if (dot != std::string::npos && dot + 10 == s.size()) s.erase(dot);
+            if (!s.empty()) return s;
+        }
+        if (IAttributeList* list = sa->getAttributes()) {
+            if (list->getString(PresetAttributes::kName, n, sizeof(n)) == kResultOk && n[0]) {
+                (void)ArpSID_utf16ToUtf8(n, buf, sizeof(buf));
+                return buf;
+            }
+            TChar path[1024] = {};
+            if (list->getString(PresetAttributes::kFilePathStringType, path, sizeof(path)) == kResultOk && path[0]) {
+                char pbuf[2048] = {};
+                (void)ArpSID_utf16ToUtf8(path, pbuf, sizeof(pbuf));
+                return Presets::presetNameFromPath(Presets::pathFromUtf8(pbuf));
+            }
+        }
+        return {};
+    }
+
+    // True when the host says it restores a preset (IStreamAttributes state
+    // type other than "Project"); false when it does not say.
+    static bool streamIsPreset_(IBStream* state) {
+        FUnknownPtr<IStreamAttributes> sa(state);
+        IAttributeList* list = sa ? sa->getAttributes() : nullptr;
+        if (!list) return false;
+        String128 t{};
+        if (list->getString(PresetAttributes::kStateType, t, sizeof(t)) != kResultOk || !t[0]) return false;
+        char buf[64] = {};
+        (void)ArpSID_utf16ToUtf8(t, buf, sizeof(buf));
+        return std::strcmp(buf, StateType::kProject) != 0;
+    }
+
     static int64 currentProcessId_() noexcept {
 #if defined(_WIN32)
         return (int64)_getpid();
@@ -707,6 +886,9 @@ private:
     uint32 trackColour_ = 0;
     bool mirroringState_ = false;
     int loadedFactorySlot_ = -1;
+    // Name of a loaded non-factory patch (empty while a factory patch plays).
+    std::string userPatchName_;
+    static constexpr uint32 kMaxPatchNameBytes_ = 255;
     Vst3KernelHost* kernelHost_ = nullptr;
 
     void pushLiveParam_(Steinberg::Vst::ParamID id, Steinberg::Vst::ParamValue value) noexcept {
@@ -780,6 +962,49 @@ double arpsidControllerEditorZoom(void* editController) noexcept {
 void arpsidControllerSetEditorZoom(void* editController, double zoom) noexcept {
     if (auto* c = static_cast<ArpSIDControllerPhase3*>(static_cast<EditController*>(editController)))
         c->setEditorZoom(zoom);
+}
+
+void arpsidControllerLoadPatch(void* editController, const SidStateRootV1& root, const char* name) noexcept {
+    if (auto* c = static_cast<ArpSIDControllerPhase3*>(static_cast<EditController*>(editController)))
+        (void)c->loadPatch(root, name ? std::string(name) : std::string());
+}
+
+void arpsidControllerPatchName(void* editController, char* out, unsigned long outSize) noexcept {
+    if (!out || outSize == 0) return;
+    out[0] = '\0';
+    if (auto* c = static_cast<ArpSIDControllerPhase3*>(static_cast<EditController*>(editController)))
+        std::snprintf(out, outSize, "%s", c->patchName().c_str());
+}
+
+bool arpsidControllerIsUserPatch(void* editController) noexcept {
+    auto* c = static_cast<ArpSIDControllerPhase3*>(static_cast<EditController*>(editController));
+    return c && c->isUserPatch();
+}
+
+static bool presetFileOp_(void* editController, const char* path, char* error, unsigned long errorSize, bool save) {
+    if (error && errorSize) error[0] = '\0';
+    auto* c = static_cast<ArpSIDControllerPhase3*>(static_cast<EditController*>(editController));
+    if (!c || !path || !*path) return false;
+    std::string err;
+    bool ok = false;
+    try {
+        ok = save ? c->savePresetFile(path, err) : c->loadPresetFile(path, err);
+    } catch (...) {
+        err = "file error";
+        ok = false;
+    }
+    if (!ok && error && errorSize) std::snprintf(error, errorSize, "%s", err.c_str());
+    return ok;
+}
+
+bool arpsidControllerSavePresetFile(void* editController, const char* path, char* error,
+                                    unsigned long errorSize) noexcept {
+    return presetFileOp_(editController, path, error, errorSize, true);
+}
+
+bool arpsidControllerLoadPresetFile(void* editController, const char* path, char* error,
+                                    unsigned long errorSize) noexcept {
+    return presetFileOp_(editController, path, error, errorSize, false);
 }
 
 } // namespace ArpSID

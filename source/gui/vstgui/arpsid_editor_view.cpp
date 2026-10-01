@@ -187,6 +187,10 @@ void EditorView::buildHeader_() {
         std::snprintf(buf, sizeof buf, "%03d  %s", i + 1, factoryPatchNameForSlot(i).c_str());
         patchMenu_->addEntry(buf);
     }
+    // Last entry: the loaded user patch (preset file, patch file, user bank),
+    // titled with its name while one is loaded.
+    patchMenu_->addSeparator();
+    patchMenu_->addEntry("USER  (no user patch loaded)");
     addView(patchMenu_);
     addView(new ActionButton(CRect(564, y + 4, 592, y + 30), ">", theme_, [this]() {
         backend_.selectFactoryPatch(std::min(kCanonicalFactoryPatchSlotMax, backend_.currentFactorySlot() + 1));
@@ -423,7 +427,13 @@ CCoord EditorView::flowSectionParams_(SectionPanel* panel, const L::Section& sec
 void EditorView::valueChanged(CControl* control) {
     const int tag = control->getTag();
     if (control == patchMenu_) {
-        backend_.selectFactoryPatch(static_cast<int>(patchMenu_->getCurrentIndex()));
+        const int index = static_cast<int>(patchMenu_->getCurrentIndex(true)); // counting the separator
+        if (index >= 0 && index < kCanonicalFactoryPatchSlotCount) {
+            backend_.selectFactoryPatch(index);
+        } else {
+            shownPatch_ = -1; // the user entry: keep showing the current patch
+            refreshHeader_();
+        }
         return;
     }
     if (tag < 0 || tag >= kNumParams) return;
@@ -470,11 +480,23 @@ void EditorView::refreshParams_() {
 }
 
 void EditorView::refreshHeader_() {
-    const int slot = backend_.currentFactorySlot();
-    if (slot != shownPatch_ && slot >= 0) {
-        shownPatch_ = slot;
-        patchMenu_->setCurrent(slot);
-        patchMenu_->invalid();
+    const int userEntry = kCanonicalFactoryPatchSlotCount + 1; // after the separator
+    if (backend_.isUserPatch()) {
+        const std::string name = backend_.patchName();
+        if (shownPatch_ != userEntry || name != shownUserPatch_) {
+            shownPatch_ = userEntry;
+            shownUserPatch_ = name;
+            if (CMenuItem* item = patchMenu_->getEntry(userEntry)) item->setTitle(("USER  " + name).c_str());
+            patchMenu_->setCurrent(userEntry);
+            patchMenu_->invalid();
+        }
+    } else {
+        const int slot = backend_.currentFactorySlot();
+        if (slot != shownPatch_ && slot >= 0) {
+            shownPatch_ = slot;
+            patchMenu_->setCurrent(slot);
+            patchMenu_->invalid();
+        }
     }
     const ArpSIDTelemetry& t = *telemetry_;
     if (ctx_->telemetry) {

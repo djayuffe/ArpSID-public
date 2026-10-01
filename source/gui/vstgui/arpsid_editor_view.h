@@ -125,6 +125,7 @@ private:
     KeyboardView* keyboard_ = nullptr;
     VSTGUI::CRect pageArea_;
     int shownPatch_ = -1;
+    std::string shownUserPatch_; // name in the menu's user entry (last entry)
     Label* track_ = nullptr;
     CColor trackColour_{};
     std::string shownTrack_;

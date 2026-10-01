@@ -6,6 +6,7 @@ namespace Steinberg { class IPlugView; }
 namespace ArpSID {
 
 class Vst3KernelHost;
+struct SidStateRootV1;
 
 // Returns an opaque handle when a native Cocoa editor was attached successfully.
 // Returns nullptr when the platform is unsupported or attach failed.
@@ -20,6 +21,20 @@ Vst3KernelHost* arpsidControllerKernelHost(void* editController) noexcept;
 void arpsidControllerMarkStateDirty(void* editController) noexcept;
 void arpsidControllerSelectFactoryPatch(void* editController, int slot) noexcept;
 int  arpsidControllerLoadedFactorySlot(void* editController) noexcept;
+// Load a patch that is not a factory slot (user bank, patch file, preset
+// browser) through the processor, mirror it to the host and name it.
+void arpsidControllerLoadPatch(void* editController, const SidStateRootV1& root, const char* name) noexcept;
+// Name of the current patch (UTF-8): the user patch's name, else the factory
+// patch's. isUserPatch is true while a non-factory patch is loaded.
+void arpsidControllerPatchName(void* editController, char* out, unsigned long outSize) noexcept;
+bool arpsidControllerIsUserPatch(void* editController) noexcept;
+// .vstpreset files (UTF-8 paths). Save writes the current patch and makes it
+// the named user patch; load applies a preset file's patch. False with a
+// reason in <error> on failure.
+bool arpsidControllerSavePresetFile(void* editController, const char* path, char* error,
+                                    unsigned long errorSize) noexcept;
+bool arpsidControllerLoadPresetFile(void* editController, const char* path, char* error,
+                                    unsigned long errorSize) noexcept;
 // Editor size (user zoom, 1.0 = 1200 x 800 at host scale 1) kept by the
 // controller so a reopened editor keeps the size the user chose.
 double arpsidControllerEditorZoom(void* editController) noexcept;

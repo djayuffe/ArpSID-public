@@ -44,6 +44,8 @@
 #include "au3/ArpSIDStateSerializer.h"
 #include "factory_patch_params.h"
 #include "vst3/arpsid_vst3_kernel_host.h"
+#include "vst3/arpsid_vst3_preset_file.h"
+#include "pluginterfaces/vst/ivstattributes.h"
 
 #include <algorithm>
 #include <chrono>
@@ -227,6 +229,48 @@ ParameterChanges* oneChange(ParameterChanges& pc, ParamID id, double value) {
     int32 qi = 0, pi = 0;
     if (IParamValueQueue* q = pc.addParameterData(id, qi)) q->addPoint(0, value, pi);
     return &pc;
+}
+
+// A preset stream as hosts pass it when loading a .vstpreset: the file name
+// and attributes come through IStreamAttributes.
+class NamedPresetStream final : public MemoryStream, public IStreamAttributes {
+public:
+    explicit NamedPresetStream(const char16_t* name) : name_(name) {}
+    tresult PLUGIN_API getFileName(String128 name) override {
+        std::u16string n(name_);
+        n = n.substr(0, 127);
+        std::memcpy(name, n.c_str(), (n.size() + 1) * sizeof(char16_t));
+        return kResultOk;
+    }
+    IAttributeList* PLUGIN_API getAttributes() override { return attrs_; }
+    tresult PLUGIN_API queryInterface(const TUID iid, void** obj) override {
+        QUERY_INTERFACE(iid, obj, IStreamAttributes::iid, IStreamAttributes)
+        return MemoryStream::queryInterface(iid, obj);
+    }
+    uint32 PLUGIN_API addRef() override { return MemoryStream::addRef(); }
+    uint32 PLUGIN_API release() override { return MemoryStream::release(); }
+
+private:
+    const char16_t* name_;
+    IPtr<IAttributeList> attrs_ = HostAttributeList::make();
+};
+
+// The editor patch name the controller saves (controller state v2).
+std::string savedPatchName(IEditController* c) {
+    MemoryStream out;
+    if (c->getState(&out) != kResultOk) return "<no state>";
+    out.seek(0, IBStream::kIBSeekSet, nullptr);
+    IBStreamer r(&out, kLittleEndian);
+    uint32 magic = 0, version = 0, len = 0;
+    double zoom = 0.0;
+    int32 tab = 0;
+    if (!r.readInt32u(magic) || !r.readInt32u(version) || !r.readDouble(zoom) || !r.readInt32(tab) || version < 2 ||
+        !r.readInt32u(len) || len > 255)
+        return "<bad state>";
+    std::string name(len, '\0');
+    int32 got = 0;
+    if (len) out.read(name.data(), (int32)len, &got);
+    return name;
 }
 
 void sendMessage(IConnectionPoint* to, const char* id, const std::vector<std::pair<const char*, int64>>& ints) {
@@ -1115,8 +1159,8 @@ int main(int argc, char** argv) {
         double zoom = 0.0;
         int32 tab = -1;
         CHECK(r.readInt32u(magic) && r.readInt32u(version) && r.readDouble(zoom) && r.readInt32(tab) &&
-                  magic == 0x41534543u && version == 1u && std::fabs(zoom - 1.5) < 1e-9 && tab == 3,
-              "editor size and tab round-trip through the controller state");
+                  magic == 0x41534543u && version == 2u && std::fabs(zoom - 1.5) < 1e-9 && tab == 3,
+              "editor size and tab round-trip through the controller state (v1 state accepted, v2 written)");
         MemoryStream junk;
         int32 jw = 0;
         const char garbage[5] = {'x', 'y', 'z', 'w', 'q'};
@@ -1160,6 +1204,168 @@ int main(int argc, char** argv) {
                 CHECK(ui->getProgramPitchName(1, firstDrum, 20, n) != kResultOk, "notes outside the GM map have no name");
             }
             CHECK(ui->getProgramPitchName(1, 0, 36, v) != kResultOk, "synth programs name no notes");
+        }
+    }
+
+    // ── User presets: names, .vstpreset files, editor patch loads ─────────
+    {
+        VST3::UID procUid;
+        for (const auto& ci : factory.classInfos())
+            if (ci.category() == kVstAudioEffectClass) procUid = ci.ID();
+        const FUID classId = FUID::fromTUID(procUid.data());
+        // Patch-only state, as Vst3KernelHost::encodePresetState writes it.
+        auto presetOf = [](int slot) {
+            ArpSID::SidStateRootV1 root = ArpSID::makeFactoryPatchStateRootForSlot(slot);
+            std::vector<uint8_t> blob(ArpSID::encodedSidStateRootBinarySize(root));
+            const size_t len = ArpSID::encodeStateRoot(root, ArpSID::kSidBinaryStateMagic, blob.data(), blob.size());
+            std::vector<uint8_t> out;
+            auto u32 = [&](uint32_t v) { for (int i = 0; i < 4; ++i) out.push_back((uint8_t)(v >> (8 * i))); };
+            u32(ArpSID::kVst3StateVersion);
+            u32(ArpSID::kVst3StateTagPreset);
+            u32(0);
+            u32(ArpSID::kVst3StateTagRoot);
+            u32((uint32_t)len);
+            out.insert(out.end(), blob.begin(), blob.begin() + (std::ptrdiff_t)len);
+            return out;
+        };
+        auto bankSlotOf = [](IEditController* c) {
+            return ArpSID::canonicalFactorySlotFromNormalizedBankSlot(
+                (float)c->getParamNormalized((ParamID)ArpSID::kParamBankSlot));
+        };
+
+        // A host loads a user .vstpreset: the controller names the patch after
+        // the file, saves the name in its state and drops it again when a
+        // factory program is chosen.
+        const std::vector<uint8_t> st = presetOf(21);
+        {
+            NamedPresetStream ns(u"My Bass.vstpreset");
+            int32 w = 0;
+            ns.write(const_cast<uint8_t*>(st.data()), (int32)st.size(), &w);
+            ns.seek(0, IBStream::kIBSeekSet, nullptr);
+            CHECK(controller->setComponentState(&ns) == kResultOk, "controller follows a named preset");
+            CHECK(bankSlotOf(controller) == 21, "named preset's patch is shown");
+            CHECK(savedPatchName(controller) == "My Bass", "the preset file name names the patch (IStreamAttributes)");
+            controller->setParamNormalized((ParamID)ArpSID::kParamProgram,
+                                           ArpSID::canonicalNormalizedFactoryProgramValue(21));
+            CHECK(savedPatchName(controller).empty(), "choosing a factory program (even the same one) clears the name");
+        }
+        {
+            // A full state the host saved from its own preset browser is
+            // named too when the host marks the preset context.
+            MemoryStream full;
+            component->getState(&full);
+            NamedPresetStream ns(u"Host Saved");
+            const char16 type[] = u"Preset";
+            ns.getAttributes()->setString(PresetAttributes::kStateType, reinterpret_cast<const TChar*>(type));
+            int32 w = 0;
+            ns.write(const_cast<char*>(full.getData()), (int32)full.getSize(), &w);
+            ns.seek(0, IBStream::kIBSeekSet, nullptr);
+            CHECK(controller->setComponentState(&ns) == kResultOk && savedPatchName(controller) == "Host Saved",
+                  "a host-saved full-state preset is named after its file");
+            NamedPresetStream proj(u"Song.cpr");
+            const char16 ptype[] = u"Project";
+            proj.getAttributes()->setString(PresetAttributes::kStateType, reinterpret_cast<const TChar*>(ptype));
+            proj.write(const_cast<char*>(full.getData()), (int32)full.getSize(), &w);
+            proj.seek(0, IBStream::kIBSeekSet, nullptr);
+            CHECK(controller->setComponentState(&proj) == kResultOk && savedPatchName(controller).empty(),
+                  "a project load does not take the project's name as a patch name");
+        }
+        {
+            // A factory preset file keeps showing the factory patch.
+            const std::string factoryName = ArpSID::factoryPatchNameForSlot(30);
+            std::u16string n16(factoryName.begin(), factoryName.end());
+            NamedPresetStream ns(n16.c_str());
+            const std::vector<uint8_t> f = presetOf(30);
+            int32 w = 0;
+            ns.write(const_cast<uint8_t*>(f.data()), (int32)f.size(), &w);
+            ns.seek(0, IBStream::kIBSeekSet, nullptr);
+            CHECK(controller->setComponentState(&ns) == kResultOk && savedPatchName(controller).empty(),
+                  "a factory preset file is shown as the factory patch");
+        }
+        {
+            // Controller state v2 carries the name into a new controller.
+            MemoryStream cs;
+            IBStreamer w2(&cs, kLittleEndian);
+            const std::string name = "Night Lead";
+            w2.writeInt32u(0x41534543u);
+            w2.writeInt32u(2u);
+            w2.writeDouble(1.0);
+            w2.writeInt32(0);
+            w2.writeInt32u((uint32)name.size());
+            int32 ww = 0;
+            cs.write(const_cast<char*>(name.data()), (int32)name.size(), &ww);
+            cs.seek(0, IBStream::kIBSeekSet, nullptr);
+            IPtr<IEditController> c = makeController();
+            CHECK(c && c->setState(&cs) == kResultOk && savedPatchName(c) == "Night Lead",
+                  "the user patch name round-trips through the project");
+            // A project's full component state clears it before the
+            // controller state restores it.
+            MemoryStream full;
+            component->getState(&full);
+            full.seek(0, IBStream::kIBSeekSet, nullptr);
+            CHECK(c && c->setComponentState(&full) == kResultOk && savedPatchName(c).empty(),
+                  "a project state resets the name until the controller state follows");
+            if (c) c->terminate();
+        }
+
+        // The editor's patch loads reach the processor as a message.
+        {
+            IPtr<IMessage> msg = owned(new HostMessage);
+            msg->setMessageID(ArpSID::kVstMsgLoadPresetState);
+            const std::vector<uint8_t> p = presetOf(44);
+            msg->getAttributes()->setBinary(ArpSID::kVstMsgAttrData, p.data(), (uint32)p.size());
+            CHECK(procCp->notify(msg) == kResultOk, "processor accepts a patch-only state message");
+            IPtr<IMessage> bad = owned(new HostMessage);
+            bad->setMessageID(ArpSID::kVstMsgLoadPresetState);
+            const uint8_t junk[8] = {5, 0, 0, 0, 1, 2, 3, 4};
+            bad->getAttributes()->setBinary(ArpSID::kVstMsgAttrData, junk, 8);
+            CHECK(procCp->notify(bad) != kResultOk, "a state that is not a preset is refused");
+            FUnknownPtr<IAudioProcessor> ap(component);
+            if (ap) (void)renderRms(ap, 2, 256);
+            MemoryStream after;
+            component->getState(&after);
+            after.seek(0, IBStream::kIBSeekSet, nullptr);
+            IPtr<IEditController> c = makeController();
+            CHECK(c && c->setComponentState(&after) == kResultOk && bankSlotOf(c) == 44,
+                  "the processor plays the patch the message carried");
+            if (c) c->terminate();
+        }
+
+        // A user .vstpreset file: written with the shared helpers, loaded the
+        // way hosts load presets (PresetFile::loadPreset) and read back.
+        {
+            const std::vector<uint8_t> p = presetOf(77);
+            const std::vector<char> image = ArpSID::Presets::buildPresetFile(
+                classId, p, ArpSID::Presets::metaInfoXml("Café & Co", "Synth", {}, false));
+            CHECK(!image.empty(), "user .vstpreset builds");
+            std::vector<uint8_t> comp;
+            std::string metaName;
+            CHECK(ArpSID::Presets::readPresetComponentState(image, classId, comp, &metaName) && comp == p &&
+                      metaName == "Café & Co",
+                  "a .vstpreset reads back its patch and (unescaped) name");
+            CHECK(!ArpSID::Presets::readPresetComponentState(image, FUID(1, 2, 3, 4), comp),
+                  "a preset of another plug-in is refused");
+            IPtr<IComponent> c2;
+            for (const auto& ci : factory.classInfos())
+                if (ci.category() == kVstAudioEffectClass) c2 = factory.createInstance<IComponent>(ci.ID());
+            IPtr<IEditController> e2 = makeController();
+            if (c2) c2->initialize(host);
+            MemoryStream in(const_cast<char*>(image.data()), (TSize)image.size());
+            CHECK(c2 && e2 && PresetFile::loadPreset(&in, classId, c2, e2) && bankSlotOf(e2) == 77,
+                  "hosts load a user .vstpreset like a factory one");
+            if (e2) e2->terminate();
+            if (c2) c2->terminate();
+        }
+
+        // Program list metadata matches the factory .vstpreset files.
+        FUnknownPtr<IUnitInfo> ui(controller);
+        if (ui) {
+            String128 v{};
+            CHECK(ui->getProgramInfo(1, 0, PresetAttributes::kInstrument, v) == kResultOk && v[0] != 0,
+                  "programs report a musical instrument category");
+            CHECK(ui->getProgramInfo(1, 5, PresetAttributes::kName, v) == kResultOk &&
+                      std::u16string(reinterpret_cast<const char16_t*>(v)).size() > 0,
+                  "programs report their name attribute");
         }
     }
 

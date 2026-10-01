@@ -11,6 +11,12 @@ namespace ArpSID {
 inline constexpr const char* kVstMsgLoadFactoryPatch = "ArpSID.LoadFactoryPatch";
 inline constexpr const char* kVstMsgAttrSlot = "slot";
 
+// Controller -> processor: load a patch that is not a factory slot (editor
+// preset browser, patch file, user bank). "data" (binary) is a patch-only
+// state (Vst3KernelHost::encodePresetState), as in a .vstpreset file.
+inline constexpr const char* kVstMsgLoadPresetState = "ArpSID.LoadPresetState";
+inline constexpr const char* kVstMsgAttrData = "data";
+
 // Editor (via controller) -> processor: one short MIDI channel message from
 // the on-screen keyboard (status, data1, data2).
 inline constexpr const char* kVstMsgUiMidi = "ArpSID.UiMidi";

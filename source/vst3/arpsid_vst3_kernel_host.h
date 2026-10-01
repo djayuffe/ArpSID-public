@@ -94,6 +94,9 @@ public:
     // Decode only the canonical state root of a component state (any version);
     // used by the edit controller to mirror parameters.
     static bool decodeStateRoot(const std::uint8_t* data, std::size_t size, SidStateRootV1& out);
+    // Patch-only state (kVst3StateTagPreset + ROOT) of a canonical state root,
+    // as saved in .vstpreset files; empty for an invalid root.
+    static std::vector<std::uint8_t> encodePresetState(const SidStateRootV1& root);
     // True for a patch-only state (kVst3StateTagPreset).
     static bool isPresetState(const std::uint8_t* data, std::size_t size) noexcept;
 

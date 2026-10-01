@@ -173,6 +173,27 @@ public:
     }
     void selectFactoryPatch(int slot) override { arpsidControllerSelectFactoryPatch(c_, slot); }
     int currentFactorySlot() const override { return arpsidControllerLoadedFactorySlot(c_); }
+    void loadPatch(const SidStateRootV1& root, const std::string& name) override {
+        arpsidControllerLoadPatch(c_, root, name.c_str());
+    }
+    std::string patchName() const override {
+        char buf[512] = {};
+        arpsidControllerPatchName(c_, buf, sizeof buf);
+        return buf;
+    }
+    bool isUserPatch() const override { return arpsidControllerIsUserPatch(c_); }
+    bool savePresetFile(const std::string& path, std::string& error) override {
+        char buf[512] = {};
+        const bool ok = arpsidControllerSavePresetFile(c_, path.c_str(), buf, sizeof buf);
+        if (!ok) error = buf;
+        return ok;
+    }
+    bool loadPresetFile(const std::string& path, std::string& error) override {
+        char buf[512] = {};
+        const bool ok = arpsidControllerLoadPresetFile(c_, path.c_str(), buf, sizeof buf);
+        if (!ok) error = buf;
+        return ok;
+    }
     void sendMidi(uint8_t s, uint8_t d1, uint8_t d2) override { arpsidControllerSendUiMidi(c_, s, d1, d2); }
     Vst3KernelHost* kernelHost() override { return arpsidControllerKernelHost(c_); }
     void markStateDirty() override { arpsidControllerMarkStateDirty(c_); }

@@ -5,6 +5,36 @@ All notable changes to ArpSID are documented here. The project uses
 version is `VERSION.txt`, mirrored by `project(VERSION)` in `CMakeLists.txt`
 and `include/arpsid/version.h`.
 
+## [Unreleased]
+
+### Fixed
+
+- **VST3 editor patch loads reach the host**: a patch loaded from the BANK
+  tab's user bank or from a patch file was written straight into the engine,
+  so the host, the generic parameter view and the editor's own knobs kept the
+  old values (and a processor in another process got nothing). Such patches
+  now go through the controller like a program change: the processor applies
+  them as a patch-only state, the values are mirrored to the host and the
+  project is marked changed.
+- **SAVE PATCH names**: a saved `.arpsid` patch is named after its file, not
+  after the factory patch it started from.
+
+### Added
+
+- **VST3 user presets in the editor**: the BANK tab has a **PRESETS** view of
+  your own `.vstpreset` files (the user VST3 preset folder minus the installed
+  factory presets), **LOAD PRESET** for any ArpSID `.vstpreset`, and
+  **SAVE PRESET**, which writes the current patch into the user preset
+  folder's `User` sub-folder, where hosts' preset browsers find it too.
+- **User patch names**: a loaded user patch (preset, patch file, user-bank
+  entry, or a `.vstpreset` the host loads) shows as `USER  <name>` in the
+  editor header and is saved with the project (controller state v2). Host
+  preset loads are named from the file (`IStreamAttributes`), also for
+  full-state presets a host saved itself; choosing a factory program clears
+  the name.
+- **Program metadata**: the factory program list reports each program's name
+  and musical instrument category, like the factory `.vstpreset` files.
+
 ## [0.9.14] — 2026-09-30
 
 ### Fixed

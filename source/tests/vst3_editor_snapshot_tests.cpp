@@ -16,8 +16,12 @@
 #include "arpsid/core/sid_parameter_presentation.h"
 #include "au3/ArpSIDCanonicalEvents.h"
 #include "parameter_ids.h"
+#include "factory_patch_params.h"
+#include "arpsid/core/sid_serializer_schema.h"
+#include "arpsid/patchbank/forensic_patch_bank.h"
 
 #include "vstgui/lib/cbitmap.h"
+#include "vstgui/lib/controls/coptionmenu.h"
 #include "vstgui/lib/coffscreencontext.h"
 #include "vstgui/lib/platform/platformfactory.h"
 #include "vstgui/lib/platform/iplatformbitmap.h"
@@ -73,9 +77,17 @@ public:
     }
     void selectFactoryPatch(int slot) override {
         slot_ = slot;
+        userName_.clear();
         host_.loadFactorySlot(slot);
     }
     int currentFactorySlot() const override { return slot_; }
+    void loadPatch(const SidStateRootV1& root, const std::string& name) override {
+        host_.scheduleStateRoot(root);
+        userName_ = name.empty() ? "User patch" : name;
+    }
+    std::string patchName() const override { return userName_.empty() ? factoryPatchNameForSlot(slot_) : userName_; }
+    bool isUserPatch() const override { return !userName_.empty(); }
+    std::string userName_;
     void sendMidi(uint8_t s, uint8_t d1, uint8_t d2) override {
         const uint8_t b[3] = {s, d1, d2};
         host_.injectMidi(b, 3);
@@ -198,6 +210,36 @@ int main(int argc, char** argv) {
         renderAudio(host, 2);
         check(backend.edits == editsBefore + 1 && std::fabs(host.parameter(kParamFilterResonance) - 0.5f) < 1e-3f,
               "editor edit reaches the kernel");
+
+        // A user patch (preset browser, patch file, user bank) shows its name
+        // in the header's patch menu; a factory pick replaces it.
+        {
+            backend.loadPatch(makeFactoryPatchStateRootForSlot(33), "My Night Lead");
+            renderAudio(host, 2);
+            view->refresh();
+            COptionMenu* menu = nullptr;
+            for (CView* v = view->getViewAt(CPoint(400, 22), GetViewOptions().deep()); v && !menu; v = v->getParentView())
+                menu = dynamic_cast<COptionMenu*>(v);
+            check(menu != nullptr, "the header has a patch menu");
+            if (menu) {
+                const int idx = static_cast<int>(menu->getCurrentIndex(true));
+                CMenuItem* item = menu->getEntry(idx);
+                check(idx == kCanonicalFactoryPatchSlotCount + 1 && item &&
+                          std::string(item->getTitle().data()).find("My Night Lead") != std::string::npos,
+                      "the header names the loaded user patch");
+                auto ctx = COffscreenContext::create(size, 1.0);
+                if (ctx) {
+                    ctx->beginDraw();
+                    view->drawRect(ctx, CRect(0, 0, size.x, size.y));
+                    ctx->endDraw();
+                    double bytes = 0;
+                    check(writePng(ctx->getBitmap(), outDir + "/editor_user_patch.png", bytes), "write user patch header");
+                }
+                backend.selectFactoryPatch(3);
+                view->refresh();
+                check(menu->getCurrentIndex() == 3, "a factory pick replaces the user patch in the header");
+            }
+        }
 
         // Tab memory: the editor reports tab changes and reopens on the saved tab.
         view->selectTab(2);

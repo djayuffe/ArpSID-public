@@ -24,6 +24,7 @@
 #include "arpsid/gui/mix_panel_model.h"
 #include "arpsid/patchbank/forensic_patch_bank.h"
 #include "arpsid_file_bank.h"
+#include "arpsid_preset_paths.h"
 #include "au3/ArpSIDStateSerializer.h"
 #include "factory_patch_params.h"
 #include "parameter_ids.h"
@@ -35,6 +36,7 @@
 #include <cmath>
 #include <cstdarg>
 #include <cstdio>
+#include <filesystem>
 #include <fstream>
 #include <iterator>
 #include <memory>
@@ -74,7 +76,8 @@ Label* unavailable(const CRect& r, EditorContext& ctx) {
 // Opens a file selector attached to the view's frame (no-op without a frame,
 // e.g. offscreen rendering).
 void chooseFile(CView* anchor, bool save, const char* title, const char* extDesc, const char* ext,
-                const std::string& defaultName, std::function<void(std::string)> done) {
+                const std::string& defaultName, std::function<void(std::string)> done,
+                const std::string& initialDir = {}) {
     CFrame* frame = anchor ? anchor->getFrame() : nullptr;
     if (!frame) return;
     auto sel = owned(CNewFileSelector::create(frame, save ? CNewFileSelector::kSelectSaveFile
@@ -83,6 +86,7 @@ void chooseFile(CView* anchor, bool save, const char* title, const char* extDesc
     sel->setTitle(title);
     if (ext) sel->addFileExtension(CFileExtension(extDesc, ext));
     if (save && !defaultName.empty()) sel->setDefaultSaveName(defaultName.c_str());
+    if (!initialDir.empty()) sel->setInitialDirectory(initialDir.c_str());
     sel->run([done = std::move(done)](CNewFileSelector* s) {
         if (s->getNumSelectedFiles() > 0 && s->getSelectedFile(0)) done(s->getSelectedFile(0));
     });
@@ -387,90 +391,212 @@ DisplayInstance makeSeqSteps(const CRect& r, EditorContext& ctx) {
     return d;
 }
 
-// ── BANK: 180-slot factory browser + patch/bank files ───────────────────────
+// ── BANK: factory browser, user presets, patch/bank files ──────────────────
+//
+// Views (the grid shows 180 entries at a time):
+//   FACTORY    the 180 factory patches (the host program list);
+//   PRESETS    .vstpreset files in the user VST3 preset folder that are not
+//              installed factory presets (what the user saved or added);
+//   USER BANK  the patches of a loaded .arpsidbank file.
+// Every load goes through the backend, so the host, the knobs and the header
+// follow it, and names the patch. SAVE PRESET writes a .vstpreset into the
+// user preset folder, where the host's preset browser also finds it.
 
 class BankPanel final : public ModelPanel {
 public:
     BankPanel(const CRect& r, EditorContext& ctx) : ModelPanel(r, ctx) {
         const CCoord w = r.getWidth(), h = r.getHeight();
         grid_ = new CellGrid(CRect(0, 34, w, h), ctx.theme, 6, 30,
-                             [this](int c, int row, bool, bool, float) { pick(c * 30 + row); });
+                             [this](int c, int row, bool, bool, float) { pick(page_ * kPerPage + c * 30 + row); });
         addView(grid_);
-        const char* labels[] = {"FACTORY", "USER BANK", "LOAD PATCH", "SAVE PATCH", "LOAD BANK", "SAVE BANK"};
-        for (int i = 0; i < 6; ++i) {
-            auto* b = new ActionButton(CRect(i * 124, 0, i * 124 + 118, 28), labels[i], ctx.theme,
+        const char* labels[] = {"FACTORY",    "PRESETS",    "USER BANK", "LOAD PRESET", "SAVE PRESET",
+                                "LOAD PATCH", "SAVE PATCH", "LOAD BANK", "SAVE BANK"};
+        const CCoord bw = std::min<CCoord>(110.0, std::floor((w - 330.0) / 9.0) - 4.0);
+        for (int i = 0; i < 9; ++i) {
+            auto* b = new ActionButton(CRect(i * (bw + 4), 0, i * (bw + 4) + bw, 28), labels[i], ctx.theme,
                                        [this, i]() { action(i); });
             buttons_.push_back(b);
             addView(b);
         }
-        status_ = new Label(CRect(6 * 124 + 6, 0, w, 28), "", ctx.theme, 10.5);
+        const CCoord sx = 9 * (bw + 4) + 4;
+        prev_ = new ActionButton(CRect(w - 60, 0, w - 32, 28), "<", ctx.theme, [this]() { turnPage(-1); });
+        next_ = new ActionButton(CRect(w - 28, 0, w, 28), ">", ctx.theme, [this]() { turnPage(+1); });
+        addView(prev_);
+        addView(next_);
+        status_ = new Label(CRect(sx, 0, w - 64, 28), "", ctx.theme, 10.5);
         addView(status_);
     }
 
     void refresh() {
         const int current = ctx_.backend.currentFactorySlot();
-        buttons_[0]->setLit(!userView_);
-        buttons_[1]->setLit(userView_);
-        for (int s = 0; s < 180; ++s) {
+        const bool user = ctx_.backend.isUserPatch();
+        const std::string currentName = ctx_.backend.patchName();
+        buttons_[0]->setLit(view_ == View::Factory);
+        buttons_[1]->setLit(view_ == View::Presets);
+        buttons_[2]->setLit(view_ == View::UserBank);
+        const int count = entryCount_();
+        const int pages = std::max(1, (count + kPerPage - 1) / kPerPage);
+        page_ = std::clamp(page_, 0, pages - 1);
+        prev_->setVisible(pages > 1);
+        next_->setVisible(pages > 1);
+        for (int i = 0; i < kPerPage; ++i) {
+            const int e = page_ * kPerPage + i;
             CellGrid::Cell c;
-            if (userView_) {
-                if (s < static_cast<int>(userMetas_.size()))
-                    c.text = fmt("U%03d %s", s + 1, userMetas_[static_cast<std::size_t>(s)].name);
-            } else {
-                c.text = fmt("%03d %s", s + 1, factoryPatchNameForSlot(s).c_str());
-                c.cursor = (s == current);
+            switch (view_) {
+                case View::Factory:
+                    c.text = fmt("%03d %s", e + 1, factoryPatchNameForSlot(e).c_str());
+                    c.cursor = (!user && e == current);
+                    break;
+                case View::Presets:
+                    if (e < count) {
+                        const auto& p = presets_[static_cast<std::size_t>(e)];
+                        c.text = (p.category.empty() || p.category == Presets::kUserSubfolder)
+                                     ? p.name
+                                     : p.category + "/" + p.name;
+                        c.cursor = user && p.name == currentName;
+                    }
+                    break;
+                case View::UserBank:
+                    if (e < count) {
+                        c.text = fmt("U%03d %s", e + 1, userMetas_[static_cast<std::size_t>(e)].name);
+                        c.cursor = user && currentName == userMetas_[static_cast<std::size_t>(e)].name;
+                    }
+                    break;
             }
-            grid_->setCell(s / 30, s % 30, c);
+            grid_->setCell(i / 30, i % 30, c);
         }
     }
 
 private:
-    void pick(int slot) {
-        if (!userView_) {
-            ctx_.backend.selectFactoryPatch(slot);
-            status_->setText(fmt("loaded factory %03d", slot + 1));
-            return;
+    enum class View { Factory, Presets, UserBank };
+    static constexpr int kPerPage = 180;
+
+    int entryCount_() const {
+        switch (view_) {
+            case View::Factory: return kCanonicalFactoryPatchSlotCount;
+            case View::Presets: return static_cast<int>(presets_.size());
+            case View::UserBank: return static_cast<int>(userMetas_.size());
         }
-        Vst3KernelHost* h = host();
-        if (!h || slot >= static_cast<int>(userRoots_.size())) return;
-        h->scheduleStateRoot(userRoots_[static_cast<std::size_t>(slot)]);
-        ctx_.backend.markStateDirty();
-        status_->setText(fmt("loaded user %03d %s", slot + 1, userMetas_[static_cast<std::size_t>(slot)].name));
+        return 0;
+    }
+
+    void turnPage(int delta) {
+        const int pages = std::max(1, (entryCount_() + kPerPage - 1) / kPerPage);
+        page_ = std::clamp(page_ + delta, 0, pages - 1);
+        status_->setText(fmt("page %d / %d", page_ + 1, pages));
+    }
+
+    void rescanPresets() {
+        presets_ = Presets::listUserPresets();
+        const std::string folder = Presets::pathToUtf8(Presets::userPresetFolder());
+        status_->setText(presets_.empty() ? "no user presets yet - SAVE PRESET makes one"
+                                          : fmt("%zu user preset(s) in %s", presets_.size(), folder.c_str()));
+    }
+
+    void pick(int e) {
+        switch (view_) {
+            case View::Factory:
+                if (e < 0 || e >= kCanonicalFactoryPatchSlotCount) return;
+                ctx_.backend.selectFactoryPatch(e);
+                status_->setText(fmt("loaded factory %03d", e + 1));
+                return;
+            case View::Presets: {
+                if (e < 0 || e >= static_cast<int>(presets_.size())) return;
+                std::string err;
+                const auto& p = presets_[static_cast<std::size_t>(e)];
+                status_->setText(ctx_.backend.loadPresetFile(Presets::pathToUtf8(p.path), err)
+                                     ? fmt("loaded preset %s", p.name.c_str())
+                                     : err);
+                return;
+            }
+            case View::UserBank:
+                if (e < 0 || e >= static_cast<int>(userRoots_.size())) return;
+                ctx_.backend.loadPatch(userRoots_[static_cast<std::size_t>(e)],
+                                       userMetas_[static_cast<std::size_t>(e)].name);
+                status_->setText(fmt("loaded user %03d %s", e + 1, userMetas_[static_cast<std::size_t>(e)].name));
+                return;
+        }
+    }
+
+    // Default file name for a save: the current patch's name.
+    std::string currentFileName(const char* ext) const {
+        return Presets::fileSafeName(ctx_.backend.patchName()) + ext;
     }
 
     void action(int i) {
         Vst3KernelHost* h = host();
         switch (i) {
-            case 0: userView_ = false; break;
-            case 1: userView_ = true; break;
-            case 2:
-                chooseFile(this, false, "Load ArpSID patch", "ArpSID patch", "arpsid", {}, [this, h](std::string p) {
-                    if (!h) return;
+            case 0: view_ = View::Factory; page_ = 0; break;
+            case 1: view_ = View::Presets; page_ = 0; rescanPresets(); break;
+            case 2: view_ = View::UserBank; page_ = 0; break;
+            case 3: {
+                const std::string dir = Presets::pathToUtf8(Presets::userPresetFolder());
+                chooseFile(this, false, "Load VST3 preset", "VST3 preset", "vstpreset", {}, [this](std::string p) {
+                    std::string err;
+                    status_->setText(ctx_.backend.loadPresetFile(p, err)
+                                         ? fmt("loaded preset %s",
+                                               Presets::presetNameFromPath(Presets::pathFromUtf8(p)).c_str())
+                                         : err);
+                }, dir);
+                break;
+            }
+            case 4: {
+                const auto folder = Presets::userSavePresetFolder();
+                std::error_code ec;
+                if (!folder.empty()) std::filesystem::create_directories(folder, ec);
+                chooseFile(this, true, "Save VST3 preset", "VST3 preset", "vstpreset",
+                           currentFileName(Presets::kFileExtension),
+                           [this](std::string p) {
+                               // Some file dialogs return the name without the extension.
+                               if (p.size() < 10 || p.compare(p.size() - 10, 10, Presets::kFileExtension) != 0)
+                                   p += Presets::kFileExtension;
+                               std::string err;
+                               if (ctx_.backend.savePresetFile(p, err)) {
+                                   status_->setText(fmt("saved preset %s",
+                                                        Presets::presetNameFromPath(Presets::pathFromUtf8(p)).c_str()));
+                                   if (view_ == View::Presets) rescanPresets();
+                               } else {
+                                   status_->setText(err);
+                               }
+                           },
+                           Presets::pathToUtf8(folder));
+                break;
+            }
+            case 5:
+                chooseFile(this, false, "Load ArpSID patch", "ArpSID patch", "arpsid", {}, [this](std::string p) {
                     SidStateRootV1 root{};
                     ArpSIDFilePatchMeta meta{};
                     const auto e = ArpSIDFileBank::loadPatchFromFile(p, root, meta);
                     if (e == FileBankError::OK) {
-                        h->scheduleStateRoot(root);
-                        ctx_.backend.markStateDirty();
+                        const std::string name =
+                            meta.name[0] ? std::string(meta.name) : Presets::presetNameFromPath(Presets::pathFromUtf8(p));
+                        ctx_.backend.loadPatch(root, name);
+                        status_->setText(fmt("loaded %s", name.c_str()));
+                    } else {
+                        status_->setText(fileBankErrorString(e));
                     }
-                    status_->setText(e == FileBankError::OK ? fmt("loaded %s", meta.name) : fileBankErrorString(e));
                 });
                 break;
-            case 3:
-                chooseFile(this, true, "Save ArpSID patch", "ArpSID patch", "arpsid", "patch.arpsid",
+            case 6:
+                chooseFile(this, true, "Save ArpSID patch", "ArpSID patch", "arpsid", currentFileName(".arpsid"),
                            [this, h](std::string p) {
-                               if (!h) return;
+                               if (!h) {
+                                   status_->setText("needs the ArpSID engine in this process");
+                                   return;
+                               }
                                SidStateRootV1 root{};
                                h->currentStateRoot(root);
                                ArpSIDFilePatchMeta meta{};
-                               const int slot = ctx_.backend.currentFactorySlot();
-                               std::snprintf(meta.name, sizeof meta.name, "%s", factoryPatchNameForSlot(std::max(0, slot)).c_str());
+                               // The patch is named after the file the user chose.
+                               std::snprintf(meta.name, sizeof meta.name, "%s",
+                                             Presets::presetNameFromPath(Presets::pathFromUtf8(p)).c_str());
                                std::snprintf(meta.author, sizeof meta.author, "User");
                                const auto e = ArpSIDFileBank::savePatchToFile(p, root, meta);
-                               status_->setText(e == FileBankError::OK ? "patch saved" : fileBankErrorString(e));
+                               status_->setText(e == FileBankError::OK ? fmt("patch saved as %s", meta.name)
+                                                                        : fileBankErrorString(e));
                            });
                 break;
-            case 4:
+            case 7:
                 chooseFile(this, false, "Load ArpSID bank", "ArpSID bank", "arpsidbank", {}, [this](std::string p) {
                     std::vector<SidStateRootV1> roots;
                     std::vector<ArpSIDFilePatchMeta> metas;
@@ -478,13 +604,14 @@ private:
                     if (e == FileBankError::OK) {
                         userRoots_ = std::move(roots);
                         userMetas_ = std::move(metas);
-                        userView_ = true;
+                        view_ = View::UserBank;
+                        page_ = 0;
                     }
                     status_->setText(e == FileBankError::OK ? fmt("bank: %zu patches", userRoots_.size())
                                                              : fileBankErrorString(e));
                 });
                 break;
-            case 5:
+            case 8:
                 chooseFile(this, true, "Save ArpSID bank", "ArpSID bank", "arpsidbank", "ArpSID.arpsidbank",
                            [this, h](std::string p) {
                                std::vector<SidStateRootV1> roots(static_cast<std::size_t>(kFileBankMaxSlots));
@@ -496,10 +623,15 @@ private:
                                        metas[static_cast<std::size_t>(s)] =
                                            ArpSIDFileBank::metaFromDefinition(defs[static_cast<std::size_t>(s)]);
                                }
-                               // The live patch replaces its factory slot.
+                               // The live patch replaces its factory slot, under its own name.
                                const int slot = ctx_.backend.currentFactorySlot();
-                               if (h && slot >= 0 && slot < kFileBankMaxSlots)
+                               if (h && slot >= 0 && slot < kFileBankMaxSlots) {
                                    h->currentStateRoot(roots[static_cast<std::size_t>(slot)]);
+                                   if (ctx_.backend.isUserPatch())
+                                       std::snprintf(metas[static_cast<std::size_t>(slot)].name,
+                                                     sizeof metas[static_cast<std::size_t>(slot)].name, "%s",
+                                                     ctx_.backend.patchName().c_str());
+                               }
                                const auto e = ArpSIDFileBank::saveBankToFile(p, roots, metas);
                                status_->setText(e == FileBankError::OK ? "bank saved" : fileBankErrorString(e));
                            });
@@ -511,8 +643,12 @@ private:
 
     CellGrid* grid_ = nullptr;
     std::vector<ActionButton*> buttons_;
+    ActionButton* prev_ = nullptr;
+    ActionButton* next_ = nullptr;
     Label* status_ = nullptr;
-    bool userView_ = false;
+    View view_ = View::Factory;
+    int page_ = 0;
+    std::vector<Presets::PresetFileEntry> presets_;
     std::vector<SidStateRootV1> userRoots_;
     std::vector<ArpSIDFilePatchMeta> userMetas_;
 };

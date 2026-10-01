@@ -55,6 +55,7 @@ std::uint32_t getU32(const std::uint8_t* p) noexcept {
 void putChunk(std::vector<std::uint8_t>& out, std::uint32_t tag, const void* data, std::size_t len) {
     putU32(out, tag);
     putU32(out, static_cast<std::uint32_t>(len));
+    if (len == 0) return;
     const auto* b = static_cast<const std::uint8_t*>(data);
     out.insert(out.end(), b, b + len);
 }
@@ -207,6 +208,20 @@ std::vector<std::uint8_t> Vst3KernelHost::saveState() const {
             putChunk(out, kTagSidFile, payload.data(), payload.size());
         }
     }
+    return out;
+}
+
+std::vector<std::uint8_t> Vst3KernelHost::encodePresetState(const SidStateRootV1& root) {
+    std::vector<std::uint8_t> out;
+    if (!root.valid()) return out;
+    const std::size_t cap = encodedSidStateRootBinarySize(root);
+    if (cap == 0) return out;
+    std::vector<std::uint8_t> blob(cap);
+    const std::size_t len = encodeStateRoot(root, kSidBinaryStateMagic, blob.data(), cap);
+    if (len == 0) return out;
+    putU32(out, kStateVersion);
+    putChunk(out, kTagPreset, nullptr, 0);
+    putChunk(out, kTagRoot, blob.data(), len);
     return out;
 }
 

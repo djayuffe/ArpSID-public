@@ -102,6 +102,17 @@ tresult PLUGIN_API ArpSIDVst3Processor::notify(IMessage* message) {
         if (!attrs || attrs->getInt(kVstMsgAttrSlot, slot) != kResultOk) return kInvalidArgument;
         return host_->loadFactorySlot(static_cast<int>(slot)) ? kResultOk : kInvalidArgument;
     }
+    if (FIDStringsEqual(id, kVstMsgLoadPresetState)) {
+        // A user patch (editor preset browser, patch file, user bank): a
+        // patch-only state, applied like a .vstpreset load.
+        const void* data = nullptr;
+        uint32 size = 0;
+        if (!attrs || attrs->getBinary(kVstMsgAttrData, data, size) != kResultOk || !data || size == 0)
+            return kInvalidArgument;
+        const auto* bytes = static_cast<const std::uint8_t*>(data);
+        if (!Vst3KernelHost::isPresetState(bytes, size)) return kInvalidArgument;
+        return host_->loadState(bytes, size) ? kResultOk : kInvalidArgument;
+    }
     if (FIDStringsEqual(id, kVstMsgUiMidi)) {
         int64 status = 0, data1 = 0, data2 = 0;
         if (!attrs || attrs->getInt(kVstMsgAttrStatus, status) != kResultOk ||

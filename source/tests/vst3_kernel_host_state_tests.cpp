@@ -9,11 +9,15 @@
 #include "au3/ArpSIDCanonicalEvents.h"
 #include "parameter_ids.h"
 #include "arpsid/core/sid_runtime_state_root_presentation.h"
+#include "arpsid_preset_paths.h"
 
 #include <cmath>
 #include <cstdio>
 #include <memory>
 #include <cstring>
+#include <filesystem>
+#include <fstream>
+#include <cstdlib>
 #include <vector>
 #if defined(__SSE__) || defined(_M_X64) || (defined(_M_IX86_FP) && _M_IX86_FP >= 1)
 #include <xmmintrin.h>
@@ -199,7 +203,54 @@ int main() {
         check(p.isSidFileLoaded() && p.sidSubtune() == 2, "a preset keeps the loaded tune");
         check(p.mix().master.masterVolume == 77, "a preset keeps the MIX model");
         check(p.bypass(), "a preset keeps bypass");
+
+        // encodePresetState writes the same patch-only layout.
+        const std::vector<std::uint8_t> enc = Vst3KernelHost::encodePresetState(want);
+        SidStateRootV1 back{};
+        check(enc == preset, "encodePresetState matches the reduced project state byte for byte");
+        check(Vst3KernelHost::decodeStateRoot(enc.data(), enc.size(), back) && back.valid(),
+              "an encoded preset decodes");
+        check(Vst3KernelHost::encodePresetState(SidStateRootV1{}).empty(), "an invalid root encodes to nothing");
     }
+
+    // User preset folder: the editor's PRESETS view lists what the user
+    // saved or added, not the installed factory presets. (Linux and macOS:
+    // the folder follows $HOME; Windows asks the shell for Documents.)
+    check(Presets::fileSafeName(" a/b:c? ") == "a-b-c-", "file-safe preset names");
+#if !defined(_WIN32)
+    {
+        namespace fs = std::filesystem;
+        const fs::path home = fs::temp_directory_path() / "arpsid_preset_paths_test";
+        std::error_code ec;
+        fs::remove_all(home, ec);
+        setenv("HOME", home.string().c_str(), 1);
+        const fs::path user = Presets::userPresetFolder();
+        check(user == home / (
+#if defined(__APPLE__)
+                                 "Library/Audio/Presets"
+#else
+                                 ".vst3/presets"
+#endif
+                                 ) / "Uber Sound Solutions" / "ArpSID",
+              "user preset folder follows the VST3 layout");
+        const PatchDefinition* def = getFactoryPatchDefinition(0);
+        const fs::path factoryFile = user / Presets::roleFolder(def->usage.role) /
+                                     (Presets::fileSafeName(factoryPatchNameForSlot(0)) + ".vstpreset");
+        fs::create_directories(factoryFile.parent_path(), ec);
+        fs::create_directories(Presets::userSavePresetFolder(), ec);
+        fs::create_directories(user / "Bass", ec);
+        std::ofstream(factoryFile) << "x";
+        std::ofstream(Presets::userSavePresetFolder() / "My Lead.vstpreset") << "x";
+        std::ofstream(user / "Bass" / "Renamed Bass.vstpreset") << "x";
+        std::ofstream(user / "notes.txt") << "x";
+        const auto list = Presets::listUserPresets();
+        check(list.size() == 2, "user presets exclude installed factory presets and other files");
+        check(list.size() == 2 && list[0].category == "Bass" && list[0].name == "Renamed Bass" &&
+                  list[1].category == "User" && list[1].name == "My Lead",
+              "user presets are sorted by folder, then name");
+        fs::remove_all(home, ec);
+    }
+#endif
 
     // The kernel flushes denormals only while it renders and restores the
     // caller's floating-point mode: the host's audio thread also runs the

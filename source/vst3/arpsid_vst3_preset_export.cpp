@@ -33,6 +33,7 @@
 #include "arpsid/patchbank/forensic_patch_bank.h"
 #include "factory_patch_params.h"
 #include "vst3/arpsid_vst3_kernel_host.h"
+#include "vst3/arpsid_vst3_preset_file.h"
 
 #include <cmath>
 #include <cstdio>
@@ -46,86 +47,6 @@ using namespace Steinberg::Vst;
 namespace fs = std::filesystem;
 
 namespace {
-
-constexpr const char* kVendor = "Uber Sound Solutions";
-constexpr const char* kPluginName = "ArpSID";
-
-const char* roleFolder(ArpSID::PatchRole role) {
-    switch (role) {
-        case ArpSID::PatchRole::Init: return "Init";
-        case ArpSID::PatchRole::Bass: return "Bass";
-        case ArpSID::PatchRole::Lead: return "Lead";
-        case ArpSID::PatchRole::Arp: return "Arp";
-        case ArpSID::PatchRole::Chord: return "Keys";
-        case ArpSID::PatchRole::PadIllusion: return "Pad";
-        case ArpSID::PatchRole::Bell: return "Bell";
-        case ArpSID::PatchRole::Metallic: return "Metallic";
-        case ArpSID::PatchRole::Drum: return "Drums";
-        case ArpSID::PatchRole::FX: return "FX";
-        case ArpSID::PatchRole::Utility: return "Utility";
-    }
-    return "Other";
-}
-
-// VST3 MusicalCategory ("Synth|Lead" etc., as in the SDK's preset metadata).
-const char* musicalCategory(ArpSID::PatchRole role) {
-    switch (role) {
-        case ArpSID::PatchRole::Bass: return "Synth|Bass";
-        case ArpSID::PatchRole::Lead: return "Synth|Lead";
-        case ArpSID::PatchRole::Arp: return "Synth|Arp";
-        case ArpSID::PatchRole::Chord: return "Keys|Synth";
-        case ArpSID::PatchRole::PadIllusion: return "Synth|Pad";
-        case ArpSID::PatchRole::Bell: return "Mallet|Bell";
-        case ArpSID::PatchRole::Metallic: return "Synth|Metallic";
-        case ArpSID::PatchRole::Drum: return "Drum&Perc";
-        case ArpSID::PatchRole::FX: return "Sound FX";
-        default: return "Synth";
-    }
-}
-
-// A file name every file system accepts.
-std::string fileSafe(const std::string& name) {
-    std::string out;
-    for (char c : name) {
-        const bool bad = c == '/' || c == '\\' || c == ':' || c == '*' || c == '?' || c == '"' || c == '<' ||
-                         c == '>' || c == '|' || static_cast<unsigned char>(c) < 0x20;
-        out += bad ? '-' : c;
-    }
-    while (!out.empty() && (out.back() == ' ' || out.back() == '.')) out.pop_back();
-    return out.empty() ? std::string("Patch") : out;
-}
-
-std::string xmlEscape(const std::string& s) {
-    std::string out;
-    for (char c : s) {
-        switch (c) {
-            case '&': out += "&amp;"; break;
-            case '<': out += "&lt;"; break;
-            case '>': out += "&gt;"; break;
-            case '"': out += "&quot;"; break;
-            case '\'': out += "&apos;"; break;
-            default: out += c;
-        }
-    }
-    return out;
-}
-
-std::string metaInfoXml(const std::string& name, const char* category, const std::string& comment) {
-    auto attr = [](const char* id, const std::string& value) {
-        return std::string("\t<Attr id=\"") + id + "\" value=\"" + xmlEscape(value) +
-               "\" type=\"string\" flags=\"writeProtected\"/>\n";
-    };
-    std::string x = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<MetaInfo>\n";
-    x += attr("MediaType", "VstPreset");
-    x += attr("PlugInName", kPluginName);
-    x += attr("PlugInCategory", "Instrument|Synth");
-    x += attr("Name", name);
-    x += attr("MusicalCategory", category);
-    x += attr("MusicalInstrument", category);
-    if (!comment.empty()) x += attr("Comment", comment);
-    x += "</MetaInfo>\n";
-    return x;
-}
 
 struct Instance {
     IPtr<IComponent> component;
@@ -173,6 +94,8 @@ void putU32(std::vector<std::uint8_t>& out, std::uint32_t v) {
 // The processor's full state reduced to a patch-only preset state: the
 // preset marker and the ROOT chunk (the patch), without the GUI models,
 // bypass or a loaded tune, so loading it acts like a program selection.
+// Same layout as Vst3KernelHost::encodePresetState (this tool loads the
+// plug-in as a module and does not link the engine).
 bool presetStateFrom(IComponent* component, std::vector<std::uint8_t>& out) {
     IPtr<MemoryStream> full = owned(new MemoryStream);
     if (component->getState(full) != kResultOk) return false;
@@ -229,7 +152,7 @@ int main(int argc, char** argv) {
     }
     const FUID classId = FUID::fromTUID(cid.data());
 
-    const fs::path root = fs::path(argv[2]) / kVendor / kPluginName;
+    const fs::path root = ArpSID::Presets::pluginFolderIn(fs::path(argv[2]));
     std::error_code ec;
     fs::remove_all(root, ec); // regenerate: no stale files from renamed patches
     int written = 0, failures = 0;
@@ -243,38 +166,29 @@ int main(int argc, char** argv) {
         // Select the program the way a host program list does.
         src.controller->setParamNormalized((ParamID)ArpSID::kParamProgram, norm);
 
-        const fs::path dir = root / roleFolder(role);
+        const fs::path dir = root / ArpSID::Presets::roleFolder(role);
         fs::create_directories(dir, ec);
-        const fs::path file = dir / (fileSafe(name) + ".vstpreset");
-        const std::string xml = metaInfoXml(name, musicalCategory(role), ArpSID::factoryPatchDescriptionForSlot(slot));
+        const fs::path file = dir / (ArpSID::Presets::fileSafeName(name) + ArpSID::Presets::kFileExtension);
+        const std::string xml = ArpSID::Presets::metaInfoXml(name, ArpSID::Presets::musicalCategory(role),
+                                                             ArpSID::factoryPatchDescriptionForSlot(slot), true);
 
         // Patch-only processor state and no controller state: loading a
         // preset must not reset the editor's size or tab, the MIX/KIT/DIGI
         // models, bypass or a loaded tune; the controller follows the
         // processor state through setComponentState.
         std::vector<std::uint8_t> state;
-        IPtr<MemoryStream> stream = owned(new MemoryStream);
-        bool saved = presetStateFrom(src.component, state);
-        if (saved) {
-            IPtr<MemoryStream> comp = owned(new MemoryStream);
-            int32 w = 0;
-            comp->write(state.data(), (int32)state.size(), &w);
-            comp->seek(0, IBStream::kIBSeekSet, nullptr);
-            saved = PresetFile::savePreset(stream, classId, comp, nullptr, xml.data(), (int32)xml.size());
-        }
-        if (!saved) {
+        std::vector<char> image;
+        if (presetStateFrom(src.component, state)) image = ArpSID::Presets::buildPresetFile(classId, state, xml);
+        if (image.empty()) {
             std::fprintf(stderr, "slot %d (%s): savePreset failed\n", slot, name.c_str());
             ++failures;
             continue;
         }
-        {
-            std::ofstream f(file, std::ios::binary | std::ios::trunc);
-            f.write(stream->getData(), (std::streamsize)stream->getSize());
-            if (!f) {
-                std::fprintf(stderr, "cannot write %s\n", file.string().c_str());
-                ++failures;
-                continue;
-            }
+        std::string writeError;
+        if (!ArpSID::Presets::writeFileBytes(file, image, &writeError)) {
+            std::fprintf(stderr, "%s\n", writeError.c_str());
+            ++failures;
+            continue;
         }
 
         // Round trip: a fresh instance loads the file and reports this patch.
