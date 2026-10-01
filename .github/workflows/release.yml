@@ -7,6 +7,8 @@ name: Release
 #   ArpSID-<v>-vst3-macos-universal.zip        VST3, macOS (rich editor)
 #   ArpSID-<v>-vst3-windows-{x64,arm64,x86}.zip VST3, Windows (full editor; x86 for 32-bit hosts)
 #   ArpSID-<v>-vst3-linux-{x86_64,aarch64}.zip VST3, Linux (full editor)
+#   ArpSID-<v>-standalone-windows-{x64,arm64,x86}.zip  Standalone app, Windows
+#   ArpSID-<v>-standalone-linux-{x86_64,aarch64}.zip   Standalone app, Linux
 #   ArpSID-<v>-source.zip                      ROM-free source (scripts/package_release.sh)
 #   SHA256SUMS.txt
 # All macOS bundles are ad-hoc signed (not notarized).
@@ -127,8 +129,8 @@ jobs:
           | Platform | Download |
           |---|---|
           | macOS (Apple silicon + Intel) | `standalone-macos-universal` (app), `auv3-macos-universal` (Logic-compatible `ArpSID.app` with the AUv3), `auv2-macos-universal` (5 AU flavors), `vst3-macos-universal` |
-          | Windows | `vst3-windows-x64`, `vst3-windows-arm64`, `vst3-windows-x86` (32-bit hosts) |
-          | Linux | `vst3-linux-x86_64`, `vst3-linux-aarch64` |
+          | Windows | `vst3-windows-x64`, `vst3-windows-arm64`, `vst3-windows-x86` (32-bit hosts); standalone app: `standalone-windows-x64`, `standalone-windows-arm64`, `standalone-windows-x86` |
+          | Linux | `vst3-linux-x86_64`, `vst3-linux-aarch64`; standalone app: `standalone-linux-x86_64`, `standalone-linux-aarch64` |
           | Source | `source` (no C64 ROMs) |
 
           ### Installing
@@ -160,6 +162,11 @@ jobs:
           - **Linux:** `./install.sh` installs to `~/.vst3/`; `--system` installs to
             `/usr/lib/vst3/`. `./install.sh --check` lists any missing desktop
             libraries.
+          - **Standalone app (Windows, Linux):** run `ArpSID` / `ArpSID.exe` from the
+            zip, or install it with the `install.ps1` / `install.sh` inside (Start
+            menu or application menu entry; no admin rights needed). Choose the
+            audio output, sample rate, buffer, MIDI input and channel in the bar at
+            the top of its window.
 
           The VST3 runs the same engine as the AU and Standalone and has the full
           ArpSID editor on every platform (on Linux it needs the usual desktop
@@ -169,7 +176,8 @@ jobs:
           Every asset in this release was built by CI after the full test suite, the
           Steinberg VST3 validator and the ArpSID VST3 host integration test (every
           VST3 build), strict `auval` on all five AU flavors (zero warnings) and a
-          Standalone launch test passed. The core test suite also runs under GCC,
+          Standalone launch test passed (macOS app, and the Windows and Linux apps'
+          window, editor and session smoke test). The core test suite also runs under GCC,
           Clang and AddressSanitizer + UBSan. Verify downloads
           against `SHA256SUMS.txt`.
           EOF

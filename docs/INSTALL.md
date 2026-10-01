@@ -70,6 +70,8 @@ stop if a checksum does not match.
 | Windows, 32-bit hosts | `ArpSID-<v>-vst3-windows-x86.zip` | `arpsid_vst3.vst3` (32-bit x86) + `VST3 Presets/` |
 | Linux x86_64 | `ArpSID-<v>-vst3-linux-x86_64.zip` | `arpsid_vst3.vst3` + `VST3 Presets/` |
 | Linux aarch64 | `ArpSID-<v>-vst3-linux-aarch64.zip` | `arpsid_vst3.vst3` + `VST3 Presets/` |
+| Windows x64 / arm64 / x86 | `ArpSID-<v>-standalone-windows-<arch>.zip` | `ArpSID.exe`: the standalone app (runs without a DAW) |
+| Linux x86_64 / aarch64 | `ArpSID-<v>-standalone-linux-<arch>.zip` | `ArpSID`: the standalone app (runs without a DAW) |
 | Any | `ArpSID-<v>-source.zip` | Source code without the C64 ROMs |
 
 Each plug-in zip also contains its installer (`install_macos.sh`, `install.ps1`
@@ -210,6 +212,47 @@ systems normally have these libraries already. On a minimal system, install:
 Hosts known to load Linux VST3 plug-ins include Bitwig Studio, REAPER, Ardour,
 Carla and Qtractor. Under Wayland, the editor runs through XWayland, as most
 Linux plug-in editors do.
+
+---
+
+## Standalone app (Windows and Linux)
+
+The `standalone-windows-*` and `standalone-linux-*` zips hold the app
+(`ArpSID.exe` / `ArpSID`), an installer and an `INSTALL.txt`. The app runs
+from the unzipped folder as is; the installer only adds it to the Start menu
+or the application menu. What the app does is in
+[STANDALONE_APP.md](STANDALONE_APP.md).
+
+**Windows.** In PowerShell, in the folder:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install.ps1             # for you: %LOCALAPPDATA%\Programs\ArpSID + Start menu
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -Scope System   # all users: %ProgramFiles%\ArpSID (elevated)
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -Uninstall
+```
+
+`-Dest DIR` installs into another folder, `-NoShortcut` skips the Start menu
+entry, `-Check` only runs the program once (`--version`). No Visual C++
+Redistributable is needed. Pick the zip for your Windows (x64, arm64, or x86
+for 32-bit Windows).
+
+**Linux.**
+
+```bash
+./install.sh            # for you: ~/.local/bin/arpsid + ~/.local/share/applications/arpsid.desktop
+./install.sh --system   # all users: /usr/local (uses sudo)
+./install.sh --check    # only check the shared libraries it needs
+./install.sh --uninstall
+```
+
+`--prefix DIR` installs into `DIR/bin` and `DIR/share/applications`. Besides
+the editor's libraries (see [Linux](#linux)), the app needs ALSA
+(`libasound2`) and, for PulseAudio/PipeWire output, `libpulse0`; desktop
+systems have both.
+
+Settings and the last session stay in `%APPDATA%\ArpSID\` or
+`~/.config/ArpSID/` when you uninstall; delete that folder to remove them
+too. Presets are shared with the VST3 (the VST3 preset folders below).
 
 ---
 

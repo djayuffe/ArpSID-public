@@ -8,7 +8,7 @@ It emulates the MOS 6581 and 8580 SID chips, runs real `.sid` tunes on a
 cycle-exact C64, plays drums through three drum engines, plays 4-bit samples
 through the SID's `$D418` volume register, and adds an arpeggiator, a 32-step
 sequencer, a mod matrix, a 16-channel mixer and post-effects. It ships as
-AUv2 (five flavors), AUv3, VST3 and a standalone Mac app, all on the same
+AUv2 (five flavors), AUv3, VST3 and standalone apps for macOS, Windows and Linux, all on the same
 engine, with the same 512 parameters and the same 180 factory patches.
 
 ---
@@ -165,6 +165,7 @@ uninstalling and troubleshooting.
 | **AUv3** | macOS universal | `ArpSID.app` (extension `arpsid_auv3.appex`) | Logic-compatible app extension; the app registers it. |
 | **VST3** | macOS universal, Windows x64 + arm64 + x86 (32-bit), Linux x86_64 + aarch64 | `arpsid_vst3.vst3` | One instrument, category `Instrument\|Synth`. Native Cocoa editor on macOS, VSTGUI editor on Windows/Linux. Static C runtime on Windows (no Visual C++ Redistributable needed). |
 | **Standalone** | macOS universal | `ArpSID Standalone.app` | Its own audio and MIDI I/O, menus, keyboard and transport. |
+| **Standalone** | Windows x64 + arm64 + x86, Linux x86_64 + aarch64 | `ArpSID.exe` / `ArpSID` | The VST3's editor in its own window with audio, MIDI and clock controls (WASAPI/DirectSound; PulseAudio/ALSA). See [STANDALONE_APP.md](docs/STANDALONE_APP.md). |
 
 Every [release](https://github.com/djayuffe/ArpSID-public/releases) ships each
 of these as its own zip, plus the source and `SHA256SUMS.txt`, built and
@@ -428,7 +429,13 @@ The same mapping applies in AU, VST3 (`IMidiMapping`) and the Standalone app.
 
 ### Standalone app
 
-- Runs ArpSID without a DAW: audio output, CoreMIDI input (a device or omni,
+- **Windows and Linux** (`ArpSID.exe`, `ArpSID`): the full editor in a
+  resizable window with a bar for the audio output, sample rate, buffer,
+  capture input, MIDI input and channel, tempo, play/stop and panic; MIDI
+  program change and Start/Stop; a virtual MIDI input on Linux; settings and
+  the session restored on launch; presets shared with the VST3. Guide:
+  [STANDALONE_APP.md](docs/STANDALONE_APP.md).
+- **macOS** (`ArpSID Standalone.app`): runs ArpSID without a DAW: audio output, CoreMIDI input (a device or omni,
   a channel or omni, reconnect), on-screen keyboard, transport and tempo.
 - Menus: Panic ⌘P, Next/Previous Preset ⌘] / ⌘[, Save User Preset ⌘S, Export
   ⌘E and Import ⌘I preset files, Reset All Parameters ⌘0, Random Patch ⌘R,
@@ -623,6 +630,7 @@ everything except the ROM files and runs the same guard before committing.
 | [`docs/internals/`](docs/internals/README.md) | Low-level references: [SID chip core](docs/internals/SID_CHIP.md), [C64 machine](docs/internals/C64_MACHINE.md), [runtime and kernel](docs/internals/RUNTIME.md), [sound engines](docs/internals/ENGINES.md), [render modes, synth modes and projection engines](docs/internals/SYNTH_MODES.md). |
 | [`docs/INSTALL.md`](docs/INSTALL.md) | Installing on macOS, Windows and Linux: one-line installers, installer options, manual steps, checksums, uninstalling, troubleshooting, building from source. |
 | [`docs/AU_EDITOR.md`](docs/AU_EDITOR.md) | The macOS editor (AUv2, AUv3, Standalone, macOS VST3): a screenshot and guide for all 17 tabs, the five AU flavors, controls, shortcuts, the Standalone menus, and how the editor works. |
+| [`docs/STANDALONE_APP.md`](docs/STANDALONE_APP.md) | The Windows/Linux standalone app: the audio/MIDI bar, patches and presets, saved settings and session, command line, troubleshooting, and how it is built. |
 | [`docs/VST3_EDITOR.md`](docs/VST3_EDITOR.md) | The Windows/Linux VST3 editor: a screenshot and guide for all 17 tabs, the controls, and how the editor code works. |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | System architecture: layers, kernel block pipeline, engines, parameters, state, GUI models and telemetry, wrappers. |
 | [`docs/PARAMETER_REFERENCE.md`](docs/PARAMETER_REFERENCE.md) | Every parameter: ID, default, values, steps and editor tab (generated from the code and checked by a test). |
@@ -644,6 +652,7 @@ everything except the ROM files and runs the same guard before committing.
 | `include/arpsid/gui/`, `include/arpsid/patchbank/` | GUI models (SETTINGS, MIX, KIT, DIGI, SIDCORE, tabs, themes, languages); factory patch/kit banks. |
 | `source/au2/`, `source/au3/` | AUv2 component, AUv3, DSP kernel, Cocoa view controller, Standalone app. |
 | `source/vst3/`, `source/arpsid_controller.cpp`, `source/gui/` | VST3 processor, kernel host, controller; Cocoa bridge and cross-platform VSTGUI editor (`source/gui/vstgui/`). |
+| `source/standalone/` | Windows/Linux standalone app: engine wrapper, RtAudio/RtMidi devices, toolbar and session, Win32 and X11 windows. |
 | `source/tests/`, `scripts/` | Test suite and snapshot tools; build, install, validation and guard scripts. |
 
 ## Status and validation limits

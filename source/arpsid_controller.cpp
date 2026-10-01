@@ -351,45 +351,16 @@ public:
     // Save the current patch as a .vstpreset (UTF-8 path); the file name is
     // the preset name, which becomes the patch name.
     bool savePresetFile(const std::string& path, std::string& error) {
-        const std::filesystem::path p = Presets::pathFromUtf8(path);
-        const std::string name = Presets::presetNameFromPath(p);
-        const std::vector<std::uint8_t> state = Vst3KernelHost::encodePresetState(currentPatchRoot());
-        if (state.empty()) {
-            error = "no patch to save";
-            return false;
-        }
-        const std::vector<char> image =
-            Presets::buildPresetFile(ProcessorUID, state, Presets::metaInfoXml(name, "Synth", {}, false));
-        if (image.empty()) {
-            error = "cannot encode the preset";
-            return false;
-        }
-        if (!Presets::writeFileBytes(p, image, &error)) return false;
-        userPatchName_ = name.substr(0, kMaxPatchNameBytes_);
+        if (!Presets::savePatchPresetFile(path, ProcessorUID, currentPatchRoot(), error)) return false;
+        userPatchName_ = Presets::presetNameFromPath(Presets::pathFromUtf8(path)).substr(0, kMaxPatchNameBytes_);
         return true;
     }
 
     // Load a .vstpreset's patch (any ArpSID preset: patch-only or full state).
     bool loadPresetFile(const std::string& path, std::string& error) {
-        const std::filesystem::path p = Presets::pathFromUtf8(path);
-        std::vector<char> image;
-        if (!Presets::readFileBytes(p, image)) {
-            error = "cannot read " + path;
-            return false;
-        }
-        std::vector<std::uint8_t> comp;
-        std::string metaName;
-        if (!Presets::readPresetComponentState(image, ProcessorUID, comp, &metaName)) {
-            error = "not an ArpSID preset";
-            return false;
-        }
         SidStateRootV1 root{};
-        if (!Vst3KernelHost::decodeStateRoot(comp.data(), comp.size(), root)) {
-            error = "preset holds no ArpSID patch";
-            return false;
-        }
-        std::string name = Presets::presetNameFromPath(p);
-        if (name.empty()) name = metaName;
+        std::string name;
+        if (!Presets::loadPatchPresetFile(path, ProcessorUID, root, name, error)) return false;
         if (!loadPatch(root, name)) {
             error = "cannot load the patch";
             return false;

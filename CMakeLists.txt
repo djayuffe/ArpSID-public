@@ -750,6 +750,13 @@ if(ARPSID_BUILD_VST3)
             add_test(NAME Vst3EditorSnapshotTests
                 COMMAND arpsid_vst3_editor_snapshot "${_arpsid_snapshot_dir}")
         endif()
+
+        # Standalone app for Linux and Windows: the same engine and editor in
+        # a native window, audio and MIDI through RtAudio / RtMidi.
+        option(ARPSID_BUILD_STANDALONE_APP "Build the Linux / Windows standalone app (ArpSID / ArpSID.exe)" ON)
+        if(ARPSID_BUILD_STANDALONE_APP AND NOT APPLE)
+            include(cmake/ArpSIDStandaloneApp.cmake)
+        endif()
     endif()
 
     # Factory patches as standard VST3 preset files (.vstpreset) for hosts
@@ -3975,6 +3982,18 @@ target_include_directories(arpsid_vst3_kernel_host_state_tests PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/source)
 target_link_libraries(arpsid_vst3_kernel_host_state_tests PRIVATE arpsid_core arpsid_forensic_patchbank)
 add_test(NAME Vst3KernelHostStateTests COMMAND arpsid_vst3_kernel_host_state_tests)
+
+# Standalone app engine (Linux / Windows app; SDK-free): clock, MIDI
+# filter, panic, patch names, session and settings round trips.
+add_executable(arpsid_standalone_engine_tests
+    source/tests/standalone_engine_tests.cpp
+    source/standalone/arpsid_standalone_engine.cpp
+    source/vst3/arpsid_vst3_kernel_host.cpp)
+target_compile_features(arpsid_standalone_engine_tests PRIVATE cxx_std_17)
+target_include_directories(arpsid_standalone_engine_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include ${CMAKE_CURRENT_SOURCE_DIR}/source)
+target_link_libraries(arpsid_standalone_engine_tests PRIVATE arpsid_core arpsid_forensic_patchbank)
+add_test(NAME StandaloneEngineTests COMMAND arpsid_standalone_engine_tests)
 
 # Factory patch sound regressions: silence after release (System Noise
 # follows voice activity), no DC at the output, finite and unclipped output.

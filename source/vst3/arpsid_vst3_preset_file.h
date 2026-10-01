@@ -17,6 +17,8 @@
 #include "public.sdk/source/vst/vstpresetfile.h"
 
 #include "arpsid_preset_paths.h"
+#include "arpsid/core/sid_serializer_schema.h"
+#include "vst3/arpsid_vst3_kernel_host.h"
 
 #include <cstdint>
 #include <filesystem>
@@ -159,6 +161,49 @@ inline bool readFileBytes(const std::filesystem::path& path, std::vector<char>& 
     bytes.assign(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
     if (bytes.size() > maxBytes) bytes.clear();
     return !bytes.empty();
+}
+
+// Save <root> as a user .vstpreset at <path> (UTF-8); the file name is the
+// preset name. False with a reason on failure.
+inline bool savePatchPresetFile(const std::string& path, const Steinberg::FUID& classId, const SidStateRootV1& root,
+                                std::string& error) {
+    const std::filesystem::path p = pathFromUtf8(path);
+    const std::vector<std::uint8_t> state = Vst3KernelHost::encodePresetState(root);
+    if (state.empty()) {
+        error = "no patch to save";
+        return false;
+    }
+    const std::vector<char> image = buildPresetFile(classId, state, metaInfoXml(presetNameFromPath(p), "Synth", {}, false));
+    if (image.empty()) {
+        error = "cannot encode the preset";
+        return false;
+    }
+    return writeFileBytes(p, image, &error);
+}
+
+// Read the patch of an ArpSID .vstpreset (patch-only or full state). <name>
+// is the file name (else the preset's MetaInfo name).
+inline bool loadPatchPresetFile(const std::string& path, const Steinberg::FUID& classId, SidStateRootV1& root,
+                                std::string& name, std::string& error) {
+    const std::filesystem::path p = pathFromUtf8(path);
+    std::vector<char> image;
+    if (!readFileBytes(p, image)) {
+        error = "cannot read " + path;
+        return false;
+    }
+    std::vector<std::uint8_t> comp;
+    std::string metaName;
+    if (!readPresetComponentState(image, classId, comp, &metaName)) {
+        error = "not an ArpSID preset";
+        return false;
+    }
+    if (!Vst3KernelHost::decodeStateRoot(comp.data(), comp.size(), root)) {
+        error = "preset holds no ArpSID patch";
+        return false;
+    }
+    name = presetNameFromPath(p);
+    if (name.empty()) name = metaName;
+    return true;
 }
 
 } // namespace ArpSID::Presets

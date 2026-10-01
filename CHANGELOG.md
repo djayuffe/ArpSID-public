@@ -16,11 +16,26 @@ and `include/arpsid/version.h`.
   now go through the controller like a program change: the processor applies
   them as a patch-only state, the values are mirrored to the host and the
   project is marked changed.
+- **Linux VST3 link check**: the plug-in is linked with `--no-undefined`, so
+  a missing symbol fails the build instead of the host's load.
 - **SAVE PATCH names**: a saved `.arpsid` patch is named after its file, not
   after the factory patch it started from.
 
 ### Added
 
+- **Standalone app for Windows and Linux** (`ArpSID.exe`, `ArpSID`): the
+  engine and the full editor in a resizable window, with a bar for the audio
+  output (WASAPI / DirectSound on Windows; PulseAudio, ALSA and JACK on
+  Linux), sample rate, buffer size, a capture input for DIGI recording, MIDI
+  input (all ports with hot-plug, one port, or none) and channel, an internal
+  clock (tempo, play/stop; MIDI Start/Stop follow), panic and a load / xrun
+  meter. MIDI Program Change (with Bank Select) picks factory patches; Linux
+  also offers a virtual "ArpSID MIDI In" port. Presets are the VST3's
+  `.vstpreset` files in the same folders. Settings and the session (the
+  whole sound, including the DIGI bank and a loaded C64 tune) are restored
+  on launch. Released as `standalone-windows-{x64,arm64,x86}` and
+  `standalone-linux-{x86_64,aarch64}` zips with installers (Start menu /
+  application menu entry). Guide: `docs/STANDALONE_APP.md`.
 - **VST3 user presets in the editor**: the BANK tab has a **PRESETS** view of
   your own `.vstpreset` files (the user VST3 preset folder minus the installed
   factory presets), **LOAD PRESET** for any ArpSID `.vstpreset`, and

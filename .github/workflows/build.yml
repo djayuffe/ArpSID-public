@@ -135,7 +135,8 @@ jobs:
           sudo apt-get install -y ninja-build zip xvfb xauth \
             libx11-xcb-dev libxcb-util-dev libxcb-cursor-dev libxcb-keysyms1-dev libxcb-xkb-dev \
             libxkbcommon-dev libxkbcommon-x11-dev libcairo2-dev libpango1.0-dev \
-            libfontconfig1-dev libfreetype-dev libwayland-dev wayland-protocols
+            libfontconfig1-dev libfreetype-dev libwayland-dev wayland-protocols \
+            libasound2-dev libpulse-dev
       - name: Fetch Steinberg VST3 SDK
         run: |
           git clone --depth 1 --branch "${VST3SDK_TAG}" --recurse-submodules --shallow-submodules \
@@ -145,7 +146,7 @@ jobs:
           set -o pipefail
           cmake -S . -B build-vst3 -G Ninja -DCMAKE_BUILD_TYPE=Release \
             -DARPSID_BUILD_VST3=ON -Dvst3sdk_SOURCE_DIR="${RUNNER_TEMP}/vst3sdk"
-          cmake --build build-vst3 --target arpsid_vst3 arpsid_vst3_host_tests arpsid_vst3_editor_snapshot arpsid_vst3_preset_export 2>&1 | tee build-vst3.log
+          cmake --build build-vst3 --target arpsid_vst3 arpsid_vst3_host_tests arpsid_vst3_editor_snapshot arpsid_vst3_preset_export arpsid_standalone_app 2>&1 | tee build-vst3.log
           scripts/ci/check_build_warnings.sh build-vst3.log "$GITHUB_WORKSPACE"
       - name: Factory presets (.vstpreset, each reloaded and verified)
         run: |
@@ -159,6 +160,30 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: always() && matrix.arch == 'x86_64'
         with: { name: editor-snapshots-linux, path: build-vst3/editor-snapshots, if-no-files-found: ignore }
+      - name: Standalone app smoke test (X11 window, editor, session)
+        run: |
+          xvfb-run -a cmake --build build-vst3 --target arpsid_standalone_check
+          test -s build-vst3/standalone-check/window.png
+          test -s build-vst3/standalone-check/session.arpsidstate
+          test -s build-vst3/standalone-check/standalone.conf
+          build-vst3/standalone/ArpSID --version
+          build-vst3/standalone/ArpSID --list-devices
+      - name: Standalone app package and installer smoke test
+        run: |
+          sa="${RUNNER_TEMP}/pkg-standalone"
+          mkdir -p "$sa"
+          cp build-vst3/standalone/ArpSID "$sa/"
+          scripts/install/stage_installer.sh standalone "$sa"
+          "$sa/install.sh" --check
+          "$sa/install.sh" --prefix "${RUNNER_TEMP}/sa-prefix" --yes
+          test -x "${RUNNER_TEMP}/sa-prefix/bin/arpsid"
+          test -f "${RUNNER_TEMP}/sa-prefix/share/applications/arpsid.desktop"
+          "${RUNNER_TEMP}/sa-prefix/bin/arpsid" --version
+          "$sa/install.sh" --prefix "${RUNNER_TEMP}/sa-prefix" --uninstall
+          test ! -e "${RUNNER_TEMP}/sa-prefix/bin/arpsid"
+      - uses: actions/upload-artifact@v7
+        if: always() && matrix.arch == 'x86_64'
+        with: { name: standalone-window-linux, path: build-vst3/standalone-check/window.png, if-no-files-found: ignore }
       - name: Install layout
         run: |
           cmake --install build-vst3 --prefix "${RUNNER_TEMP}/stage"
@@ -189,6 +214,7 @@ jobs:
           v="$(tr -d '[:space:]' < VERSION.txt)"
           mkdir -p "${RUNNER_TEMP}/dist"
           (cd "${RUNNER_TEMP}/pkg" && zip -qr "${RUNNER_TEMP}/dist/ArpSID-${v}-vst3-linux-${{ matrix.arch }}.zip" .)
+          (cd "${RUNNER_TEMP}/pkg-standalone" && zip -qr "${RUNNER_TEMP}/dist/ArpSID-${v}-standalone-linux-${{ matrix.arch }}.zip" .)
       - uses: actions/upload-artifact@v7
         if: inputs.release
         with: { name: "linux-vst3-${{ matrix.arch }}", path: "${{ runner.temp }}/dist/*" }
@@ -217,7 +243,7 @@ jobs:
           set -o pipefail
           cmake -S . -B build-vst3 -A "${{ matrix.cmake_arch }}" \
             -DARPSID_BUILD_VST3=ON -Dvst3sdk_SOURCE_DIR="$(cygpath -m "${RUNNER_TEMP}/vst3sdk")"
-          cmake --build build-vst3 --config Release --target arpsid_vst3 arpsid_vst3_host_tests arpsid_vst3_editor_snapshot arpsid_vst3_preset_export -- -m -nologo -v:minimal 2>&1 | tee build-vst3.log
+          cmake --build build-vst3 --config Release --target arpsid_vst3 arpsid_vst3_host_tests arpsid_vst3_editor_snapshot arpsid_vst3_preset_export arpsid_standalone_app -- -m -nologo -v:minimal 2>&1 | tee build-vst3.log
           scripts/ci/check_build_warnings.sh build-vst3.log "$(cygpath -w "$GITHUB_WORKSPACE")"
           test -d build-vst3/VST3/Release/arpsid_vst3.vst3
           # Static CRT: the module must not need the Visual C++ Redistributable.
@@ -225,6 +251,10 @@ jobs:
           test -n "$mod"
           if grep -a -i -q -E 'vcruntime140|msvcp140' "$mod"; then
             echo "::error::arpsid_vst3 imports the dynamic MSVC runtime"; exit 1
+          fi
+          test -f build-vst3/standalone/ArpSID.exe
+          if grep -a -i -q -E 'vcruntime140|msvcp140' build-vst3/standalone/ArpSID.exe; then
+            echo "::error::ArpSID.exe imports the dynamic MSVC runtime"; exit 1
           fi
       - name: Factory presets (.vstpreset, each reloaded and verified)
         run: |
@@ -237,6 +267,31 @@ jobs:
       - uses: actions/upload-artifact@v7
         if: always() && matrix.arch == 'x64'
         with: { name: editor-snapshots-windows, path: build-vst3/editor-snapshots, if-no-files-found: ignore }
+      - name: Standalone app smoke test (window, editor, session)
+        run: |
+          cmake --build build-vst3 --config Release --target arpsid_standalone_check
+          test -s build-vst3/standalone-check/window.png
+          test -s build-vst3/standalone-check/session.arpsidstate
+          test -s build-vst3/standalone-check/standalone.conf
+      - uses: actions/upload-artifact@v7
+        if: always() && matrix.arch == 'x64'
+        with: { name: standalone-window-windows, path: build-vst3/standalone-check/window.png, if-no-files-found: ignore }
+      - name: Stage standalone app folder (program + installer)
+        run: |
+          sa="${RUNNER_TEMP}/pkg-standalone"
+          mkdir -p "$sa"
+          cp build-vst3/standalone/ArpSID.exe "$sa/"
+          scripts/install/stage_installer.sh standalone-windows "$sa"
+      - name: Standalone installer smoke test
+        shell: pwsh
+        run: |
+          $sa = Join-Path $env:RUNNER_TEMP 'pkg-standalone'
+          $dest = Join-Path $env:RUNNER_TEMP 'sa-user'
+          & "$sa\install.ps1" -Check
+          & "$sa\install.ps1" -Dest $dest -NoShortcut
+          if (-not (Test-Path "$dest\ArpSID.exe")) { throw 'install.ps1 did not install ArpSID.exe' }
+          & "$sa\install.ps1" -Dest $dest -NoShortcut -Uninstall
+          if (Test-Path "$dest\ArpSID.exe") { throw 'install.ps1 -Uninstall left ArpSID.exe' }
       - name: Stage release folder (bundle + installer)
         run: |
           pkg="${RUNNER_TEMP}/pkg"
@@ -268,6 +323,7 @@ jobs:
           v="$(tr -d '[:space:]' < VERSION.txt)"
           mkdir -p "${RUNNER_TEMP}/dist"
           (cd "${RUNNER_TEMP}/pkg" && 7z a -tzip -bso0 "$(cygpath -w "${RUNNER_TEMP}/dist/ArpSID-${v}-vst3-windows-${{ matrix.arch }}.zip")" .)
+          (cd "${RUNNER_TEMP}/pkg-standalone" && 7z a -tzip -bso0 "$(cygpath -w "${RUNNER_TEMP}/dist/ArpSID-${v}-standalone-windows-${{ matrix.arch }}.zip")" .)
       - uses: actions/upload-artifact@v7
         if: inputs.release
         with: { name: "windows-vst3-${{ matrix.arch }}", path: "${{ runner.temp }}/dist/*" }
