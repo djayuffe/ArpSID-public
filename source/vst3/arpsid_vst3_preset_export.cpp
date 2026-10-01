@@ -51,7 +51,7 @@ namespace {
 struct Instance {
     IPtr<IComponent> component;
     IPtr<IEditController> controller;
-    FUnknownPtr<IConnectionPoint> procCp, ctrlCp;
+    FUnknownPtr<Steinberg::Vst::IConnectionPoint> procCp, ctrlCp;
 };
 
 bool makeInstance(const VST3::Hosting::PluginFactory& factory, FUnknown* host, Instance& out, VST3::UID& cid) {
@@ -66,8 +66,8 @@ bool makeInstance(const VST3::Hosting::PluginFactory& factory, FUnknown* host, I
     if (out.component->getControllerClassId(ctrlCid) != kResultOk) return false;
     out.controller = factory.createInstance<IEditController>(VST3::UID::fromTUID(ctrlCid));
     if (!out.controller || out.controller->initialize(host) != kResultOk) return false;
-    out.procCp = FUnknownPtr<IConnectionPoint>(out.component);
-    out.ctrlCp = FUnknownPtr<IConnectionPoint>(out.controller);
+    out.procCp = FUnknownPtr<Steinberg::Vst::IConnectionPoint>(out.component);
+    out.ctrlCp = FUnknownPtr<Steinberg::Vst::IConnectionPoint>(out.controller);
     if (!out.procCp || !out.ctrlCp) return false;
     out.procCp->connect(out.ctrlCp);
     out.ctrlCp->connect(out.procCp);

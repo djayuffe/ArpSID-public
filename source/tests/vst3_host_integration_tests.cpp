@@ -273,7 +273,7 @@ std::string savedPatchName(IEditController* c) {
     return name;
 }
 
-void sendMessage(IConnectionPoint* to, const char* id, const std::vector<std::pair<const char*, int64>>& ints) {
+void sendMessage(Steinberg::Vst::IConnectionPoint* to, const char* id, const std::vector<std::pair<const char*, int64>>& ints) {
     IPtr<IMessage> msg = owned(new HostMessage);
     msg->setMessageID(id);
     for (const auto& kv : ints) msg->getAttributes()->setInt(kv.first, kv.second);
@@ -535,8 +535,8 @@ int main(int argc, char** argv) {
     RecordingHandler handler;
     controller->setComponentHandler(&handler);
 
-    FUnknownPtr<IConnectionPoint> procCp(component);
-    FUnknownPtr<IConnectionPoint> ctrlCp(controller);
+    FUnknownPtr<Steinberg::Vst::IConnectionPoint> procCp(component);
+    FUnknownPtr<Steinberg::Vst::IConnectionPoint> ctrlCp(controller);
     CHECK(procCp && ctrlCp, "both sides are IConnectionPoints");
     procCp->connect(ctrlCp);
     ctrlCp->connect(procCp);
