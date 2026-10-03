@@ -46,8 +46,6 @@ and `include/arpsid/version.h`.
 - **SID DIGI `blockPeak`**: was computed as distance-from-midpoint of the
   nibble, not the waveform magnitude. Now the true bipolar magnitude
   `|nibble/15 * 2 − 1|`.
-- **SID filter cutoff squash**: the 0.16 cap was inert (the raw term maxes at
-  0.117). Lowered to 0.12 so it is reachable.
 - **SID `$D418` comments**: the filter-mode bits are per-voice control
   register bits, not "$D418 bits 4..6". Comments corrected. The in-code
   filter-cutoff/Q tables are documented as superseded by the analogue
