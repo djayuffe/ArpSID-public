@@ -206,7 +206,7 @@ void ArpSIDVst3Processor::collectEvents_(ProcessData& data, int frameCount) {
                 Event e{};
                 if (list->getEvent(i, e) != kResultOk) continue;
                 const bool isNote = (e.type == Event::kNoteOnEvent || e.type == Event::kNoteOffEvent);
-                const bool isPressure = (e.type == Event::kPolyPressureEvent || e.type == Event::kChannelPressureEvent);
+                const bool isPressure = (e.type == Event::kPolyPressureEvent);
                 if (pass == 0 ? !isNote : !isPressure) continue;
                 TimedEvent ev{};
                 ev.sampleOffset = std::clamp<int32>(e.sampleOffset, 0, lastFrame);
@@ -232,11 +232,6 @@ void ArpSIDVst3Processor::collectEvents_(ProcessData& data, int frameCount) {
                         ev.pitch = static_cast<std::int16_t>(std::clamp<int16>(e.polyPressure.pitch, 0, 127));
                         ev.value = std::clamp(e.polyPressure.pressure, 0.0f, 1.0f);
                         ev.noteId = e.polyPressure.noteId;
-                        break;
-                    case Event::kChannelPressureEvent:
-                        ev.kind = EventKind::ChannelPressure;
-                        ev.channel = static_cast<std::uint8_t>(std::clamp<int16>(e.channelPressure.channel, 0, 15));
-                        ev.value = std::clamp(e.channelPressure.pressure, 0.0f, 1.0f);
                         break;
                     default:
                         continue;

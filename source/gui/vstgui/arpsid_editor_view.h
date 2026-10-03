@@ -19,6 +19,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <set>
 #include <vector>
 
 namespace ArpSID::Editor {
