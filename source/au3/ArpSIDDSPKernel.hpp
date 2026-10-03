@@ -7688,6 +7688,7 @@ public:
         // Fidelity ratio for GUI: near 1.0 = full coverage; <0.95 = mirror degraded.
         float    c64MirrorFidelity = 1.0f;
         uint64_t c64Phi2Cycle = 0;
+        uint64_t c64Phi2CyclesThisBlock = 0;
         uint64_t c64BlockIndex = 0;
         uint32_t c64PlayCalls = 0;
         uint64_t c64PlayCallCapHits = 0;

@@ -427,7 +427,7 @@ public:
                     break;
                 }
                 const std::uint8_t nibble = renderNextNibble_(sampleBank, writeFrame);
-                blockPeak = std::max(blockPeak, std::fabsf((static_cast<float>(nibble) / 15.0f) * 2.0f - 1.0f));
+                blockPeak = std::max(blockPeak, std::fabs((static_cast<float>(nibble) / 15.0f) * 2.0f - 1.0f));
                 emitD418_(sidBridge, openBus, writePhi2, static_cast<std::uint32_t>(writeFrame), nibble, ioVisible);
             }
         }
