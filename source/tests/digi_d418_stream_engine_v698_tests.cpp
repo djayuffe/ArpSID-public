@@ -1,3 +1,4 @@
+#undef NDEBUG
 // SPDX-License-Identifier: BSD-3-Clause
 // Copyright (C) 2024-2026 Ulf Bertilsson
 // v698 - Authentic DIGI $D418 stream engine contract tests.

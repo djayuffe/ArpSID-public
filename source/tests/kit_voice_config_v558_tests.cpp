@@ -1,3 +1,4 @@
+#undef NDEBUG
 // SPDX-License-Identifier: BSD-3-Clause
 // Copyright (C) 2024-2026 Ulf Bertilsson
 // kit_voice_config_v558_tests.cpp — KIT voice config contract tests (v558).

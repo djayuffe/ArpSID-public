@@ -1,3 +1,4 @@
+#undef NDEBUG
 // SPDX-License-Identifier: BSD-3-Clause
 // Copyright (C) 2024-2026 Ulf Bertilsson
 // digi_state_persistence_v565_tests.cpp — DIGI AU state persistence contract

@@ -1,4 +1,5 @@
 // Copyright (C) 2024-2026 Ulf Bertilsson
+#undef NDEBUG
 #include "runtime_test_common.h"
 #include "arpsid/engines/voice_manager.h"
 #include "arpsid/engines/sid_register_engine.h"

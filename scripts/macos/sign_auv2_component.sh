@@ -41,17 +41,16 @@ if [ ! -x "$CODESIGN_BIN" ]; then
 fi
 
 # Build codesign argument list
-ARGS="--force --sign \"$IDENTITY\" --timestamp=none"
+CS_ARGS=(--force --sign "$IDENTITY" --timestamp=none)
 if [ "$HARDENED_RUNTIME" = "ON" ]; then
-    ARGS="$ARGS --options runtime"
+    CS_ARGS+=(--options runtime)
 fi
 if [ -n "$ENTITLEMENTS" ] && [ -f "$ENTITLEMENTS" ]; then
-    ARGS="$ARGS --entitlements \"$ENTITLEMENTS\""
+    CS_ARGS+=(--entitlements "$ENTITLEMENTS")
 fi
-ARGS="$ARGS --deep \"$COMPONENT_BUNDLE\""
+CS_ARGS+=(--deep "$COMPONENT_BUNDLE")
 
-# shellcheck disable=SC2086
-eval "$CODESIGN_BIN $ARGS"
+"$CODESIGN_BIN" "${CS_ARGS[@]}"
 
 # Verify the signature
 "$CODESIGN_BIN" --verify --deep --strict --verbose=2 "$COMPONENT_BUNDLE"

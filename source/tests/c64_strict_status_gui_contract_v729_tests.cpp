@@ -1,4 +1,5 @@
 // Copyright (C) 2024-2026 Ulf Bertilsson
+#undef NDEBUG
 #include "arpsid/core/c64_psid_runtime.h"
 #include "arpsid/gui/diagnostic_snapshot.h"
 #include <cstdlib>

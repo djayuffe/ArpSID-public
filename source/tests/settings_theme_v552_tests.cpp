@@ -1,3 +1,4 @@
+#undef NDEBUG
 // SPDX-License-Identifier: BSD-3-Clause
 // Copyright (C) 2024-2026 Ulf Bertilsson
 // settings_theme_v552_tests.cpp — Contract tests for v552 theme palette.

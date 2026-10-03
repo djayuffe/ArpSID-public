@@ -210,7 +210,7 @@ public:
             case 0x0D: {
                 const uint8_t v = uint8_t((irqLevel_ ? 0x80u : 0x00u) | (irqFlags_ & 0x1Fu));
                 irqFlags_ = 0;
-                irqLevel_ = false;
+                updateIrq_();
                 return v;
             }
             case 0x0E: return regs_[0x0E];

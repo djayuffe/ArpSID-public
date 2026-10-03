@@ -34,7 +34,7 @@ inline bool parseWavMono(const std::vector<std::uint8_t>& b, WavData& out, std::
     for (std::size_t p = 12; p + 8 <= b.size();) {
         const std::uint32_t len = u32(p + 4);
         const std::size_t body = p + 8;
-        if (body + len > b.size() + 1) break;
+        if (body + len > b.size()) break;
         if (std::memcmp(b.data() + p, "fmt ", 4) == 0 && len >= 16) {
             format = u16(body);
             channels = u16(body + 2);

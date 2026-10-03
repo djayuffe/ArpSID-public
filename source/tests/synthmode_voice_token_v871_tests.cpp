@@ -1,4 +1,5 @@
 // Copyright (C) 2024-2026 Ulf Bertilsson
+#undef NDEBUG
 // synthmode_voice_token_v871_tests.cpp
 //
 // Guards canonical voice-token carriage through held replay and SynthMode

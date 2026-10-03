@@ -1,3 +1,4 @@
+#undef NDEBUG
 // SPDX-License-Identifier: BSD-3-Clause
 // Copyright (C) 2024-2026 Ulf Bertilsson
 // digi_panel_model_v563_tests.cpp — DigiPanelModel contract tests (v563).

@@ -195,41 +195,53 @@ void ArpSIDVst3Processor::collectEvents_(ProcessData& data, int frameCount) {
     const int lastFrame = std::max(0, frameCount - 1);
 
     // Note events first: they are never dropped in favour of automation (a
-    // lost note-off is a stuck note).
+    // lost note-off is a stuck note). Pass 1 collects note-ons/offs; pass 2
+    // fills remaining capacity with pressure events, so under a polyphony
+    // storm the pressure is sacrificed before any note-off.
     if (IEventList* list = data.inputEvents) {
         const int32 count = list->getEventCount();
-        for (int32 i = 0; i < count && n < cap; ++i) {
-            Event e{};
-            if (list->getEvent(i, e) != kResultOk) continue;
-            TimedEvent ev{};
-            ev.sampleOffset = std::clamp<int32>(e.sampleOffset, 0, lastFrame);
-            ev.rawOrder = ++eventOrder_;
-            switch (e.type) {
-                case Event::kNoteOnEvent:
-                    ev.kind = e.noteOn.velocity > 0.0f ? EventKind::NoteOn : EventKind::NoteOff;
-                    ev.channel = static_cast<std::uint8_t>(std::clamp<int16>(e.noteOn.channel, 0, 15));
-                    ev.pitch = static_cast<std::int16_t>(std::clamp<int16>(e.noteOn.pitch, 0, 127));
-                    ev.value = std::clamp(e.noteOn.velocity, 0.0f, 1.0f);
-                    ev.noteId = e.noteOn.noteId;
-                    break;
-                case Event::kNoteOffEvent:
-                    ev.kind = EventKind::NoteOff;
-                    ev.channel = static_cast<std::uint8_t>(std::clamp<int16>(e.noteOff.channel, 0, 15));
-                    ev.pitch = static_cast<std::int16_t>(std::clamp<int16>(e.noteOff.pitch, 0, 127));
-                    ev.value = std::clamp(e.noteOff.velocity, 0.0f, 1.0f);
-                    ev.noteId = e.noteOff.noteId;
-                    break;
-                case Event::kPolyPressureEvent:
-                    ev.kind = EventKind::PolyPressure;
-                    ev.channel = static_cast<std::uint8_t>(std::clamp<int16>(e.polyPressure.channel, 0, 15));
-                    ev.pitch = static_cast<std::int16_t>(std::clamp<int16>(e.polyPressure.pitch, 0, 127));
-                    ev.value = std::clamp(e.polyPressure.pressure, 0.0f, 1.0f);
-                    ev.noteId = e.polyPressure.noteId;
-                    break;
-                default:
-                    continue;
+        for (int32 pass = 0; pass < 2 && n < cap; ++pass) {
+            for (int32 i = 0; i < count && n < cap; ++i) {
+                Event e{};
+                if (list->getEvent(i, e) != kResultOk) continue;
+                const bool isNote = (e.type == Event::kNoteOnEvent || e.type == Event::kNoteOffEvent);
+                const bool isPressure = (e.type == Event::kPolyPressureEvent || e.type == Event::kChannelPressureEvent);
+                if (pass == 0 ? !isNote : !isPressure) continue;
+                TimedEvent ev{};
+                ev.sampleOffset = std::clamp<int32>(e.sampleOffset, 0, lastFrame);
+                ev.rawOrder = ++eventOrder_;
+                switch (e.type) {
+                    case Event::kNoteOnEvent:
+                        ev.kind = e.noteOn.velocity > 0.0f ? EventKind::NoteOn : EventKind::NoteOff;
+                        ev.channel = static_cast<std::uint8_t>(std::clamp<int16>(e.noteOn.channel, 0, 15));
+                        ev.pitch = static_cast<std::int16_t>(std::clamp<int16>(e.noteOn.pitch, 0, 127));
+                        ev.value = std::clamp(e.noteOn.velocity, 0.0f, 1.0f);
+                        ev.noteId = e.noteOn.noteId;
+                        break;
+                    case Event::kNoteOffEvent:
+                        ev.kind = EventKind::NoteOff;
+                        ev.channel = static_cast<std::uint8_t>(std::clamp<int16>(e.noteOff.channel, 0, 15));
+                        ev.pitch = static_cast<std::int16_t>(std::clamp<int16>(e.noteOff.pitch, 0, 127));
+                        ev.value = std::clamp(e.noteOff.velocity, 0.0f, 1.0f);
+                        ev.noteId = e.noteOff.noteId;
+                        break;
+                    case Event::kPolyPressureEvent:
+                        ev.kind = EventKind::PolyPressure;
+                        ev.channel = static_cast<std::uint8_t>(std::clamp<int16>(e.polyPressure.channel, 0, 15));
+                        ev.pitch = static_cast<std::int16_t>(std::clamp<int16>(e.polyPressure.pitch, 0, 127));
+                        ev.value = std::clamp(e.polyPressure.pressure, 0.0f, 1.0f);
+                        ev.noteId = e.polyPressure.noteId;
+                        break;
+                    case Event::kChannelPressureEvent:
+                        ev.kind = EventKind::ChannelPressure;
+                        ev.channel = static_cast<std::uint8_t>(std::clamp<int16>(e.channelPressure.channel, 0, 15));
+                        ev.value = std::clamp(e.channelPressure.pressure, 0.0f, 1.0f);
+                        break;
+                    default:
+                        continue;
+                }
+                events_[static_cast<std::size_t>(n++)] = ev;
             }
-            events_[static_cast<std::size_t>(n++)] = ev;
         }
     }
 

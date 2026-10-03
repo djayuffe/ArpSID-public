@@ -1,4 +1,5 @@
 // Copyright (C) 2024-2026 Ulf Bertilsson
+#undef NDEBUG
 #include "arpsid/core/sid_runtime_state_apply_policy.h"
 
 #include <cstdlib>

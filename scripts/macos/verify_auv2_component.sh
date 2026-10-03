@@ -226,8 +226,13 @@ run_auval() {
     done
 }
 
-SUBTYPES="${ARPSID_AUVAL_SUBTYPES:-ArpS ArIn DrSD S808 C64P}"
-for subtype in $SUBTYPES; do
+SUBTYPES_STR="${ARPSID_AUVAL_SUBTYPES:-ArpS ArIn DrSD S808 C64P}"
+read -r -a SUBTYPES <<< "$SUBTYPES_STR"
+for subtype in "${SUBTYPES[@]}"; do
+    if ! [[ "$subtype" =~ ^[A-Za-z0-9]{4}$ ]]; then
+        echo "verify_auv2_component: invalid subtype '$subtype' (must be 4 alphanumeric chars)" >&2
+        exit 1
+    fi
     run_auval "$subtype"
 done
 

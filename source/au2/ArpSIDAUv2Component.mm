@@ -3317,9 +3317,12 @@ static OSStatus componentScheduleParameters(void* self,
                 const float value = ArpSID::sanitizeNormalizedParamValue((int)ev.parameter,
                                                                          ev.eventValues.immediate.value,
                                                                          ArpSID::defaultNormalizedParamValue((int)ev.parameter));
+                const UInt32 offsetCap = (impl->maxFramesPerSlice.load(std::memory_order_acquire) > 0u)
+                    ? impl->maxFramesPerSlice.load(std::memory_order_acquire) - 1u : (UInt32)0x7FFFFFFFu;
+                const UInt32 safeOffset = std::min<UInt32>(ev.eventValues.immediate.bufferOffset, offsetCap);
                 const bool queued = kernel->enqueueParameterIntent((int)ev.parameter,
                                                                    value,
-                                                                   (int32_t)ev.eventValues.immediate.bufferOffset,
+                                                                   (int32_t)safeOffset,
                                                                    0);
                 cacheParameterValueForInstance(impl, ev.parameter, value);
                 if (!queued) {
@@ -3342,11 +3345,14 @@ static OSStatus componentScheduleParameters(void* self,
                                                                             ev.eventValues.ramp.endValue,
                                                                             startValue);
                 const UInt32 anchors = std::min<UInt32>(64u, std::max<UInt32>(2u, duration));
+                const UInt32 offsetCap = (impl->maxFramesPerSlice.load(std::memory_order_acquire) > 0u)
+                    ? impl->maxFramesPerSlice.load(std::memory_order_acquire) - 1u : (UInt32)0x7FFFFFFFu;
+                const UInt32 rampBase = std::min<UInt32>(ev.eventValues.ramp.startBufferOffset, offsetCap);
                 bool anyDropped = false;
                 for (UInt32 anchor = 0; anchor < anchors; ++anchor) {
                     const double t = (anchors <= 1u) ? 1.0 : (double)anchor / (double)(anchors - 1u);
-                    const UInt32 sampleOffset = ev.eventValues.ramp.startBufferOffset +
-                        (UInt32)std::llround((double)(duration - 1u) * t);
+                    const UInt32 sampleOffset = std::min<UInt32>(rampBase +
+                        (UInt32)std::llround((double)(duration - 1u) * t), offsetCap);
                     const float value = ArpSID::sanitizeNormalizedParamValue((int)ev.parameter,
                                                                               startValue + (endValue - startValue) * (float)t,
                                                                               startValue);

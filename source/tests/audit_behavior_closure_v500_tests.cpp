@@ -1,4 +1,5 @@
 // Copyright (C) 2024-2026 Ulf Bertilsson
+#undef NDEBUG
 // audit_behavior_closure_v500_tests.cpp
 // Behavior tests for all P0/P1/P2 audit findings.
 // These tests exercise real runtime/render behavior, not source-text needles.

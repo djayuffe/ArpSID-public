@@ -131,7 +131,11 @@ check_bundle() {
     fi
   else
     [ -d "$FROM/Contents/MacOS" ] || { echo "Not a macOS VST3 bundle: $FROM" >&2; return 1; }
-    echo "Bundle architectures: $(lipo -archs "$FROM/Contents/MacOS/arpsid_vst3" 2>/dev/null || echo unknown)"
+    local bin="$FROM/Contents/MacOS/arpsid_vst3"
+    [ -f "$bin" ] || { echo "No VST3 binary at $bin" >&2; return 1; }
+    local arch; arch="$(lipo -archs "$bin" 2>/dev/null || true)"
+    [ -n "$arch" ] || { echo "lipo failed on $bin" >&2; return 1; }
+    echo "Bundle architectures: $arch"
   fi
   return $ok
 }

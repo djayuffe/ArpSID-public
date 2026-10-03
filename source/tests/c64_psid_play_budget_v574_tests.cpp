@@ -1,3 +1,4 @@
+#undef NDEBUG
 // SPDX-License-Identifier: BSD-3-Clause
 // Copyright (C) 2024-2026 Ulf Bertilsson
 // c64_psid_play_budget_v574_tests.cpp — C64 PSID play instruction budget (v574).

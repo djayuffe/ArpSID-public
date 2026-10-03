@@ -1,3 +1,4 @@
+#undef NDEBUG
 // SPDX-License-Identifier: BSD-3-Clause
 // Copyright (C) 2024-2026 Ulf Bertilsson
 // lfo_rate_projection_v569_tests.cpp — LFO rate bulk-projection path contract (v569).

@@ -1,4 +1,5 @@
 // Copyright (C) 2024-2026 Ulf Bertilsson
+#undef NDEBUG
 // c64_psid_init_reg_seed_v579_tests.cpp
 // v579: Fix ordinary PSID choppiness by seeding sreg_() from init-time
 // SID register state at render-thread handoff.

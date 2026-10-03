@@ -1,4 +1,5 @@
 // Copyright (C) 2024-2026 Ulf Bertilsson
+#undef NDEBUG
 // c64_psid_block_timedwrite_clear_v584_tests.cpp
 // v584: Clear timed-write storage array at block start.
 //

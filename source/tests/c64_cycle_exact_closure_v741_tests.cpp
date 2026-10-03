@@ -1,4 +1,5 @@
 // Copyright (C) 2024-2026 Ulf Bertilsson
+#undef NDEBUG
 #include "arpsid/core/c64_cia.h"
 #include "arpsid/core/c64_sid_readback.h"
 #include "arpsid/core/c64_vic.h"

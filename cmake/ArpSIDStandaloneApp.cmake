@@ -121,6 +121,9 @@ target_include_directories(arpsid_standalone_app SYSTEM PRIVATE ${vst3sdk_SOURCE
 target_compile_definitions(arpsid_standalone_app PRIVATE VSTGUI_ENABLE_DEPRECATED_METHODS=0)
 target_link_libraries(arpsid_standalone_app PRIVATE arpsid_core arpsid_forensic_patchbank vstgui sdk_common
                                                     arpsid_rtio)
+if(UNIX AND NOT APPLE)
+    target_link_options(arpsid_standalone_app PRIVATE "LINKER:--no-undefined")
+endif()
 
 # Headless smoke test: start, open the window (Linux: needs DISPLAY), render
 # the toolbar and editor to a PNG, save settings and session, quit.

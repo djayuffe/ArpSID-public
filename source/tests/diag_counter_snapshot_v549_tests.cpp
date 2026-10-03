@@ -1,3 +1,4 @@
+#undef NDEBUG
 // SPDX-License-Identifier: BSD-3-Clause
 // Copyright (C) 2024-2026 Ulf Bertilsson
 // diag_counter_snapshot_v549_tests.cpp — Contract tests for v549 diagnostic snapshot.

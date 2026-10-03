@@ -37,7 +37,7 @@ BUILD_RC=${PIPESTATUS[0]}
 set -e
 if [[ ${BUILD_RC} -ne 0 ]]; then
   echo "WARN: parallel build failed; retrying serial build for deterministic first error" >&2
-  cmake --build "${BUILD}" -j1 2>&1 | tee "${LOG_DIR}/04b_build_all_serial_retry.log"
+  cmake --build "${BUILD}" -j1 > "${LOG_DIR}/04b_build_all_serial_retry.log" 2>&1 || { echo "ERROR: serial retry build also failed (see ${LOG_DIR}/04b_build_all_serial_retry.log)" >&2; exit 1; }
 fi
 
 log_run "05 ctest inventory" ctest --test-dir "${BUILD}" -N

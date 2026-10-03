@@ -11,6 +11,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: ci-screenshots
+  cancel-in-progress: true
+
 jobs:
   au-editor:
     # Private repository: no runs (the private tree carries real C64 ROMs and
@@ -45,6 +49,8 @@ jobs:
           # Retina captures are 2x; the docs use the 1280-pixel design size.
           for f in "$out"/*.png; do sips --resampleWidth 1280 "$f" >/dev/null; done
       - name: Publish to the ci-screenshots branch
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           out="${RUNNER_TEMP}/shots"
           pub="${RUNNER_TEMP}/pub"
@@ -55,4 +61,4 @@ jobs:
           git add -A
           git -c user.name="github-actions[bot]" -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
             commit -q -m "AU editor screenshots for ${GITHUB_SHA}"
-          git push -f "https://x-access-token:${{ github.token }}@github.com/${GITHUB_REPOSITORY}.git" HEAD:refs/heads/ci-screenshots
+          git push -f "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:refs/heads/ci-screenshots

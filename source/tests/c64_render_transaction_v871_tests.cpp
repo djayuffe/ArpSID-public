@@ -1,4 +1,5 @@
 // Copyright (C) 2024-2026 Ulf Bertilsson
+#undef NDEBUG
 // c64_render_transaction_v871_tests.cpp
 //
 // Guards the v871 C64 render transaction closure:

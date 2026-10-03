@@ -1,3 +1,4 @@
+#undef NDEBUG
 // SPDX-License-Identifier: BSD-3-Clause
 // Copyright (C) 2024-2026 Ulf Bertilsson
 // mix_panel_tab_v548_tests.cpp — tab wire-up completeness tests for MIX tab (v548).

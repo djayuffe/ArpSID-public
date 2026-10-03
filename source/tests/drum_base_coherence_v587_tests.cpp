@@ -1,4 +1,5 @@
 // Copyright (C) 2024-2026 Ulf Bertilsson
+#undef NDEBUG
 // drum_base_coherence_v587_tests.cpp
 // v587: Five base-frequency / canonical-note bugs found and fixed during audit.
 //

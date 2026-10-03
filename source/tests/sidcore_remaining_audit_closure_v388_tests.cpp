@@ -1,4 +1,5 @@
 // Copyright (C) 2024-2026 Ulf Bertilsson
+#undef NDEBUG
 
 #include <iostream>
 #include "arpsid/core/sid_envelope_core.h"

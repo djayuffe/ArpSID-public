@@ -117,9 +117,11 @@ jobs:
         run: |
           v="${{ needs.prepare.outputs.version }}"
           awk -v v="$v" '
-            $0 ~ "^## \\[" v "\\]" {on=1; next}
-            on && /^## \[/ {exit}
-            on {print}
+            BEGIN { h = "## [" v "]" }
+            index($0, h) == 1 { on=1; next }
+            on && /^## \[/ { exit }
+            on { print }
+            END { if (!on) { print "ERROR: no section for " v > "/dev/stderr"; exit 1 } }
           ' CHANGELOG.md > release-notes.md
           test -s release-notes.md
           cat >> release-notes.md <<'EOF'

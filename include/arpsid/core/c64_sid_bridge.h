@@ -55,6 +55,8 @@ struct C64SidBridgeState final : SidRegisterSink {
         uint32_t invalidSidChipWriteCount = 0;
         uint32_t rmwDummyWriteCount = 0;
         uint32_t droppedSidHoleWriteCount = 0;
+        bool readsAnsweredElsewhere = false;
+        uint32_t shadowedReadCount = 0;
     };
 
     std::array<uint8_t, 32> regs{};
@@ -153,6 +155,8 @@ struct C64SidBridgeState final : SidRegisterSink {
         out.invalidSidChipWriteCount = invalidSidChipWriteCount;
         out.rmwDummyWriteCount = rmwDummyWriteCount;
         out.droppedSidHoleWriteCount = droppedSidHoleWriteCount;
+        out.readsAnsweredElsewhere = readsAnsweredElsewhere;
+        out.shadowedReadCount = shadowedReadCount;
     }
 
     void restoreSnapshot(const Snapshot& in) noexcept {
@@ -183,6 +187,8 @@ struct C64SidBridgeState final : SidRegisterSink {
         invalidSidChipWriteCount = in.invalidSidChipWriteCount;
         rmwDummyWriteCount = in.rmwDummyWriteCount;
         droppedSidHoleWriteCount = in.droppedSidHoleWriteCount;
+        readsAnsweredElsewhere = in.readsAnsweredElsewhere;
+        shadowedReadCount = in.shadowedReadCount;
     }
 
     void sidWrite(uint8_t reg, uint8_t value, uint64_t phi2Cycle) noexcept override {

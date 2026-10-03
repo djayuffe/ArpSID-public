@@ -158,8 +158,8 @@ jobs:
       - name: Editor render (every tab, offscreen)
         run: cmake --build build-vst3 --target arpsid_vst3_editor_check
       - uses: actions/upload-artifact@v7
-        if: always() && matrix.arch == 'x86_64'
-        with: { name: editor-snapshots-linux, path: build-vst3/editor-snapshots, if-no-files-found: ignore }
+        if: matrix.arch == 'x86_64'
+        with: { name: editor-snapshots-linux, path: build-vst3/editor-snapshots, if-no-files-found: error }
       - name: Standalone app smoke test (X11 window, editor, session)
         run: |
           xvfb-run -a cmake --build build-vst3 --target arpsid_standalone_check
@@ -182,8 +182,8 @@ jobs:
           "$sa/install.sh" --prefix "${RUNNER_TEMP}/sa-prefix" --uninstall
           test ! -e "${RUNNER_TEMP}/sa-prefix/bin/arpsid"
       - uses: actions/upload-artifact@v7
-        if: always() && matrix.arch == 'x86_64'
-        with: { name: standalone-window-linux, path: build-vst3/standalone-check/window.png, if-no-files-found: ignore }
+        if: matrix.arch == 'x86_64'
+        with: { name: standalone-window-linux, path: build-vst3/standalone-check/window.png, if-no-files-found: error }
       - name: Install layout
         run: |
           cmake --install build-vst3 --prefix "${RUNNER_TEMP}/stage"
@@ -265,8 +265,8 @@ jobs:
       - name: Editor render (every tab, offscreen)
         run: cmake --build build-vst3 --config Release --target arpsid_vst3_editor_check
       - uses: actions/upload-artifact@v7
-        if: always() && matrix.arch == 'x64'
-        with: { name: editor-snapshots-windows, path: build-vst3/editor-snapshots, if-no-files-found: ignore }
+        if: matrix.arch == 'x64'
+        with: { name: editor-snapshots-windows, path: build-vst3/editor-snapshots, if-no-files-found: error }
       - name: Standalone app smoke test (window, editor, session)
         run: |
           cmake --build build-vst3 --config Release --target arpsid_standalone_check
@@ -274,8 +274,8 @@ jobs:
           test -s build-vst3/standalone-check/session.arpsidstate
           test -s build-vst3/standalone-check/standalone.conf
       - uses: actions/upload-artifact@v7
-        if: always() && matrix.arch == 'x64'
-        with: { name: standalone-window-windows, path: build-vst3/standalone-check/window.png, if-no-files-found: ignore }
+        if: matrix.arch == 'x64'
+        with: { name: standalone-window-windows, path: build-vst3/standalone-check/window.png, if-no-files-found: error }
       - name: Stage standalone app folder (program + installer)
         run: |
           sa="${RUNNER_TEMP}/pkg-standalone"
@@ -382,8 +382,8 @@ jobs:
             -DARPSID_BUILD_VST3=ON -Dvst3sdk_SOURCE_DIR="${RUNNER_TEMP}/vst3sdk"
           cmake --build build-vst3 --target arpsid_vst3 arpsid_vst3_host_tests arpsid_vst3_preset_export --parallel "$(sysctl -n hw.ncpu)" 2>&1 | tee build-vst3.log
           scripts/ci/check_build_warnings.sh build-vst3.log "$GITHUB_WORKSPACE"
-          vst="$(find build-vst3/VST3 -maxdepth 3 -type d -name 'arpsid_vst3.vst3' -print -quit)"
-          test -n "$vst"
+          vst="build-vst3/VST3/Release/arpsid_vst3.vst3"
+          test -d "$vst"
           codesign --force --deep --sign - "$vst"
           codesign --verify --deep --strict --verbose=2 "$vst"
           lipo -archs "$vst/Contents/MacOS/arpsid_vst3"

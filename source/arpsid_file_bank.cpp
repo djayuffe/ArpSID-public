@@ -422,7 +422,13 @@ bool ArpSIDFileBank::ensureDirectoryExists(const std::string& path) noexcept {
         const std::string sub = p.substr(0, pos);
         if (!sub.empty()) mkdir(sub.c_str(), 0755);
     }
-    return mkdir(p.c_str(), 0755) == 0 || errno == EEXIST;
+    const int rc = mkdir(p.c_str(), 0755);
+    if (rc == 0) return true;
+    if (errno == EEXIST) {
+        struct stat st{};
+        return stat(p.c_str(), &st) == 0 && S_ISDIR(st.st_mode);
+    }
+    return false;
 #else
     return false;
 #endif

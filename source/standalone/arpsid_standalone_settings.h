@@ -117,12 +117,12 @@ inline std::filesystem::path configFolder() {
     if (!overrideDir.empty()) return overrideDir;
 #if defined(_WIN32)
     const auto appData = Presets::detail::envPath("APPDATA");
-    return appData.empty() ? appData : appData / "ArpSID";
+    return appData.empty() ? std::filesystem::path("ArpSID") : appData / "ArpSID";
 #else
     const auto xdg = Presets::detail::envPath("XDG_CONFIG_HOME");
     if (!xdg.empty()) return xdg / "ArpSID";
     const auto home = Presets::detail::envPath("HOME");
-    return home.empty() ? home : home / ".config" / "ArpSID";
+    return home.empty() ? std::filesystem::path(".config/ArpSID") : home / ".config" / "ArpSID";
 #endif
 }
 

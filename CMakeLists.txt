@@ -657,20 +657,20 @@ if(ARPSID_BUILD_VST3)
                 COMMAND /usr/bin/codesign ${_arpsid_vst3_sign_args}
                         --deep "$<TARGET_BUNDLE_DIR:arpsid_vst3>"
                 COMMAND "${CMAKE_COMMAND}" -E rm -rf
-                        "${CMAKE_CURRENT_BINARY_DIR}/VST3/Release/ArpSID.vst3"
+                        "${CMAKE_CURRENT_BINARY_DIR}/VST3/\$<CONFIG>/ArpSID.vst3"
                 COMMAND "${CMAKE_COMMAND}" -E copy_directory
                         "$<TARGET_BUNDLE_DIR:arpsid_vst3>"
-                        "${CMAKE_CURRENT_BINARY_DIR}/VST3/Release/ArpSID.vst3"
+                        "${CMAKE_CURRENT_BINARY_DIR}/VST3/\$<CONFIG>/ArpSID.vst3"
                 COMMAND /usr/bin/codesign ${_arpsid_vst3_sign_args}
-                        --deep "${CMAKE_CURRENT_BINARY_DIR}/VST3/Release/ArpSID.vst3"
+                        --deep "${CMAKE_CURRENT_BINARY_DIR}/VST3/\$<CONFIG>/ArpSID.vst3"
                 VERBATIM)
         else()
             add_custom_command(TARGET arpsid_vst3 POST_BUILD
                 COMMAND "${CMAKE_COMMAND}" -E rm -rf
-                        "${CMAKE_CURRENT_BINARY_DIR}/VST3/Release/ArpSID.vst3"
+                        "${CMAKE_CURRENT_BINARY_DIR}/VST3/\$<CONFIG>/ArpSID.vst3"
                 COMMAND "${CMAKE_COMMAND}" -E copy_directory
                         "$<TARGET_BUNDLE_DIR:arpsid_vst3>"
-                        "${CMAKE_CURRENT_BINARY_DIR}/VST3/Release/ArpSID.vst3"
+                        "${CMAKE_CURRENT_BINARY_DIR}/VST3/\$<CONFIG>/ArpSID.vst3"
                 VERBATIM)
         endif()
     endif()

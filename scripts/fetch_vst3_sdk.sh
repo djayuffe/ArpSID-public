@@ -13,11 +13,18 @@ DIR="${1:-$ROOT/.deps/vst3sdk}"
 
 if [ -f "$DIR/CMakeLists.txt" ] && [ -d "$DIR/public.sdk" ] && [ -d "$DIR/vstgui4/vstgui" ]; then
   have="$(git -C "$DIR" describe --tags --exact-match 2>/dev/null || true)"
-  if [ -z "$have" ] || [ "$have" = "$TAG" ]; then
+  if [ -n "$have" ] && [ "$have" = "$TAG" ]; then
     echo "$DIR"
     exit 0
   fi
-  echo "[ArpSID] $DIR is at $have, expected $TAG; remove it or pass another directory." >&2
+  # describe failed or reported a different tag — verify by commit hash.
+  want="$(git -C "$DIR" rev-parse "refs/tags/$TAG^{commit}" 2>/dev/null || true)"
+  head="$(git -C "$DIR" rev-parse HEAD 2>/dev/null || true)"
+  if [ -n "$want" ] && [ "$want" = "$head" ]; then
+    echo "$DIR"
+    exit 0
+  fi
+  echo "[ArpSID] $DIR does not match $TAG (describe='${have:-none}', commit='${head:-none}', expected='${want:-unresolvable}'); remove it or pass another directory." >&2
   exit 1
 fi
 
