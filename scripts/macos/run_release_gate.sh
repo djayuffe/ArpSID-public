@@ -39,6 +39,23 @@ if [[ "$BUILD_DIR" == "$ROOT" || "$BUILD_DIR" == "$ROOT"/* ]]; then
   echo "ERROR: ARPSID_RELEASE_BUILD_DIR must be outside the source tree; refusing to pollute release sources." >&2
   exit 2
 fi
+# The gate rm -rf's $BUILD_DIR, so an environment-controlled override must be
+# contained: never the filesystem root, the user's home, or any path outside a
+# temp/build area. A typo'd or malicious ARPSID_RELEASE_BUILD_DIR must not be
+# able to destroy user data.
+case "$BUILD_DIR" in
+  /) echo "ERROR: ARPSID_RELEASE_BUILD_DIR must not be the filesystem root." >&2; exit 2 ;;
+esac
+if [[ -n "${HOME:-}" && ( "$BUILD_DIR" == "$HOME" || "$BUILD_DIR" == "$HOME"/* ) ]]; then
+  echo "ERROR: ARPSID_RELEASE_BUILD_DIR must not be under \$HOME." >&2
+  exit 2
+fi
+case "$BUILD_DIR" in
+  "${TMPDIR:-/tmp}"/* | /tmp/* | /var/folders/* | ./* | */.build*) : ;;
+  *)
+    echo "ERROR: ARPSID_RELEASE_BUILD_DIR must be under \$TMPDIR, /tmp, or a .build* directory (got: $BUILD_DIR)." >&2
+    exit 2 ;;
+esac
 
 rm -rf "$BUILD_DIR"
 cmake -S "$ROOT" -B "$BUILD_DIR" \

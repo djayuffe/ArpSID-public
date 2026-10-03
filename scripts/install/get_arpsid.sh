@@ -16,7 +16,10 @@
 set -euo pipefail
 
 REPO="${ARPSID_REPO:-djayuffe/ArpSID-public}"
-RAW_BASE="${ARPSID_RAW_BASE:-https://raw.githubusercontent.com/$REPO/main}"   # installer fallback source
+# Installer fallback source, pinned to the release being installed (v$VERSION).
+# Overridable for testing, but the default is the release ref — never an
+# unpinned branch.
+RAW_BASE="${ARPSID_RAW_BASE:-https://raw.githubusercontent.com/$REPO/v}"
 VERSION=""
 PRODUCTS="vst3,auv2,auv3,standalone"
 KEEP=0
@@ -91,16 +94,42 @@ mkdir -p "$WORK/extract"
 for a in "${ASSETS[@]}"; do unzip -qo "$WORK/$a" -d "$WORK/extract"; done
 
 # Releases from 0.9.8 carry their installer; older ones use the repository copy.
+# The fallback installer is pinned to the release ref (RAW_BASE already ends in
+# "v$VERSION") and, when the release publishes an installer checksum, verified
+# against it before being executed. This prevents an unpinned main-branch
+# installer from running against an old release.
+installer_checksum() {
+  # $1 = installer filename; echoes the expected sha256 or nothing.
+  local f="$1"
+  [ -f "$WORK/SHA256SUMS.txt" ] || return 0
+  awk -v f="$f" '$2 == f || $2 == "*"f {print $1}' "$WORK/SHA256SUMS.txt"
+}
+verify_installer() {
+  local path="$1" name="$2" expected actual
+  expected="$(installer_checksum "$name")"
+  if [ -z "$expected" ]; then
+    # The installer is already pinned to the release ref (v$VERSION), so this is
+    # defense-in-depth. Older releases may not list the installer .sh in
+    # SHA256SUMS; warn loudly but continue rather than break the install.
+    echo "get_arpsid: WARNING: no checksum for $name in SHA256SUMS.txt; using release-ref-pinned installer without verification" >&2
+    return 0
+  fi
+  if command -v sha256sum >/dev/null 2>&1; then actual="$(sha256sum "$path" | awk '{print $1}')"
+  else actual="$(shasum -a 256 "$path" | awk '{print $1}')"; fi
+  [ "$expected" = "$actual" ] || { echo "get_arpsid: checksum mismatch for $name" >&2; exit 1; }
+  echo "  verified $name"
+}
+
 INSTALLER=""
 if [ "$OS" = Darwin ]; then
   [ -f "$WORK/extract/install_macos.sh" ] && INSTALLER="$WORK/extract/install_macos.sh"
   [ -n "$INSTALLER" ] || { INSTALLER="$WORK/install_macos.sh"; curl -fsSL -o "$INSTALLER" \
-      "$RAW_BASE/scripts/install/install_macos.sh"; }
+      "${RAW_BASE}${VERSION}/scripts/install/install_macos.sh"; verify_installer "$INSTALLER" "install_macos.sh"; }
   bash "$INSTALLER" --from "$WORK/extract" "${PASS[@]}"
 else
   [ -f "$WORK/extract/install.sh" ] && INSTALLER="$WORK/extract/install.sh"
   [ -n "$INSTALLER" ] || { INSTALLER="$WORK/install.sh"; curl -fsSL -o "$INSTALLER" \
-      "$RAW_BASE/scripts/install/install_vst3.sh"; }
+      "${RAW_BASE}${VERSION}/scripts/install/install_vst3.sh"; verify_installer "$INSTALLER" "install_vst3.sh"; }
   bash "$INSTALLER" --from "$WORK/extract/arpsid_vst3.vst3" "${PASS[@]}"
 fi
 [ "$KEEP" -eq 1 ] && echo "Downloads kept in $WORK"

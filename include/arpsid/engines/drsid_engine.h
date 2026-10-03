@@ -846,8 +846,11 @@ public:
         fractionalSamplePrepared_ = false;
     }
 
-    void allNotesOffChannel(int /*channel*/) noexcept {
-        allNotesOff();
+    void allNotesOffChannel(int channel) noexcept {
+        // DrSID is a GM channel-10 drum engine (MIDI channel index 9). A
+        // channel-scoped All Notes Off (CC123) for any other channel must not
+        // choke the drums. A global panic (channel < 0) still clears everything.
+        if (channel < 0 || channel == 9) allNotesOff();
     }
     
     void renderFractionalCycleSpanContribution(float& outL, float& outR, uint16_t cycleStart, uint16_t cycleEnd) noexcept {

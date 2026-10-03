@@ -155,7 +155,7 @@ if pgrep -x "Logic Pro X" >/dev/null; then
   fi
 fi
 
-/usr/bin/killall AUHostingServiceXPC AUHostingServiceXPC_arrow AUHostingService AudioComponentRegistrar auvaltool pkd lsd 2>/dev/null || true
+/usr/bin/killall AUHostingServiceXPC AUHostingServiceXPC_arrow AUHostingService AudioComponentRegistrar auvaltool pkd 2>/dev/null || true
 
 echo "== Move per-user AU/Logic caches aside =="
 cache_dir="${QUARANTINE}/Caches"
@@ -180,7 +180,7 @@ if [[ -x "$LSREGISTER" ]]; then
   "$LSREGISTER" -gc >/dev/null 2>&1 || true
   "$LSREGISTER" -r -domain local -domain system -domain user >/dev/null 2>&1 || true
 fi
-/usr/bin/killall AudioComponentRegistrar pkd lsd 2>/dev/null || true
+/usr/bin/killall AudioComponentRegistrar pkd 2>/dev/null || true
 sleep 1
 
 echo "== Verify stale wrapper is gone =="

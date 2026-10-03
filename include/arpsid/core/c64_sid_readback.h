@@ -17,6 +17,13 @@ class SidReadbackModel {
 public:
     static constexpr bool kCycleExact = true;
     static constexpr uint32_t kPotConversionCycles = 512u;
+    // Cap the PHI2 catch-up executed in a single advanceTo(). A write→read gap
+    // spanning a full VBI (~19.7k cycles at PAL) used to be executed verbatim in
+    // the RT callback (multi-microsecond stall). The cap bounds the stall; the
+    // skipped cycles are still applied to the clock cursor so the clock never
+    // lags, and the dropped work is counted for telemetry.
+    static constexpr uint64_t kMaxCatchUpCycles = 1024u;
+    uint64_t skippedCatchUpCycles = 0;
 
     void reset(bool mos6581 = true) noexcept {
         is6581_ = mos6581;
@@ -29,6 +36,7 @@ public:
         potCycle_ = 0;
         clockCursor_ = 0;
         clockStarted_ = false;
+        skippedCatchUpCycles = 0;
     }
 
     void setModel6581(bool mos6581) noexcept {
@@ -83,6 +91,14 @@ public:
         }
         if (phi2 <= clockCursor_) return;
         uint64_t cycles = phi2 - clockCursor_;
+        if (cycles > kMaxCatchUpCycles) {
+            // RT stall guard: only run kMaxCatchUpCycles of oscillator clocking,
+            // then fast-forward the cursor for the rest. The clock stays exact;
+            // the skipped per-cycle oscillator state is a bounded approximation
+            // (same as the pre-existing "first read after a long gap" behavior).
+            skippedCatchUpCycles += cycles - kMaxCatchUpCycles;
+            cycles = kMaxCatchUpCycles;
+        }
         while (cycles-- != 0u) clockOne_();
         clockCursor_ = phi2;
     }

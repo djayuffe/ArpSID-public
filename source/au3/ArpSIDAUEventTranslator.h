@@ -183,6 +183,27 @@ inline void translateAUEvents(const AURenderEvent* head,
                             case 0x80:
                                 te.kind  = EventKind::NoteOff;
                                 te.pitch = d1; te.value = value; out.push(te); break;
+                            case 0xA0:
+                                te.kind  = EventKind::PolyPressure;
+                                te.pitch = d1; te.value = value; out.push(te); break;
+                            case 0xB0:
+                                if (d1 == 120u || d1 == 123u) {
+                                    te.kind = (d1 == 120u) ? EventKind::AllSoundOff : EventKind::AllNotesOff;
+                                } else {
+                                    te.kind  = EventKind::ControlChange;
+                                    te.ccNum = d1;
+                                    te.value = value;
+                                }
+                                out.push(te); break;
+                            case 0xC0:
+                                // Raw MIDI Program Change must not select/overwrite the ArpSID factory patch.
+                                break;
+                            case 0xD0:
+                                te.kind  = EventKind::ChannelPressure; te.value = value; out.push(te); break;
+                            case 0xE0: {
+                                te.kind   = EventKind::PitchBend;
+                                te.data14 = static_cast<uint16_t>(value16 & 0x3FFFu); out.push(te); break;
+                            }
                             default:
                                 break;
                         }

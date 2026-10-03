@@ -198,7 +198,10 @@ struct C64SidBridgeState final : SidRegisterSink {
         }
         regsByChip[chip][r] = value;
         if (!readsAnsweredElsewhere) readbackByChip[chip].write(phi2Cycle, r, value);
-        regs[r] = regsByChip[0][r];
+        // The flat regs[] mirror is the primary-SID (chip 0) image. A write to a
+        // secondary chip (chip 1..4) must not stomp it with chip 0's stale value;
+        // only a chip-0 write updates the flat mirror.
+        if (chip == 0u) regs[r] = value;
         if (r == 0x18u) {
             if (d418Observed && lastD418Value == value) ++d418RepeatedValueWriteCount;
             ++d418WriteCount;
