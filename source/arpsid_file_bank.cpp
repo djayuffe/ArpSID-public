@@ -348,7 +348,7 @@ ArpSIDFilePatchMeta ArpSIDFileBank::metaFromDefinition(const PatchDefinition& de
     ArpSIDFilePatchMeta m{};
     copyBoundedField_(m.name, sizeof(m.name), def.displayName.c_str());
     copyBoundedField_(m.author, sizeof(m.author), "ArpSID Factory");
-    copyBoundedField_(m.category, sizeof(m.category), toString(def.usage.role).c_str());
+    copyBoundedField_(m.category, sizeof(m.category), toString(def.usage.role));
     copyBoundedField_(m.tags, sizeof(m.tags), def.id.c_str());
     m.chip_model   = (def.staticState.chip == SidChipTarget::MOS8580) ? 1u
                    : (def.staticState.chip == SidChipTarget::MOS6581) ? 0u : 2u;
