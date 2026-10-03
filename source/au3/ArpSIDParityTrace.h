@@ -68,6 +68,7 @@ struct ParityRecord {
 
 struct ParityTraceLogSlot {
     std::atomic<uint8_t> ready{0};
+    std::atomic<uint32_t> generation{0};
     char text[256]{};
 };
 
@@ -82,6 +83,7 @@ public:
         va_start(args, fmt);
         std::vsnprintf(slot.text, sizeof(slot.text), fmt, args);
         va_end(args);
+        slot.generation.store(writeIndex_.load(std::memory_order_relaxed), std::memory_order_release);
         slot.ready.store(1, std::memory_order_release);
 #else
         (void)fmt;
@@ -90,12 +92,13 @@ public:
 
     static void flushToFILE(FILE* f = stderr) noexcept {
 #if ARPSID_PARITY_TRACE
-        if (!f) f = stderr;
+        if (!f) return;
         const uint32_t end = writeIndex_.load(std::memory_order_acquire);
         while (readIndex_.load(std::memory_order_relaxed) < end) {
             const uint32_t ridx = readIndex_.load(std::memory_order_relaxed) % kCapacity;
             auto& slot = slots_[ridx];
             if (!slot.ready.load(std::memory_order_acquire)) break;
+            if (slot.generation.load(std::memory_order_acquire) != ridx) continue;
             std::fputs(slot.text, f);
             std::fputc('\n', f);
             slot.ready.store(0, std::memory_order_relaxed);

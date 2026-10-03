@@ -15,7 +15,7 @@ own="$(grep -E "(^|[[:space:]])(${ROOT}/)?(source|include|cmake)/[^:]+:[0-9]+(:[
 msvc="$(grep -E '[\\/](source|include|cmake)[\\/][^(]+\([0-9]+(,[0-9]+)?\): warning C[0-9]+' "$LOG" \
         | grep -viE '[\\/](vst3sdk|external)[\\/]' || true)"
 # Linker warnings have no source path; any of them is ours to fix.
-ld="$(grep -E '(^|[[:space:]])ld(64)?: warning:|^/usr/bin/ld: warning:| : warning LNK[0-9]+' "$LOG" || true)"
+ld="$(grep -E '(^|[[:space:]])ld(lld|64)?: warning:|^/usr/bin/ld: warning:| : warning LNK[0-9]+' "$LOG" || true)"
 own="$own$msvc"
 
 if [ -n "$own$ld" ]; then

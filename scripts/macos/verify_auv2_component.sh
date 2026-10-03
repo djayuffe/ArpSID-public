@@ -194,6 +194,7 @@ else
 fi
 
 VAL_LOG="$(mktemp)"
+chmod 600 "$VAL_LOG"
 cleanup() { rm -f "$VAL_LOG"; }
 trap cleanup EXIT
 

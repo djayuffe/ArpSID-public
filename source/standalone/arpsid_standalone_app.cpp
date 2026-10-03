@@ -55,6 +55,11 @@ bool writeFile(const std::filesystem::path& p, const void* data, std::size_t siz
     if (ec) {
         std::filesystem::remove(p, ec);
         std::filesystem::rename(tmp, p, ec);
+        if (ec) {
+            std::fprintf(stderr, "writeFile: second rename failed for %s: %s\n",
+                         p.string().c_str(), ec.message().c_str());
+            std::filesystem::remove(tmp, ec);
+        }
     }
     return !ec;
 }

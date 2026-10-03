@@ -191,6 +191,8 @@ if [ -n "$CLOSURE_LOG_DIR" ] || [ "$MACOS_CLOSURE" -eq 1 ]; then
   LOG_FILE="$CLOSURE_LOG_DIR/macos-closure-$(date +%Y%m%d-%H%M%S).log"
   echo "[ArpSID] capture log: $LOG_FILE"
   exec > >(tee -a "$LOG_FILE") 2>&1
+  TEE_PID=$!
+  trap 'wait "$TEE_PID" 2>/dev/null' EXIT
   echo "[ArpSID] log started: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
   ORIGINAL_COMMAND="$0"
   for arg in "${ORIGINAL_ARGS[@]}"; do

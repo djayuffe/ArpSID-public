@@ -1079,7 +1079,7 @@ if(ARPSID_BUILD_AUV2)
         # entitlements (no sandbox) rather than the generic entitlements.
         # Remove any --entitlements flag inherited from the generic helper and
         # replace it with the AUv2 entitlements.
-        list(REMOVE_ITEM _arpsid_auv2_sign_args --entitlements)
+        list(REMOVE_ITEM _arpsid_auv2_sign_args --entitlements "${ARPSID_CODESIGN_ENTITLEMENTS}")
         if(EXISTS "${ARPSID_AUV2_ENTITLEMENTS}")
             list(APPEND _arpsid_auv2_sign_args
                 --entitlements "${ARPSID_AUV2_ENTITLEMENTS}")

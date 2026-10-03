@@ -97,7 +97,7 @@ std::vector<uint8_t> readFileBytes(const std::string& path, std::size_t maxBytes
     std::vector<uint8_t> out;
     if (!in) return out;
     out.assign(std::istreambuf_iterator<char>(in), std::istreambuf_iterator<char>());
-    if (out.size() > maxBytes) out.clear();
+    if (in.bad() || out.size() > maxBytes) out.clear();
     return out;
 }
 

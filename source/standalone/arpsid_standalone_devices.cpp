@@ -302,8 +302,8 @@ void MidiIo::open(const std::string& selection) {
             if (selection != "*" && name != selection) continue;
             try {
                 auto in = std::make_unique<RtMidiIn>(RtMidi::UNSPECIFIED, "ArpSID");
-                // MIDI clock and active sensing are ignored; Start/Stop pass.
-                in->ignoreTypes(true, true, true);
+                // Sysex and active sensing are ignored; timing (Start/Stop/Continue) passes.
+                in->ignoreTypes(true, false, true);
                 in->setCallback(&MidiIo::callback_, this);
                 in->openPort(i, "ArpSID In");
                 ins_.push_back(std::move(in));

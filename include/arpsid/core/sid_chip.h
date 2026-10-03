@@ -88,16 +88,16 @@ enum class FilterMode : uint8_t {
 
 // Canonical Filter Mode parameter decode, shared by every render mode.
 // The 8 equal-width bins of the normalized value map to the enum above, whose
-// numeric value IS the SID $D418 LP/BP/HP bit pattern (bit0 LP, bit1 BP,
-// bit2 HP). CLASSIC (BitPerfectEngine::setFilterMode) and SYNTH / SID REG
-// ($D418 bits 4..6) must both use this so the audible filter type always
-// matches the selected choice.
+// numeric value IS the per-voice control register ($D406/$D40D/$D414) LP/BP/HP
+// bit pattern (bit0 LP, bit1 BP, bit2 HP). CLASSIC (BitPerfectEngine::setFilterMode)
+// and SYNTH / SID REG (per-voice control reg bits 4..6) must both use this so
+// the audible filter type always matches the selected choice.
 inline FilterMode sidFilterModeFromNormalized(float norm) noexcept {
     const int idx = static_cast<int>(ArpSID_sanitize01(norm) * 8.0f);
     return static_cast<FilterMode>(std::clamp(idx, 0, 7));
 }
 
-// $D418 bits 4..6 (LP=$10, BP=$20, HP=$40) for a normalized Filter Mode value.
+// Per-voice control reg bits 4..6 (LP=$10, BP=$20, HP=$40) for a normalized Filter Mode value.
 inline uint8_t sidD418FilterModeBitsFromNormalized(float norm) noexcept {
     return static_cast<uint8_t>(static_cast<uint8_t>(sidFilterModeFromNormalized(norm)) << 4);
 }
@@ -610,7 +610,10 @@ public:
                     if (table[i] < table[i - 1]) table[i] = table[i - 1];
                 }
             };
-            // Named hardware-anchor surfaces for maintainability/documentation.
+            // NOTE: s_filterCutoff* and s_filterQ* arrays below are NOT read by
+            // the live filter law (sidComputeFilterParityBase uses
+            // sid_analogue_calibration.h instead). Kept as documentation of the
+            // hardware anchor points; the 6581 table matches R3 only.
             static constexpr std::array<std::pair<int, double>, 9> kFilterCutoffAnchors6581 =
                 {{{0, 30.0}, {64, 55.0}, {192, 120.0}, {384, 320.0}, {768, 1100.0}, {1152, 2800.0}, {1536, 5400.0}, {1856, 8800.0}, {2047, 11800.0}}};
             static constexpr std::array<std::pair<int, double>, 9> kFilterCutoffAnchors8580 =

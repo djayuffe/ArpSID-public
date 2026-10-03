@@ -115,6 +115,7 @@ private:
     std::multimap<int, VSTGUI::CControl*> controls_;
     std::multimap<int, ParamMenu*> menus_;
     std::map<VSTGUI::CControl*, bool> editing_;
+    std::set<VSTGUI::CControl*> synchronizing_;
     std::vector<Page> pages_;
     int currentTab_ = -1;
 

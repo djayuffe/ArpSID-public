@@ -24,11 +24,11 @@ while [ "$(date +%s)" -lt "$END_EPOCH" ]; do
     TS="$(date +%H%M%S)"
     echo "[$TS] saw Logic/AU host" | tee -a "$OUT/README.txt"
     for pid in $AUPIDS; do
-      /usr/bin/sample "$pid" 3 10 -file "$OUT/auhost_${pid}_${TS}.sample.txt" > "$OUT/auhost_${pid}_${TS}.sample.stdout" 2>&1 || true
+      /usr/bin/sample "$pid" 1 4 -file "$OUT/auhost_${pid}_${TS}.sample.txt" > "$OUT/auhost_${pid}_${TS}.sample.stdout" 2>&1 || true
       /bin/ps -p "$pid" -o pid,ppid,state,%cpu,%mem,etime,command > "$OUT/auhost_${pid}_${TS}.ps.txt" 2>&1 || true
     done
     for pid in $LOGICPIDS; do
-      /usr/bin/sample "$pid" 2 8 -file "$OUT/logic_${pid}_${TS}.sample.txt" > "$OUT/logic_${pid}_${TS}.sample.stdout" 2>&1 || true
+      /usr/bin/sample "$pid" 1 4 -file "$OUT/logic_${pid}_${TS}.sample.txt" > "$OUT/logic_${pid}_${TS}.sample.stdout" 2>&1 || true
       /bin/ps -p "$pid" -o pid,ppid,state,%cpu,%mem,etime,command > "$OUT/logic_${pid}_${TS}.ps.txt" 2>&1 || true
     done
     SAMPLED=$((SAMPLED + 1))

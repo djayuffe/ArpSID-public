@@ -251,6 +251,7 @@ inline void fillTelemetryFromKernel(ArpSID::ArpSIDDSPKernel& k,
     out->c64RealtimeRunning  = t.c64RealtimeRunning;
     out->c64Booted           = t.c64Booted;
     out->c64Phi2Cycle = t.c64Phi2Cycle;
+    out->c64Phi2CyclesThisBlock = t.c64Phi2CyclesThisBlock;
     out->c64BlockIndex = t.c64BlockIndex;
     out->c64PlayCalls = t.c64PlayCalls;
     out->c64PlayRateHz = t.c64PlayRateHz;

@@ -45,7 +45,7 @@ inline Settings sanitize(Settings s) {
     s.bpm = std::clamp(s.bpm, 20.0, 300.0);
     if (!std::isfinite(s.zoom)) s.zoom = 1.0;
     s.zoom = std::clamp(s.zoom, 0.5, 3.0);
-    s.tab = std::max(0, s.tab);
+    s.tab = std::clamp(s.tab, 0, 16);
     return s;
 }
 

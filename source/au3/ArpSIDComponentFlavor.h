@@ -45,10 +45,11 @@ inline constexpr size_t componentFlavorIndex(ComponentFlavor flavor) noexcept {
 }
 
 constexpr OSType makeArpSIDFourCC(char a, char b, char c, char d) noexcept {
-    return (static_cast<OSType>(static_cast<unsigned char>(a)) << 24) |
-           (static_cast<OSType>(static_cast<unsigned char>(b)) << 16) |
-           (static_cast<OSType>(static_cast<unsigned char>(c)) << 8)  |
-            static_cast<OSType>(static_cast<unsigned char>(d));
+    const uint32_t v = (static_cast<uint32_t>(static_cast<unsigned char>(a)) << 24) |
+                       (static_cast<uint32_t>(static_cast<unsigned char>(b)) << 16) |
+                       (static_cast<uint32_t>(static_cast<unsigned char>(c)) << 8)  |
+                        static_cast<uint32_t>(static_cast<unsigned char>(d));
+    return static_cast<OSType>(v);
 }
 
 static constexpr OSType kComponentManufacturer = makeArpSIDFourCC('A','S','I','D');

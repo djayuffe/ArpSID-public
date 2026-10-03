@@ -24,3 +24,5 @@ Testing/
 
 # Patches and scratch
 *.patch
+
+__pycache__/

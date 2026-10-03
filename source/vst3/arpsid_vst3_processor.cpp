@@ -190,6 +190,7 @@ void ArpSIDVst3Processor::readTransport_(const ProcessContext* ctx, double sampl
 }
 
 void ArpSIDVst3Processor::collectEvents_(ProcessData& data, int frameCount) {
+    eventOrder_ = 0;
     int n = 0;
     const int cap = static_cast<int>(events_.size());
     const int lastFrame = std::max(0, frameCount - 1);

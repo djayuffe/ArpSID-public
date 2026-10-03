@@ -346,17 +346,6 @@ public:
         return count;
     }
     
-    ArpNote process(int numSamples) {
-        if (!enabled || noteCount == 0) {
-            firstStepPending = false;
-            return {-1, 0.0f, false};
-        }
-
-        TimedArpEvent events[kMaxTimedEventsPerProcess]{};
-        const int n = collectTimedEvents(numSamples, events, kMaxTimedEventsPerProcess);
-        return (n > 0) ? events[n - 1].note : ArpNote{-1, 0.0f, false};
-    }
-    
     // Parameters
     void setEnabled(bool enable) {
         if (enabled == enable) return;

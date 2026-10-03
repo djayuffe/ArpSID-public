@@ -1785,6 +1785,10 @@ private:
             if (s.jammed) {
                 phi2Machine_.setTrapBrkAsJam(false);
                 const uint16_t prevPc = static_cast<uint16_t>(s.pc - 1u);
+                // peekRam reads raw RAM (bypassing the PLA decode). This is
+                // correct because the bootstrap runs with HIRAM cleared (port
+                // restored to 0x37 at :1726), so $E000+ reads KERNAL, not RAM.
+                // If HIRAM handling changes, this must use a mapped read.
                 const bool terminalBrkSentinel = (phi2Machine_.memory().peekRam(prevPc) == 0x00u && sink_.writeCount > 0u);
                 if (allowInitBrkSentinel && terminalBrkSentinel) {
                     // Some PSID/RSID fixtures and older tunes use BRK as an init

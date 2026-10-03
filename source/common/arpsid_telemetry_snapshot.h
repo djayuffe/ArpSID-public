@@ -230,6 +230,7 @@ typedef struct {
     uint64_t c64SidPlayEndPhi2;
     uint32_t c64SidPlayCallCount;
     uint64_t c64Phi2Cycle;
+    uint64_t c64Phi2CyclesThisBlock;
     uint64_t c64BlockIndex;
     uint32_t c64PlayCalls;
     float c64PlayRateHz;

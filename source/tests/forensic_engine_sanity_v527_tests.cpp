@@ -245,9 +245,8 @@ int main() {
         // label), but the call must not segfault — that's the contract.
         (void)negName;
         (void)oobName;
-        require(getFactoryPatchDefinition(-1) == nullptr ||
-                getFactoryPatchDefinition(-1) != nullptr,  // trivially true
-                "out-of-range slot accessor doesn't crash");
+        require(getFactoryPatchDefinition(-1) == nullptr,
+                "out-of-range slot accessor returns null definition");
     }
 
     std::cout << "forensic_engine_sanity_v527_tests: 128 factory slots, 512 ParamIDs, all forensic invariants intact (audit #56/#58/#59/#60/#67/#74)\n";

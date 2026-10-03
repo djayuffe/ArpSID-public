@@ -28,6 +28,10 @@ if [ -f "$DIR/CMakeLists.txt" ] && [ -d "$DIR/public.sdk" ] && [ -d "$DIR/vstgui
   exit 1
 fi
 
+if [ -e "$DIR" ] && [ -n "$(ls -A "$DIR" 2>/dev/null)" ]; then
+  echo "[ArpSID] refusing to clone into non-empty directory $DIR (remove it or pass another directory)" >&2
+  exit 1
+fi
 mkdir -p "$(dirname "$DIR")"
 echo "[ArpSID] cloning VST3 SDK $TAG into $DIR" >&2
 git clone --depth 1 --branch "$TAG" --recurse-submodules --shallow-submodules \

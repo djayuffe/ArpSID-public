@@ -19,7 +19,7 @@ parent="$(dirname "${ROOT_DIR}")"
 base="$(basename "${ROOT_DIR}")"
 PACKAGE_TMP_ROOT="${PACKAGE_TMP_ROOT:-${TMPDIR:-/tmp}}"
 mkdir -p "${PACKAGE_TMP_ROOT}"
-tmp="${PACKAGE_TMP_ROOT%/}/.${base}.package.$$"
+tmp="$(mktemp -d "${PACKAGE_TMP_ROOT%/}/.${base}.package.XXXXXX")"
 trap 'rm -rf "${tmp}"' EXIT
 # v896: PACKAGE_OUT may point into a not-yet-existing directory (e.g. dist/);
 # create it so the zip step cannot fail on a missing parent.

@@ -74,7 +74,7 @@ done < <(git -C "$PUBLIC" ls-files)
 # 2. Overlay every private file except the ROM-specific ones (git + tar only).
 tar_excludes=()
 for f in "${KEEP_PUBLIC[@]}"; do tar_excludes+=("--exclude=$f"); done
-git -C "$PRIVATE" archive HEAD | tar -x -C "$PUBLIC" "${tar_excludes[@]}"
+git -C "$PRIVATE" archive HEAD | tar --anchored -x -C "$PUBLIC" "${tar_excludes[@]}"
 
 "$PRIVATE/scripts/ci/check_public_tree.sh" "$PUBLIC" \
   || die "mirrored tree failed the public-tree guard; NOT committing (inspect $PUBLIC)"

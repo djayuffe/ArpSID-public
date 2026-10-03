@@ -53,7 +53,7 @@ inline std::vector<float> renderMonoScript(DrSidEngine& e,
     std::vector<float> mono(static_cast<size_t>(std::max(totalSamples, 0)), 0.0f);
     size_t eventIndex = 0;
     for (int i = 0; i < totalSamples; ++i) {
-        while (eventIndex < script.size() && script[eventIndex].sample == i) {
+        while (eventIndex < script.size() && script[eventIndex].sample <= i) {
             e.triggerMidiNote(script[eventIndex].midiNote, script[eventIndex].velocity);
             ++eventIndex;
         }

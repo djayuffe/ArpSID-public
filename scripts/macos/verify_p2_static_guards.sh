@@ -14,7 +14,12 @@ if grep -n "source/au3/ArpSIDDSPKernel_process.cpp" CMakeLists.txt; then
   fail=1
 fi
 
-env -i PATH=/usr/bin:/bin python3 -S - <<'PY' || fail=1
+PY_BIN="$(command -v python3 || true)"
+if [ -z "$PY_BIN" ]; then
+  echo "FAIL: python3 not found" >&2
+  fail=1
+else
+env -i PATH="$(dirname "$PY_BIN"):/usr/bin:/bin" "$PY_BIN" -S - <<'PY' || fail=1
 from pathlib import Path
 s = Path('source/au3/ArpSIDDSPKernel.hpp').read_text()
 start = s.index('    Telemetry readTelemetry() const noexcept {')
@@ -33,6 +38,7 @@ for needle in required:
         raise SystemExit(f'FAIL: readTelemetry missing snapshot field: {needle}')
 print('PASS: readTelemetry uses published telemetry snapshot only')
 PY
+fi
 
 if [[ "$fail" -ne 0 ]]; then
   exit 1

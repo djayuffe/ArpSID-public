@@ -151,7 +151,7 @@ jobs:
       - name: Factory presets (.vstpreset, each reloaded and verified)
         run: |
           cmake --build build-vst3 --target arpsid_vst3_presets
-          test "$(find "build-vst3/VST3 Presets" -name '*.vstpreset' | wc -l)" -eq 180
+          test "$(find "build-vst3/VST3 Presets" -name '*.vstpreset' | wc -l | tr -d ' ')" -eq 180
       - name: VST3 host integration test (editor in a real X11 window)
         env: { ARPSID_REQUIRE_X11_EDITOR: "1" }
         run: xvfb-run -a cmake --build build-vst3 --target arpsid_vst3_host_check

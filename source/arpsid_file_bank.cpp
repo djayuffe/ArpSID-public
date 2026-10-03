@@ -278,8 +278,8 @@ FileBankError ArpSIDFileBank::loadBankFromFile(const std::string& path,
         std::fclose(f); return FileBankError::BadMagic;
     }
     if (version > kFileBankVersion) { std::fclose(f); return FileBankError::BadVersion; }
-    if (count > static_cast<uint32_t>(kFileBankMaxSlots)) {
-        std::fclose(f); return FileBankError::TooManySlots;
+    if (count == 0 || count > static_cast<uint32_t>(kFileBankMaxSlots)) {
+        std::fclose(f); return FileBankError::BadBlob;
     }
 
     std::vector<SidStateRootV1> decodedPatches(count);
@@ -329,7 +329,8 @@ FileBankError ArpSIDFileBank::exportAllToDirectory(const std::string& dir,
                                                     const std::vector<SidStateRootV1>& patches,
                                                     const std::vector<ArpSIDFilePatchMeta>& metas) noexcept {
     if (!ensureDirectoryExists(dir)) return FileBankError::DirectoryCreateFailed;
-    const size_t count = std::min(patches.size(), metas.size());
+    if (patches.size() != metas.size()) return FileBankError::BadBlob;
+    const size_t count = patches.size();
     for (size_t i = 0; i < count; ++i) {
         char nameBuf[32];
         const std::string safe = sanitizeFilename(metas[i].name[0] ? metas[i].name : "Patch");
@@ -345,10 +346,10 @@ FileBankError ArpSIDFileBank::exportAllToDirectory(const std::string& dir,
 // ─── Meta from PatchDefinition ────────────────────────────────────────────────
 ArpSIDFilePatchMeta ArpSIDFileBank::metaFromDefinition(const PatchDefinition& def) noexcept {
     ArpSIDFilePatchMeta m{};
-    std::strncpy(m.name,     def.displayName.c_str(), sizeof(m.name) - 1);
-    std::strncpy(m.author,   "ArpSID Factory",         sizeof(m.author) - 1);
-    std::strncpy(m.category, toString(def.usage.role),  sizeof(m.category) - 1);
-    std::strncpy(m.tags,     def.id.c_str(),            sizeof(m.tags) - 1);
+    copyBoundedField_(m.name, sizeof(m.name), def.displayName.c_str());
+    copyBoundedField_(m.author, sizeof(m.author), "ArpSID Factory");
+    copyBoundedField_(m.category, sizeof(m.category), toString(def.usage.role).c_str());
+    copyBoundedField_(m.tags, sizeof(m.tags), def.id.c_str());
     m.chip_model   = (def.staticState.chip == SidChipTarget::MOS8580) ? 1u
                    : (def.staticState.chip == SidChipTarget::MOS6581) ? 0u : 2u;
     m.clock_system = (def.staticState.clock == ClockTarget::NTSC_First) ? 1u : 0u;

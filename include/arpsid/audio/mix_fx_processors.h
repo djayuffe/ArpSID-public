@@ -158,17 +158,6 @@ inline BiquadCoeffs computeHighShelfCoeffs(float sampleRate,
     const float sqrtA  = std::sqrt(A);
     const float twoSqrtA = 2.f * sqrtA * alpha;
 
-    const float a0inv = 1.f / ((A + 1.f) - (A - 1.f) * cosw + twoSqrtA);
-    // Note: high shelf a0 uses different sign pattern from low shelf
-    // high shelf: a0 = (A+1) - (A-1)*cosw + twoSqrtA <-- same as low shelf actually
-    // Let me recalculate properly from cookbook:
-    // High shelf a0 = (A+1) - (A-1)*cosw + 2*sqrt(A)*alpha
-    // Wait — that's the same. Let me double-check the cookbook:
-    // Low shelf: a0 = (A+1) + (A-1)*cos(w0) + 2*sqrt(A)*alpha <-- NOTE: + (A-1)*cos
-    // High shelf: a0 = (A+1) - (A-1)*cos(w0) + 2*sqrt(A)*alpha <-- NOTE: - (A-1)*cos
-    // I have the wrong sign above. Let me redo:
-    (void)a0inv; // discard the wrong one
-
     const float a0hs = (A + 1.f) - (A - 1.f) * cosw + twoSqrtA;
     const float inv = 1.f / a0hs;
 
@@ -568,14 +557,21 @@ struct BitcrusherProcessor {
                 holdCounter_ = 0u;
         }
 
-        // Bit-depth reduction: quantise to quantBits_
-        const float q = maxQuant_;
-        if (q > 0.5f) {
-            L = std::round(heldL_ * q) / q;
-            R = std::round(heldR_ * q) / q;
+        // Bit-depth reduction: quantise to quantBits_. At 16 bits the
+        // quantiser is a no-op (pass-through) — matches the documented
+        // "255 = essentially transparent" contract.
+        if (quantBits_ >= 16u) {
+            L = heldL_;
+            R = heldR_;
         } else {
-            L = 0.f;
-            R = 0.f;
+            const float q = maxQuant_;
+            if (q > 0.5f) {
+                L = std::round(heldL_ * q) / q;
+                R = std::round(heldR_ * q) / q;
+            } else {
+                L = 0.f;
+                R = 0.f;
+            }
         }
     }
 

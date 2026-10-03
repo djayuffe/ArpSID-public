@@ -79,7 +79,7 @@ inline double effectiveCutoffHz_6581_loading(double smoothedCutoffHz,
     }
     const double squash = 1.0 - std::clamp(
         (double)(driveNorm - kLoadingDriveThreshold) * (double)resNorm * 0.18,
-        0.0, 0.16);
+        0.0, 0.12);
     return smoothedCutoffHz * squash;
 }
 

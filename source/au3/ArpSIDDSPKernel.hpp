@@ -1026,6 +1026,7 @@ private:
     uint32_t c64ProjectionMirrorQueuedWritesThisBlock_ = 0u;
     std::atomic<uint8_t>  telemetryC64Booted_{0};
     std::atomic<uint64_t> telemetryC64Phi2Cycle_{0};
+    std::atomic<uint64_t> telemetryC64Phi2CyclesThisBlock_{0};
     std::atomic<uint64_t> telemetryC64BlockIndex_{0};
     std::atomic<uint32_t> telemetryC64PlayCalls_{0};
     std::atomic<uint64_t> telemetryC64PlayCallCapHits_{0};
@@ -7988,6 +7989,7 @@ public:
             t.c64PsidLastLoadFailure = telemetryC64PsidLastLoadFailure_.load(std::memory_order_relaxed);
             t.c64MirrorFidelity = std::clamp(telemetryC64MirrorFidelity_.load(std::memory_order_relaxed), 0.0f, 1.0f);
             t.c64Phi2Cycle = telemetryC64Phi2Cycle_.load(std::memory_order_relaxed);
+            t.c64Phi2CyclesThisBlock = telemetryC64Phi2CyclesThisBlock_.load(std::memory_order_relaxed);
             t.c64BlockIndex = telemetryC64BlockIndex_.load(std::memory_order_relaxed);
             t.hostSampleStart = telemetryHostSampleStart_.load(std::memory_order_relaxed);
             t.hostSampleEnd = telemetryHostSampleEnd_.load(std::memory_order_relaxed);
@@ -9817,7 +9819,12 @@ private:
         telemetryC64Pal_.store(pal ? 1u : 0u, std::memory_order_relaxed);
         telemetryC64RealtimeRunning_.store(telemetryPlatform.realtimeSidCoreRunning() ? 1u : 0u, std::memory_order_relaxed);
         telemetryC64Booted_.store(telemetryPlatform.booted() ? 1u : 0u, std::memory_order_relaxed);
-        telemetryC64Phi2Cycle_.store(telemetryPlatform.phi2Cycle(), std::memory_order_relaxed);
+        {
+            const uint64_t prevPhi2 = telemetryC64Phi2Cycle_.load(std::memory_order_relaxed);
+            const uint64_t curPhi2 = telemetryPlatform.phi2Cycle();
+            telemetryC64Phi2Cycle_.store(curPhi2, std::memory_order_relaxed);
+            telemetryC64Phi2CyclesThisBlock_.store(curPhi2 - prevPhi2, std::memory_order_relaxed);
+        }
         telemetryC64BlockIndex_.store(blockIndex_, std::memory_order_relaxed);
         telemetryC64PlayCalls_.store(c64BlockPlayCalls_, std::memory_order_relaxed);
         telemetryC64PlayCallCapHits_.store(c64PlayCallCapHitCount_.load(std::memory_order_relaxed),

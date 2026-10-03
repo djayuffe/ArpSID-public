@@ -51,6 +51,7 @@ ControlKind controlKindFor(int id) {
 
 // Short control caption: the parameter name without its section prefix.
 std::string shortLabel(int id) {
+    if (id < 0 || id >= kNumParams) return "";
     std::string n = kParamInfos[static_cast<std::size_t>(id)].name ? kParamInfos[static_cast<std::size_t>(id)].name : "";
     // SID registers: "$D400 FREQ1 LO" -> "D400 FREQ LO" (the section names the
     // voice; the value already reads as $XX).
@@ -446,12 +447,16 @@ void EditorView::valueChanged(CControl* control) {
     if (editing_.count(control)) backend_.performEdit(tag, v);
     else editorSetParam(backend_, tag, v);
     // Keep sibling controls of the same parameter (on other tabs) in sync.
+    // Guard against re-entrancy: setValueNormalized re-fires valueChanged.
+    if (synchronizing_.count(control)) return;
+    synchronizing_.insert(control);
     auto range = controls_.equal_range(tag);
     for (auto it = range.first; it != range.second; ++it)
         if (it->second != control) {
             it->second->setValueNormalized(v);
             it->second->invalid();
         }
+    synchronizing_.erase(control);
 }
 
 void EditorView::controlBeginEdit(CControl* control) {
