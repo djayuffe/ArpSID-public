@@ -4,8 +4,8 @@
 // Canonical version — must match VERSION.txt and CMakeLists.txt project(VERSION ...).
 #define ARPSID_PLUGIN_VERSION_MAJOR 0
 #define ARPSID_PLUGIN_VERSION_MINOR 9
-#define ARPSID_PLUGIN_VERSION_PATCH 15
-#define ARPSID_PLUGIN_VERSION "0.9.15"
+#define ARPSID_PLUGIN_VERSION_PATCH 16
+#define ARPSID_PLUGIN_VERSION "0.9.16"
 
 #ifndef ARPSID_PLUGIN_VENDOR
 #define ARPSID_PLUGIN_VENDOR "Uber Sound Solutions"

@@ -5,6 +5,70 @@ All notable changes to ArpSID are documented here. The project uses
 version is `VERSION.txt`, mirrored by `project(VERSION)` in `CMakeLists.txt`
 and `include/arpsid/version.h`.
 
+## [0.9.16] — 2026-10-03
+
+### Fixed
+
+- **Bitcrusher at 16-bit depth**: the quantizer divided by 32767 at the
+  "transparent" 16-bit setting, hard-limiting |x| > 1.0. 16 bits and above
+  now pass through unquantized, matching the documented contract.
+- **MIDI clock / start / stop / continue**: the RTMIDI `open` call discarded
+  timing messages (`ignoreTypes(true, true, true)`), so the 0xFA/0xFB/0xFC
+  handlers in the engine were dead code. Clock, start, stop and continue
+  now reach the engine.
+- **VST3 event-ordering token wrap**: `eventOrder_` was never reset, so after
+  ~27 hours of continuous processing the 32-bit token wrapped and in-block
+  event arrival order was no longer monotonic. Reset per processing block.
+- **Arpeggiator dead `process()` API**: an unused convenience method with an
+  8 KB stack array (RT-thread hazard) was deleted.
+- **File bank edge cases**: a bank blob with zero patches is now rejected
+  (`BadBlob`); `exportAllToDirectory` no longer silently truncates when
+  patch/meta counts disagree; name/meta `strncpy` calls are routed through
+  the bounds-checked `copyBoundedField_` helper.
+- **Editor view safety**: `shortLabel` performs a range check before
+  indexing the param table; `valueChanged` → sibling `setValueNormalized`
+  re-entrancy is guarded so a param change triggers one engine update, not
+  two.
+- **Standalone file write**: if the second rename in the atomic-write
+  sequence fails, the orphaned temp file is removed and the error is logged
+  instead of being silently lost.
+- **Standalone settings**: `Settings::sanitize` now clamps the selected tab
+  to the valid range (upper bound was unclamped).
+- **AUv2 four-character code**: `makeArpSIDFourCC` built the OSType from
+  signed char shifts; bytes ≥ 0x80 produced a negative value. Built in
+  `uint32_t`, cast once.
+- **Parity trace**: the single `ready` 0/1 gate allowed two producers to
+  interleave; a per-slot generation counter closes the race.
+  `flushToFILE(nullptr)` is now a no-op instead of writing to stderr.
+- **C64 PSID runtime**: the BRK-sentinel `peekRam` call and the color-RAM
+  mirror ordering invariant are documented (the bootstrap runs with HIRAM
+  cleared; a future HIRAM change must switch to a mapped read).
+- **SID DIGI `blockPeak`**: was computed as distance-from-midpoint of the
+  nibble, not the waveform magnitude. Now the true bipolar magnitude
+  `|nibble/15 * 2 − 1|`.
+- **SID filter cutoff squash**: the 0.16 cap was inert (the raw term maxes at
+  0.117). Lowered to 0.12 so it is reachable.
+- **SID `$D418` comments**: the filter-mode bits are per-voice control
+  register bits, not "$D418 bits 4..6". Comments corrected. The in-code
+  filter-cutoff/Q tables are documented as superseded by the analogue
+  calibration header.
+- **Telemetry**: added `c64Phi2CyclesThisBlock` (per-block PHI-2 delta) so
+  block pacing is observable without subtracting cumulative counters.
+- **Build / CI / packaging scripts**: `mktemp -d` instead of predictable
+  paths; `tar --anchored` for exclude patterns; `chmod 600` on temp logs;
+  `python3` resolved before `env -i` (Homebrew); `tee` process substitution
+  waited on via trap; `ld.lld` in the linker-warning regex; CMake
+  `REMOVE_ITEM` removes the entitlements path value, not just the flag;
+  `fetch_vst3_sdk.sh` refuses non-empty clone targets; `wc -l | tr -d ' '`
+  for BSD portability; non-recursive `__pycache__` in `.gitignore`.
+
+### Changed
+
+- **Validation**: all 85 P2 findings from the five ai2ai audits were
+  re-validated against source. 41 confirmed SAFE fixes applied (above);
+  19 refuted with evidence; 4 RISKY items (DSP timing, RT-adjacent
+  poller, HIRAM mapped read) deferred. See `ai2ai_validation_p2.md`.
+
 ## [0.9.15] — 2026-10-01
 
 ### Fixed
