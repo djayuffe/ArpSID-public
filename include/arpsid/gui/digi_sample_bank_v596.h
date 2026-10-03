@@ -372,6 +372,7 @@ inline void digiCopyDisplayName(char (&dst)[kDigiUserSampleNameBytes],
     const std::uint32_t n = std::min<std::uint32_t>(srcLen, kDigiUserSampleNameBytes - 1u);
     for (std::uint32_t i = 0; i < n; ++i) {
         const unsigned char ch = static_cast<unsigned char>(src[i]);
+        if (ch == 0u) break;  // stop at NUL even when srcLen over-states the length
         dst[i] = (ch >= 32u && ch <= 126u) ? static_cast<char>(ch) : '_';
     }
 }
