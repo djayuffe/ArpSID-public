@@ -21,8 +21,10 @@ public:
     // spanning a full VBI (~19.7k cycles at PAL) used to be executed verbatim in
     // the RT callback (multi-microsecond stall). The cap bounds the stall; the
     // skipped cycles are still applied to the clock cursor so the clock never
-    // lags, and the dropped work is counted for telemetry.
-    static constexpr uint64_t kMaxCatchUpCycles = 1024u;
+    // lags, and the dropped work is counted for telemetry. 8192 covers the
+    // full 12-bit phase range (max 4096 cycles at freq=$1000) so single-waveform
+    // readback stays cycle-exact; only multi-VBI gaps (> 8192) approximate.
+    static constexpr uint64_t kMaxCatchUpCycles = 8192u;
     uint64_t skippedCatchUpCycles = 0;
 
     void reset(bool mos6581 = true) noexcept {
